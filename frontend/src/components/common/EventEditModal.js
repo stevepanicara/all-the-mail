@@ -12,7 +12,7 @@ const EventEditModal = ({
     <div className="modal-overlay" onMouseDown={closeEventEdit}>
       <div className="modal" style={{ maxWidth: '520px' }} onMouseDown={e => e.stopPropagation()}>
         <div className="modal-header">
-          <div style={{ fontSize: '16px', fontWeight: 600 }}>Edit event</div>
+          <div style={{ fontSize: '16px', fontWeight: 600 }}>{selectedEvent?.id === 'new' ? 'New event' : 'Edit event'}</div>
           <button className="btn-ghost btn-icon" onClick={closeEventEdit} title="Close"><X size={16} /></button>
         </div>
         <div className="modal-body">
@@ -59,7 +59,7 @@ const EventEditModal = ({
         <div className="modal-actions">
           <button className="btn-ghost" onClick={closeEventEdit} disabled={eventEditSaving}>Cancel</button>
           <button className="btn btn-primary" onClick={saveEventEdit} disabled={eventEditSaving} style={{ fontSize: '13px', padding: '10px 20px' }}>
-            {eventEditSaving ? 'Saving...' : 'Save'}
+            {eventEditSaving ? 'Saving...' : selectedEvent?.id === 'new' ? 'Create' : 'Save'}
           </button>
         </div>
       </div>

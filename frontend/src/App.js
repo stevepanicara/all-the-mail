@@ -20,6 +20,7 @@ import {
 import Sidebar from './components/common/Sidebar';
 import ComposeModal from './components/common/ComposeModal';
 import EventEditModal from './components/common/EventEditModal';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 import './design-system.css';
 
@@ -36,9 +37,13 @@ const AllTheMail = () => {
   // Docs state
   const [docsCategory, setDocsCategory] = useState('recent');
   const [selectedDoc, setSelectedDoc] = useState(null);
+  const [docsSearchQuery, setDocsSearchQuery] = useState('');
+  const [docsSortBy, setDocsSortBy] = useState('lastEdited');
+  const [docsSortDir, setDocsSortDir] = useState('desc');
 
   // Cals state
   const [calsCategory, setCalsCategory] = useState('upcoming');
+  const [calsViewMode, setCalsViewMode] = useState('agenda');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventEditOpen, setEventEditOpen] = useState(false);
   const [eventEditFields, setEventEditFields] = useState({});
@@ -204,6 +209,11 @@ const AllTheMail = () => {
     setReaderCompact(e.target.scrollTop > 60);
   }, []);
 
+  const toggleDocsSort = useCallback((field) => {
+    if (docsSortBy === field) setDocsSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setDocsSortBy(field); setDocsSortDir('desc'); }
+  }, [docsSortBy]);
+
   const cycleDensity = useCallback(() => {
     setDensityMode(p => p==='default'?'comfortable':p==='comfortable'?'compact':'default');
   }, []);
@@ -331,14 +341,64 @@ const AllTheMail = () => {
     return allEvents.filter(e => e.accountId === activeView);
   }, [allEvents, activeView]);
 
+  const weekDays = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dayEnd = new Date(d);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const dayEvents = filteredAllEvents.filter(ev => {
+        const evDate = new Date(ev.startISO || 0);
+        return evDate >= d && evDate <= dayEnd;
+      });
+
+      days.push({
+        date: d,
+        label: d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }),
+        isToday: d.toDateString() === now.toDateString(),
+        events: dayEvents,
+      });
+    }
+    return days;
+  }, [filteredAllEvents]);
+
   const filteredDocs = useMemo(() => {
     let pool = allDocs;
     if (activeView !== 'everything') pool = pool.filter(d => d.accountId === activeView);
-    if (docsCategory === 'shared') return pool.filter(d => d.shared);
-    if (docsCategory === 'starred') return pool.filter(d => d.starred);
-    if (docsCategory === 'trash') return [];
+    if (docsCategory === 'shared') pool = pool.filter(d => d.shared);
+    else if (docsCategory === 'starred') pool = pool.filter(d => d.starred);
+    else if (docsCategory === 'trash') pool = [];
+
+    // Search filter
+    if (docsSearchQuery.trim()) {
+      const q = docsSearchQuery.toLowerCase();
+      pool = pool.filter(d =>
+        (d.title || '').toLowerCase().includes(q) ||
+        (d.owner || '').toLowerCase().includes(q) ||
+        (d.mimeType || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    pool = [...pool].sort((a, b) => {
+      let cmp = 0;
+      if (docsSortBy === 'name') cmp = (a.title || '').localeCompare(b.title || '');
+      else if (docsSortBy === 'type') cmp = (a.mimeType || '').localeCompare(b.mimeType || '');
+      else if (docsSortBy === 'lastEdited') cmp = new Date(b.lastEdited || 0) - new Date(a.lastEdited || 0);
+      else cmp = new Date(b.date || 0) - new Date(a.date || 0);
+      return docsSortDir === 'asc' ? -cmp : cmp;
+    });
+
     return pool;
-  }, [docsCategory, allDocs, activeView]);
+  }, [docsCategory, allDocs, activeView, docsSearchQuery, docsSortBy, docsSortDir]);
 
   const evFilteredDocs = useMemo(() => {
     let pool = allDocs;
@@ -561,25 +621,41 @@ const AllTheMail = () => {
     if (startDT) patch.start = startDT;
     if (endDT) patch.end = endDT;
 
-    const prevEvents = { ...events };
-    setEvents(prev => {
-      const accountEvents = prev[selectedEvent.accountId] || [];
-      return { ...prev, [selectedEvent.accountId]: accountEvents.map(e => e.id === selectedEvent.id ? { ...e, title: eventEditFields.summary || e.title, meta: eventEditFields.location || e.meta } : e) };
-    });
-    setSelectedEvent(prev => prev ? { ...prev, title: eventEditFields.summary || prev.title, meta: eventEditFields.location || prev.meta } : prev);
+    const isNew = selectedEvent.id === 'new';
 
-    try {
-      if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
-      const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
-        method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    if (!isNew) {
+      const prevEvents = { ...events };
+      setEvents(prev => {
+        const accountEvents = prev[selectedEvent.accountId] || [];
+        return { ...prev, [selectedEvent.accountId]: accountEvents.map(e => e.id === selectedEvent.id ? { ...e, title: eventEditFields.summary || e.title, meta: eventEditFields.location || e.meta } : e) };
       });
-      if (!r.ok) { const body = await r.json().catch(() => ({})); throw new Error(body.message || body.error || 'Update failed'); }
-      setEventEditOpen(false);
-      loadEventsForAccount(selectedEvent.accountId);
-    } catch (err) {
-      setEvents(prevEvents);
-      setEventEditError(err.message || 'Failed to save changes');
-    } finally { setEventEditSaving(false); }
+      setSelectedEvent(prev => prev ? { ...prev, title: eventEditFields.summary || prev.title, meta: eventEditFields.location || prev.meta } : prev);
+
+      try {
+        if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
+        const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
+          method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+        });
+        if (!r.ok) { const body = await r.json().catch(() => ({})); throw new Error(body.message || body.error || 'Update failed'); }
+        setEventEditOpen(false);
+        loadEventsForAccount(selectedEvent.accountId);
+      } catch (err) {
+        setEvents(prevEvents);
+        setEventEditError(err.message || 'Failed to save changes');
+      } finally { setEventEditSaving(false); }
+    } else {
+      try {
+        const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events`, {
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+        });
+        if (!r.ok) { const body = await r.json().catch(() => ({})); throw new Error(body.message || body.error || 'Create failed'); }
+        setEventEditOpen(false);
+        setSelectedEvent(null);
+        loadEventsForAccount(selectedEvent.accountId);
+      } catch (err) {
+        setEventEditError(err.message || 'Failed to create event');
+      } finally { setEventEditSaving(false); }
+    }
   }, [selectedEvent, eventEditFields, events, loadEventsForAccount]);
 
   const loadDocPreview = useCallback(async (doc) => {
@@ -1186,12 +1262,18 @@ const AllTheMail = () => {
       <PanelResizeHandle className="panel-resize-handle" />
       <Panel defaultSize="40%" minSize="28%" id="docs-list">
         <div style={{ height: '100%', overflow: 'auto', background: 'var(--surface-list)' }}>
-          <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px' }}><span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{docsCategory.charAt(0).toUpperCase() + docsCategory.slice(1)}</span></div>
+          <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{docsCategory.charAt(0).toUpperCase() + docsCategory.slice(1)}</span>
+            <div style={{ marginTop: '8px' }}>
+              <div className="search-pill"><Search size={14} /><input value={docsSearchQuery} onChange={e => setDocsSearchQuery(e.target.value)} placeholder="Search documents..." /></div>
+            </div>
+          </div>
           <div className="doc-row" style={{ minHeight: '34px', cursor: 'default', borderBottom: '1px solid var(--line-0)' }}>
-            <div /><div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>Title</div>
+            <div />
+            <div style={{ fontSize: '11px', color: docsSortBy === 'name' ? 'var(--text-1)' : 'var(--text-3)', fontWeight: 500, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleDocsSort('name')}>Title {docsSortBy === 'name' ? (docsSortDir === 'asc' ? '\u2191' : '\u2193') : ''}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>Owner</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>Last edited</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500, textAlign: 'right' }}>Date</div>
+            <div style={{ fontSize: '11px', color: docsSortBy === 'lastEdited' ? 'var(--text-1)' : 'var(--text-3)', fontWeight: 500, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleDocsSort('lastEdited')}>Last edited {docsSortBy === 'lastEdited' ? (docsSortDir === 'asc' ? '\u2191' : '\u2193') : ''}</div>
+            <div style={{ fontSize: '11px', color: docsSortBy === 'date' ? 'var(--text-1)' : 'var(--text-3)', fontWeight: 500, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleDocsSort('date')}>Date {docsSortBy === 'date' ? (docsSortDir === 'asc' ? '\u2191' : '\u2193') : ''}</div>
           </div>
           {isLoadingDocs && filteredDocs.length === 0 ? (
             Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`dsk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0 }} /><div className="skeleton-block" style={{ flex: 1 }} /><div className="skeleton-block" style={{ width: 80 }} /><div className="skeleton-block" style={{ width: 64 }} /></div>))
@@ -1276,6 +1358,19 @@ const AllTheMail = () => {
                 </button>
               ))}
             </div>
+            <div style={{ padding: '0 16px 16px' }}>
+              <button className="btn-compose" style={{ width: '100%' }} onClick={() => {
+                const calsAccount = connectedAccounts.find(a => a.granted_scopes?.includes('cals'));
+                if (!calsAccount) return;
+                const now = new Date();
+                const oneHourLater = new Date(now.getTime() + 3600000);
+                const newEv = { id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() };
+                setSelectedEvent(newEv);
+                openEventEdit(newEv);
+              }}>
+                <Plus size={14} strokeWidth={1.5} /> New event
+              </button>
+            </div>
             <div style={{ padding: '0 16px 24px' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: 500, marginBottom: '8px' }}>Accounts</div>
               {connectedAccounts.map((a, i) => {
@@ -1290,34 +1385,58 @@ const AllTheMail = () => {
           <div style={{ height: '100%', overflow: 'auto', background: 'var(--surface-list)' }}>
             <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{calsCategory === 'this-week' ? 'This week' : calsCategory.charAt(0).toUpperCase() + calsCategory.slice(1)}</span>
-              <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Agenda view</span>
-            </div>
-            {isLoadingEvents && filteredAllEvents.length === 0 ? (
-              Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 48 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
-            ) : (!anyHasCals || hasEventsError) && Object.keys(grouped).length === 0 ? (
-              <div className="connect-cta">
-                <Calendar size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
-                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasCals ? 'Calendar permissions were revoked. Reconnect to see your events.' : 'Grant Calendar permissions to see your events here'}</div>
-                <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect account'}</button>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button className={`ev-filter-btn${calsViewMode === 'agenda' ? ' active' : ''}`} onClick={() => setCalsViewMode('agenda')} style={{ fontSize: '11px', padding: '2px 8px' }}>Agenda</button>
+                <button className={`ev-filter-btn${calsViewMode === 'week' ? ' active' : ''}`} onClick={() => setCalsViewMode('week')} style={{ fontSize: '11px', padding: '2px 8px' }}>Week</button>
               </div>
-            ) : Object.keys(grouped).length === 0 ? (
-              <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
-            ) : Object.entries(grouped).map(([day, dayEvents]) => (
-              <div key={day}>
-                <div className="cal-day-header">{day}</div>
-                {dayEvents.map(ev => (
-                  <div key={ev.id} className={`cal-event${selectedEvent?.id === ev.id ? ' active' : ''}`} onClick={() => setSelectedEvent(ev)}>
-                    <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
-                    <div className="cal-event-time">{ev.time}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="cal-event-title">{ev.title}</div>
-                      <div className="cal-event-meta">{ev.calendarName && ev.calendarName !== 'primary' ? `${ev.calendarName}${ev.meta ? ' · ' : ''}` : ''}{ev.meta}</div>
+            </div>
+            {calsViewMode === 'week' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', background: 'var(--line-0)', flex: 1 }}>
+                {weekDays.map(day => (
+                  <div key={day.label} style={{ background: 'var(--surface-list)', padding: '8px', minHeight: '100px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 500, color: day.isToday ? 'var(--accent)' : 'var(--text-2)', marginBottom: '6px' }}>
+                      {day.label}
                     </div>
+                    {day.events.map(ev => (
+                      <div key={ev.id} style={{ fontSize: '11px', padding: '2px 4px', marginBottom: '2px', borderRadius: '3px', background: ev.calendarColor ? `${ev.calendarColor}22` : 'rgba(139, 124, 255, 0.08)', borderLeft: `2px solid ${ev.calendarColor || 'var(--accent)'}`, cursor: 'pointer' }}
+                        onClick={() => setSelectedEvent(ev)}>
+                        <div style={{ fontWeight: 500, color: 'var(--text-0)' }}>{ev.time !== 'All day' ? ev.time : ''}</div>
+                        <div style={{ color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
+            ) : (
+              <>
+                {isLoadingEvents && filteredAllEvents.length === 0 ? (
+                  Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 48 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
+                ) : (!anyHasCals || hasEventsError) && Object.keys(grouped).length === 0 ? (
+                  <div className="connect-cta">
+                    <Calendar size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasCals ? 'Calendar permissions were revoked. Reconnect to see your events.' : 'Grant Calendar permissions to see your events here'}</div>
+                    <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect account'}</button>
+                  </div>
+                ) : Object.keys(grouped).length === 0 ? (
+                  <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
+                ) : Object.entries(grouped).map(([day, dayEvents]) => (
+                  <div key={day}>
+                    <div className="cal-day-header">{day}</div>
+                    {dayEvents.map(ev => (
+                      <div key={ev.id} className={`cal-event${selectedEvent?.id === ev.id ? ' active' : ''}`} onClick={() => setSelectedEvent(ev)}>
+                        <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
+                        <div className="cal-event-time">{ev.time}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="cal-event-title">{ev.title}</div>
+                          <div className="cal-event-meta">{ev.calendarName && ev.calendarName !== 'primary' ? `${ev.calendarName}${ev.meta ? ' · ' : ''}` : ''}{ev.meta}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </Panel>
         <PanelResizeHandle className="panel-resize-handle" />
@@ -1334,7 +1453,57 @@ const AllTheMail = () => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Clock size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} /><span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.day} at {selectedEvent.time}{selectedEvent.endTime ? ` – ${selectedEvent.endTime}` : ''}</span></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Clock size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.day} at </span>
+                      {selectedEvent.id !== 'new' && selectedEvent.startISO && selectedEvent.startISO.includes('T') ? (
+                        <input type="time"
+                          defaultValue={selectedEvent.startISO.split('T')[1]?.substring(0, 5) || ''}
+                          onBlur={async (e) => {
+                            const newTime = e.target.value;
+                            if (!newTime || !selectedEvent.startISO) return;
+                            const date = selectedEvent.startISO.split('T')[0];
+                            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                            const patch = { start: { dateTime: `${date}T${newTime}:00`, timeZone: tz } };
+                            if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
+                            try {
+                              const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
+                                method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+                              });
+                              if (r.ok) loadEventsForAccount(selectedEvent.accountId);
+                            } catch (err) { console.error('Inline time update failed:', err); }
+                          }}
+                          style={{ fontSize: '13px', color: 'var(--text-1)', background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', padding: '2px 6px', fontFamily: 'inherit', width: '90px' }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.time}</span>
+                      )}
+                      {selectedEvent.endTime && selectedEvent.id !== 'new' && selectedEvent.endISO && selectedEvent.endISO.includes('T') ? (
+                        <>
+                          <span style={{ fontSize: '13px', color: 'var(--text-2)' }}> -- </span>
+                          <input type="time"
+                            defaultValue={selectedEvent.endISO.split('T')[1]?.substring(0, 5) || ''}
+                            onBlur={async (e) => {
+                              const newTime = e.target.value;
+                              if (!newTime || !selectedEvent.endISO) return;
+                              const date = selectedEvent.endISO.split('T')[0];
+                              const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                              const patch = { end: { dateTime: `${date}T${newTime}:00`, timeZone: tz } };
+                              if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
+                              try {
+                                const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
+                                  method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+                                });
+                                if (r.ok) loadEventsForAccount(selectedEvent.accountId);
+                              } catch (err) { console.error('Inline time update failed:', err); }
+                            }}
+                            style={{ fontSize: '13px', color: 'var(--text-1)', background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', padding: '2px 6px', fontFamily: 'inherit', width: '90px' }}
+                          />
+                        </>
+                      ) : selectedEvent.endTime ? (
+                        <span style={{ fontSize: '13px', color: 'var(--text-1)' }}> -- {selectedEvent.endTime}</span>
+                      ) : null}
+                    </div>
                     {selectedEvent.meta && (<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><MapPin size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} /><span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.meta}</span></div>)}
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
@@ -1549,14 +1718,16 @@ const AllTheMail = () => {
 
       {/* Main content */}
       <div className="main-content">
-        {activeModule === 'everything' && renderEverything()}
-        {activeModule !== 'everything' && (
-          <PanelGroup orientation="horizontal" id={`atm-${activeModule}-${activeModule==='mail'?splitMode:'default'}-layout`}>
-            {activeModule === 'mail' && renderMailModule()}
-            {activeModule === 'docs' && renderDocsModule()}
-            {activeModule === 'cals' && renderCalsModule()}
-          </PanelGroup>
-        )}
+        <ErrorBoundary>
+          {activeModule === 'everything' && renderEverything()}
+          {activeModule !== 'everything' && (
+            <PanelGroup orientation="horizontal" id={`atm-${activeModule}-${activeModule==='mail'?splitMode:'default'}-layout`}>
+              {activeModule === 'mail' && renderMailModule()}
+              {activeModule === 'docs' && renderDocsModule()}
+              {activeModule === 'cals' && renderCalsModule()}
+            </PanelGroup>
+          )}
+        </ErrorBoundary>
       </div>
 
       {/* Compose modal */}

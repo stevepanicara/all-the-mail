@@ -193,6 +193,68 @@ router.patch('/:accountId/events/:eventId', authenticateToken, async (req, res) 
   }
 });
 
+// Create event
+router.post('/:accountId/events', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const account = await verifyAccountOwnership(accountId, req.userId);
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    if (!account.granted_scopes?.includes('cals')) {
+      return res.status(403).json({ error: 'missing_scope', message: 'This account has not granted Calendar access', service: 'cals' });
+    }
+
+    const ALLOWED_FIELDS = ['summary', 'description', 'location', 'start', 'end'];
+    const eventBody = {};
+    for (const key of ALLOWED_FIELDS) {
+      if (req.body[key] !== undefined) {
+        eventBody[key] = req.body[key];
+      }
+    }
+
+    if (!eventBody.summary) {
+      return res.status(400).json({ error: 'Event title is required' });
+    }
+
+    const calendarId = req.body.calendarId || 'primary';
+
+    const client = await getOAuth2ClientForAccount(accountId);
+    const calendar = google.calendar({ version: 'v3', auth: client });
+
+    const response = await calendar.events.insert({
+      calendarId,
+      requestBody: eventBody,
+    });
+
+    const ev = response.data;
+    const start = ev.start?.dateTime || ev.start?.date;
+    const end = ev.end?.dateTime || ev.end?.date;
+
+    res.status(201).json({
+      event: {
+        id: ev.id,
+        title: ev.summary || '(No title)',
+        description: ev.description || '',
+        location: ev.location || '',
+        startISO: start,
+        endISO: end,
+        status: ev.status,
+        htmlLink: ev.htmlLink,
+      }
+    });
+  } catch (error) {
+    console.error('Create calendar event error:', error?.message || error);
+    if (error?.code === 403 || error?.response?.status === 403) {
+      return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
+    }
+    if (error?.code === 401 || error?.response?.status === 401) {
+      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
+    }
+    res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
 // List calendars
 router.get('/:accountId/calendars', authenticateToken, async (req, res) => {
   try {
