@@ -1,174 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Mail,
-  RefreshCw,
-  Users,
-  Search,
-  Plus,
-  LogOut,
-  X,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  Forward,
-  Reply,
-  Archive,
-  Trash2,
-  CheckSquare,
-  Square,
-  MinusSquare,
-  Paperclip,
-  Download,
-  ArrowLeft,
-  FileText,
-  Calendar,
-  Star,
-  Clock,
-  Share2,
-  MoreHorizontal,
-  LayoutGrid,
-  ExternalLink,
-  MapPin,
-  Table2,
-  Presentation,
+  Mail, RefreshCw, Users, Search, Plus, LogOut, X,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  Forward, Reply, Archive, Trash2, CheckSquare, Square, MinusSquare,
+  Paperclip, Download, ArrowLeft, FileText, Calendar, Star, Clock,
+  Share2, MoreHorizontal, LayoutGrid, ExternalLink, MapPin,
 } from 'lucide-react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import DOMPurify from 'dompurify';
+
+import { API_BASE, DENSITY_HEIGHTS, FILE_TYPES } from './utils/constants';
+import {
+  getAccountGradient, buildEmailSrcDoc, stripName, ensurePrefix,
+  getEmailOnly, splitList, uniqLower, migrateLayoutStorage,
+  sanitizeDocHtml, formatRelativeEdit, getShortLabel,
+  getDocEditUrl, getDocIcon, getDocEditorLabel, getRelativeTime, formatTime,
+} from './utils/helpers';
+
+import Sidebar from './components/common/Sidebar';
+import ComposeModal from './components/common/ComposeModal';
+import EventEditModal from './components/common/EventEditModal';
+
 import './design-system.css';
-
-const API_BASE =
-  process.env.REACT_APP_BACKEND_URL ||
-  process.env.REACT_APP_API_URL ||
-  'http://localhost:3000';
-
-const GRADIENT_PRESETS = [
-  { key: 'purple-red',    g0: '#6C4CFF', g1: '#FF4C8B' },
-  { key: 'cyan-green',    g0: '#00E5FF', g1: '#00FF94' },
-  { key: 'yellow-orange', g0: '#FFD84D', g1: '#FF8C2B' },
-  { key: 'orange-red',    g0: '#FF8C42', g1: '#FF3B3B' },
-  { key: 'violet-cyan',   g0: '#7A5CFF', g1: '#4DE6FF' },
-  { key: 'pink-orange',   g0: '#FF4FB6', g1: '#FFB24D' },
-  { key: 'green-yellow',  g0: '#00FF94', g1: '#FFD84D' },
-  { key: 'blue-purple',   g0: '#3B82F6', g1: '#A855F7' },
-];
-
-function hexToRgb(hex) {
-  const h = hex.replace('#', '');
-  return {
-    r: parseInt(h.substring(0, 2), 16),
-    g: parseInt(h.substring(2, 4), 16),
-    b: parseInt(h.substring(4, 6), 16),
-  };
-}
-
-function getAccountGradient(accountIndex) {
-  const preset = GRADIENT_PRESETS[accountIndex % GRADIENT_PRESETS.length];
-  const rgb0 = hexToRgb(preset.g0);
-  const rgb1 = hexToRgb(preset.g1);
-  const mid = {
-    r: Math.round((rgb0.r + rgb1.r) / 2),
-    g: Math.round((rgb0.g + rgb1.g) / 2),
-    b: Math.round((rgb0.b + rgb1.b) / 2),
-  };
-  return {
-    ...preset, rgb0, rgb1, mid,
-    gradient: `linear-gradient(90deg, ${preset.g0}, ${preset.g1})`,
-    midRgba: (a) => `rgba(${mid.r}, ${mid.g}, ${mid.b}, ${a})`,
-    g0Rgba: (a) => `rgba(${rgb0.r}, ${rgb0.g}, ${rgb0.b}, ${a})`,
-    g1Rgba: (a) => `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, ${a})`,
-  };
-}
-
-function buildEmailSrcDoc(rawHtml) {
-  const html = rawHtml || '<div style="padding:16px;color:#111;">(empty)</div>';
-  const stripped = html
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
-    .replace(/<link[\s\S]*?>/gi, '')
-    .replace(/<meta[\s\S]*?>/gi, '')
-    .replace(/<base[\s\S]*?>/gi, '');
-  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>html,body{margin:0;padding:24px;background:#F5F7FA;color:#111;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:14px;line-height:1.5}img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#0b57d0}body{overflow:hidden}</style></head><body>${stripped}<script>document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a&&a.href){e.preventDefault();window.open(a.href,'_blank','noopener,noreferrer')}});</script></body></html>`;
-}
-
-function stripName(s = '') { return (s || '').replace(/<.*?>/g, '').trim(); }
-function ensurePrefix(subject = '', prefix = 'Re:') {
-  const s = (subject || '').trim();
-  if (/^\s*(re|fw|fwd)\s*:/i.test(s)) return s;
-  return `${prefix} ${s || '(no subject)'}`.trim();
-}
-function getEmailOnly(addr = '') { const m = String(addr||'').match(/<([^>]+)>/); return (m?m[1]:addr).trim(); }
-function splitList(list = '') { return String(list||'').split(',').map(x=>x.trim()).filter(Boolean); }
-function uniqLower(list = []) {
-  const seen = new Set(), out = [];
-  for (const x of list) { const e = getEmailOnly(x).toLowerCase(); if (!e||seen.has(e)) continue; seen.add(e); out.push(x); }
-  return out;
-}
-function migrateLayoutStorage() {
-  const old = localStorage.getItem('atm_layout');
-  if (old) { const m = { split:'vertical','no-split':'none' }; const v = m[old]||'none'; localStorage.setItem('atm_split_mode',v); localStorage.removeItem('atm_layout'); return v; }
-  return null;
-}
-
-function sanitizeDocHtml(html) {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br', 'hr',
-      'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'u', 'a', 'span',
-      'table', 'thead', 'tbody', 'tr', 'td', 'th', 'img', 'blockquote',
-      'pre', 'code', 'sup', 'sub', 'div'],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'class', 'colspan', 'rowspan'],
-    ALLOW_DATA_ATTR: false,
-  });
-}
-
-const DENSITY_HEIGHTS = { default: 56, comfortable: 64, compact: 46 };
-
-function formatRelativeEdit(isoDate) {
-  if (!isoDate) return '';
-  const now = new Date(), d = new Date(isoDate), ms = now - d;
-  const mins = Math.floor(ms / 60000), hrs = Math.floor(ms / 3600000), days = Math.floor(ms / 86400000);
-  if (mins < 1) return 'Edited just now';
-  if (mins < 60) return `Edited ${mins}m ago`;
-  if (hrs < 24) return `Edited ${hrs}h ago`;
-  if (days === 1) return 'Edited yesterday';
-  if (days < 7) return `Edited ${days}d ago`;
-  return `Edited ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
-}
-
-function getShortLabel(account) {
-  const name = account.account_name || '';
-  if (name) {
-    const first = name.split(/\s+/)[0];
-    return first.length > 14 ? first.slice(0, 13) + '\u2026' : first;
-  }
-  const prefix = (account.gmail_email || '').split('@')[0];
-  return prefix.length > 14 ? prefix.slice(0, 13) + '\u2026' : prefix;
-}
-
-const FILE_TYPES = {
-  'application/vnd.google-apps.document': { label: 'Google Doc', editor: 'document', Icon: FileText, editorLabel: 'Google Docs' },
-  'application/vnd.google-apps.spreadsheet': { label: 'Google Sheet', editor: 'spreadsheets', Icon: Table2, editorLabel: 'Google Sheets' },
-  'application/vnd.google-apps.presentation': { label: 'Google Slide', editor: 'presentation', Icon: Presentation, editorLabel: 'Google Slides' },
-  'application/vnd.google-apps.form': { label: 'Google Form', editor: 'forms', Icon: FileText, editorLabel: 'Google Forms' },
-  'application/pdf': { label: 'PDF', editor: null, Icon: FileText, editorLabel: null },
-};
-
-function getDocEditUrl(doc) {
-  if (doc.webViewLink) return doc.webViewLink;
-  const ft = FILE_TYPES[doc.mimeType];
-  if (ft?.editor) return `https://docs.google.com/${ft.editor}/d/${doc.id}/edit`;
-  return null;
-}
-
-function getDocIcon(mimeType) {
-  return FILE_TYPES[mimeType]?.Icon || FileText;
-}
-
-function getDocEditorLabel(mimeType) {
-  return FILE_TYPES[mimeType]?.editorLabel || 'Google Docs';
-}
 
 // ==================== MAIN COMPONENT ====================
 
@@ -178,7 +31,6 @@ const AllTheMail = () => {
   const [introActive, setIntroActive] = useState(true);
   const [cascadeKey, setCascadeKey] = useState(0);
 
-  // Module: everything | mail | docs | cals
   const [activeModule, setActiveModule] = useState('everything');
 
   // Docs state
@@ -214,8 +66,8 @@ const AllTheMail = () => {
   const [activeCategory, setActiveCategory] = useState('primary');
 
   const [emails, setEmails] = useState({});
-  const [docs, setDocs] = useState({});       // { accountId: [doc, ...] }
-  const [events, setEvents] = useState({});   // { accountId: [event, ...] }
+  const [docs, setDocs] = useState({});
+  const [events, setEvents] = useState({});
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [selectedThread, setSelectedThread] = useState(null);
   const [selectedThreadActiveMessageId, setSelectedThreadActiveMessageId] = useState(null);
@@ -282,7 +134,6 @@ const AllTheMail = () => {
   const iframeRef = useRef(null);
   const iframeResizeCleanupRef = useRef(null);
 
-  // Avatar dropdown state
   const [userProfile, setUserProfile] = useState(null);
   const [avatarDropdownOpen, setAvatarDropdownOpen] = useState(false);
   const [removingAccountId, setRemovingAccountId] = useState(null);
@@ -305,14 +156,12 @@ const AllTheMail = () => {
   useEffect(() => { localStorage.setItem('atm_split_mode',splitMode); }, [splitMode]);
   useEffect(() => { localStorage.setItem('atm_density',densityMode); }, [densityMode]);
 
-  // Write activeView to URL
   useEffect(() => {
     const url = new URL(window.location);
     url.searchParams.set('acct', activeView === 'everything' ? 'all' : activeView);
     window.history.replaceState({}, '', url);
   }, [activeView]);
 
-  // Validate stale account IDs
   useEffect(() => {
     if (connectedAccounts.length > 0 && activeView !== 'everything') {
       if (!connectedAccounts.some(a => a.id === activeView)) setActiveView('everything');
@@ -325,12 +174,10 @@ const AllTheMail = () => {
     obs.observe(el); return () => obs.disconnect();
   }, []);
 
-  // Cleanup iframe resize observers on unmount
   useEffect(() => {
     return () => { if (iframeResizeCleanupRef.current) iframeResizeCleanupRef.current(); };
   }, []);
 
-  // Avatar dropdown — click outside to close
   useEffect(() => {
     if (!avatarDropdownOpen) return;
     const handler = (e) => {
@@ -344,7 +191,6 @@ const AllTheMail = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [avatarDropdownOpen]);
 
-  // Avatar dropdown — escape to close
   useEffect(() => {
     if (!avatarDropdownOpen) return;
     const handler = (e) => {
@@ -354,10 +200,8 @@ const AllTheMail = () => {
     return () => document.removeEventListener('keydown', handler);
   }, [avatarDropdownOpen]);
 
-  // Reader scroll → header compression
   const handleReaderScroll = useCallback((e) => {
-    const scrollTop = e.target.scrollTop;
-    setReaderCompact(scrollTop > 60);
+    setReaderCompact(e.target.scrollTop > 60);
   }, []);
 
   const cycleDensity = useCallback(() => {
@@ -404,10 +248,7 @@ const AllTheMail = () => {
   }, []);
 
   const handleRemoveAccount = useCallback(async (accountId) => {
-    if (removingAccountId !== accountId) {
-      setRemovingAccountId(accountId);
-      return;
-    }
+    if (removingAccountId !== accountId) { setRemovingAccountId(accountId); return; }
     try {
       const r = await fetch(`${API_BASE}/accounts/${accountId}`, { method: 'DELETE', credentials: 'include' });
       if (r.ok) {
@@ -420,11 +261,7 @@ const AllTheMail = () => {
         setError(d.error || 'Failed to remove account');
         setRemovingAccountId(null);
       }
-    } catch (e) {
-      console.error('Remove account error:', e);
-      setError('Failed to remove account');
-      setRemovingAccountId(null);
-    }
+    } catch (e) { console.error('Remove account error:', e); setError('Failed to remove account'); setRemovingAccountId(null); }
   }, [removingAccountId, connectedAccounts, activeView]);
 
   const handleUpgrade = useCallback(async () => {
@@ -447,21 +284,6 @@ const AllTheMail = () => {
     finally { setBillingLoading(false); }
   }, []);
 
-  const getRelativeTime = useCallback((date) => {
-    const now=new Date(), d=new Date(date), ms=now-d, mins=Math.floor(ms/60000), hrs=Math.floor(ms/3600000);
-    if(mins<1) return 'Just now'; if(mins<60) return `${mins}m ago`; if(hrs<24) return `${hrs}h ago`;
-    return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-  }, []);
-
-  const formatTime = useCallback((date) => {
-    const now=new Date(), d=new Date(date);
-    if(d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()) return d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
-    const diff=Math.floor((now-d)/86400000);
-    if(diff<7) return d.toLocaleDateString(undefined,{weekday:'short'});
-    if(d.getFullYear()===now.getFullYear()) return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-    return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-  }, []);
-
   const getCurrentEmails = useCallback(() => {
     if (activeView==='everything') {
       const all=[]; connectedAccounts.forEach(a => { const ae=emails[a.id]?.[activeCategory]||[]; all.push(...ae.map(e=>({...e,accountId:a.id}))); });
@@ -470,7 +292,6 @@ const AllTheMail = () => {
     return emails[activeView]?.[activeCategory]||[];
   }, [activeView, activeCategory, connectedAccounts, emails]);
 
-  // Get all emails across accounts for Everything view
   const allEmails = useMemo(() => {
     const all = [];
     connectedAccounts.forEach(a => {
@@ -577,9 +398,7 @@ const AllTheMail = () => {
         const body = await r.json().catch(() => ({}));
         const errType = body.error === 'invalid_token' ? 'token' : 'scope';
         setDocsErrors(p => ({ ...p, [accountId]: errType }));
-      } else {
-        console.error('Docs load failed:', r.status);
-      }
+      } else { console.error('Docs load failed:', r.status); }
     } catch (err) { console.error('Error loading docs:', err); setDocsErrors(p => ({ ...p, [accountId]: 'network' })); }
   }, []);
 
@@ -595,9 +414,7 @@ const AllTheMail = () => {
         const body = await r.json().catch(() => ({}));
         const errType = body.error === 'invalid_token' ? 'token' : 'scope';
         setEventsErrors(p => ({ ...p, [accountId]: errType }));
-      } else {
-        console.error('Events load failed:', r.status);
-      }
+      } else { console.error('Events load failed:', r.status); }
     } catch (err) { console.error('Error loading events:', err); setEventsErrors(p => ({ ...p, [accountId]: 'network' })); }
   }, []);
 
@@ -621,7 +438,6 @@ const AllTheMail = () => {
         accs.forEach(a => { loadEmailsForAccount(a.id); });
         Promise.all(docPromises).then(() => setIsLoadingDocs(false));
         Promise.all(eventPromises).then(() => setIsLoadingEvents(false));
-        // Mark accounts without scopes — loading finishes immediately if none have scope
         if (docsAccs.length === 0) setIsLoadingDocs(false);
         if (calsAccs.length === 0) setIsLoadingEvents(false);
         loadUserProfile();
@@ -745,91 +561,55 @@ const AllTheMail = () => {
     if (startDT) patch.start = startDT;
     if (endDT) patch.end = endDT;
 
-    // Optimistic update
     const prevEvents = { ...events };
     setEvents(prev => {
       const accountEvents = prev[selectedEvent.accountId] || [];
-      return {
-        ...prev,
-        [selectedEvent.accountId]: accountEvents.map(e =>
-          e.id === selectedEvent.id
-            ? { ...e, title: eventEditFields.summary || e.title, meta: eventEditFields.location || e.meta }
-            : e
-        )
-      };
+      return { ...prev, [selectedEvent.accountId]: accountEvents.map(e => e.id === selectedEvent.id ? { ...e, title: eventEditFields.summary || e.title, meta: eventEditFields.location || e.meta } : e) };
     });
     setSelectedEvent(prev => prev ? { ...prev, title: eventEditFields.summary || prev.title, meta: eventEditFields.location || prev.meta } : prev);
 
     try {
       if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
       const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
       });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body.message || body.error || 'Update failed');
-      }
+      if (!r.ok) { const body = await r.json().catch(() => ({})); throw new Error(body.message || body.error || 'Update failed'); }
       setEventEditOpen(false);
-      // Reload events for this account to get fresh data
       loadEventsForAccount(selectedEvent.accountId);
     } catch (err) {
-      // Revert optimistic update
       setEvents(prevEvents);
       setEventEditError(err.message || 'Failed to save changes');
-    } finally {
-      setEventEditSaving(false);
-    }
+    } finally { setEventEditSaving(false); }
   }, [selectedEvent, eventEditFields, events, loadEventsForAccount]);
 
-  // Slide-over handlers
   const loadDocPreview = useCallback(async (doc) => {
     if (!doc?.id || !doc?.accountId) return;
     setDocPreviewLoading(true);
     setDocPreview(null);
     try {
       const r = await fetch(`${API_BASE}/docs/${doc.accountId}/${doc.id}/preview`, { credentials: 'include' });
-      if (r.ok) {
-        const data = await r.json();
-        setDocPreview(data);
-      } else {
-        setDocPreview({ type: 'none' });
-      }
-    } catch {
-      setDocPreview({ type: 'none' });
-    } finally {
-      setDocPreviewLoading(false);
-    }
+      if (r.ok) { setDocPreview(await r.json()); } else { setDocPreview({ type: 'none' }); }
+    } catch { setDocPreview({ type: 'none' }); }
+    finally { setDocPreviewLoading(false); }
   }, []);
 
   const openSlideOverEmail = useCallback((email, index) => {
-    setSlideOverDoc(null);
-    setDocPreview(null);
-    setSlideOverEmail(email);
+    setSlideOverDoc(null); setDocPreview(null); setSlideOverEmail(email);
     setSlideOverIndex(typeof index === 'number' ? index : null);
-    document.body.style.overflow = 'hidden';
-    loadEmailDetails(email);
+    document.body.style.overflow = 'hidden'; loadEmailDetails(email);
   }, [loadEmailDetails]);
 
   const openSlideOverDoc = useCallback((doc, index) => {
-    setSlideOverEmail(null);
-    setSlideOverDoc(doc);
+    setSlideOverEmail(null); setSlideOverDoc(doc);
     setSlideOverIndex(typeof index === 'number' ? index : null);
-    document.body.style.overflow = 'hidden';
-    loadDocPreview(doc);
+    document.body.style.overflow = 'hidden'; loadDocPreview(doc);
   }, [loadDocPreview]);
 
   const closeSlideOver = useCallback(() => {
-    setSlideOverEmail(null);
-    setSlideOverDoc(null);
-    setSlideOverIndex(null);
-    setDocPreview(null);
+    setSlideOverEmail(null); setSlideOverDoc(null); setSlideOverIndex(null); setDocPreview(null);
     document.body.style.overflow = '';
   }, []);
 
-  // Slide-over keyboard: ESC to close, arrow keys to navigate
   useEffect(() => {
     if (!slideOverEmail && !slideOverDoc) return;
     const items = slideOverEmail ? evFilteredEmails.slice(0, 50) : evFilteredDocs;
@@ -866,7 +646,6 @@ const AllTheMail = () => {
     return list.filter(e=>(e.subject||'').toLowerCase().includes(q)||(e.from||'').toLowerCase().includes(q)||(e.snippet||'').toLowerCase().includes(q));
   }, [getCurrentEmails, searchQuery]);
 
-  // Auto-save drafts
   useEffect(() => {
     if(!composeOpen) return;
     if(draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
@@ -894,7 +673,6 @@ const AllTheMail = () => {
     if(i<filteredEmails.length-1){const n=filteredEmails[i+1];setSelectedEmail(n);setShowMetadata(false);loadEmailDetails(n);loadThread(n);}
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread]);
 
-  // Keyboard nav
   useEffect(() => {
     const onKey = (e) => {
       if(composeOpen) return;
@@ -903,9 +681,7 @@ const AllTheMail = () => {
       if(e.key==='Escape'&&splitMode==='none'&&fullPageReaderOpen){e.preventDefault();setFullPageReaderOpen(false);return;}
       if(e.key==='Enter'&&splitMode==='none'&&selectedEmail&&!fullPageReaderOpen){e.preventDefault();setFullPageReaderOpen(true);return;}
       if(e.metaKey||e.ctrlKey||e.altKey) return;
-
       const readerOpen = selectedEmail && (splitMode!=='none' || fullPageReaderOpen);
-
       if(readerOpen){
         if(e.key==='ArrowLeft'){e.preventDefault();navigatePrev();return;}
         if(e.key==='ArrowRight'){e.preventDefault();navigateNext();return;}
@@ -1042,49 +818,24 @@ const AllTheMail = () => {
     const isFullPage = opts.fullPage;
 
     return (
-      <div className="reader-root" key={email.id}
-        onScroll={handleReaderScroll} ref={readerScrollRef}>
-        {/* Toolbar — 48px, bg-1, sticky */}
+      <div className="reader-root" key={email.id} onScroll={handleReaderScroll} ref={readerScrollRef}>
         <div className="reader-toolbar">
           <div className="reader-toolbar-left">
-            {isFullPage && (
-              <button className="reader-toolbar-btn" onClick={goBackToList} title="Back to inbox">
-                <ArrowLeft size={16} strokeWidth={1.5} />
-              </button>
-            )}
-            <button className="reader-toolbar-btn" onClick={() => archiveEmail(email)} title="Archive">
-              <Archive size={16} strokeWidth={1.5} />
-            </button>
-            <button className="reader-toolbar-btn danger" onClick={() => trashEmail(email)} title="Delete">
-              <Trash2 size={16} strokeWidth={1.5} />
-            </button>
-            <button className="reader-toolbar-btn" title="More">
-              <MoreHorizontal size={16} strokeWidth={1.5} />
-            </button>
+            {isFullPage && (<button className="reader-toolbar-btn" onClick={goBackToList} title="Back to inbox"><ArrowLeft size={16} strokeWidth={1.5} /></button>)}
+            <button className="reader-toolbar-btn" onClick={() => archiveEmail(email)} title="Archive"><Archive size={16} strokeWidth={1.5} /></button>
+            <button className="reader-toolbar-btn danger" onClick={() => trashEmail(email)} title="Delete"><Trash2 size={16} strokeWidth={1.5} /></button>
+            <button className="reader-toolbar-btn" title="More"><MoreHorizontal size={16} strokeWidth={1.5} /></button>
           </div>
           <div className="reader-toolbar-right">
-            <button className="reader-toolbar-btn" onClick={navigatePrev} disabled={emailIdx <= 0} title="Previous">
-              <ChevronLeft size={16} strokeWidth={1.5} />
-            </button>
+            <button className="reader-toolbar-btn" onClick={navigatePrev} disabled={emailIdx <= 0} title="Previous"><ChevronLeft size={16} strokeWidth={1.5} /></button>
             <span className="reader-toolbar-count">{emailIdx >= 0 ? emailIdx + 1 : '–'} of {emailCount}</span>
-            <button className="reader-toolbar-btn" onClick={navigateNext} disabled={emailIdx >= emailCount - 1} title="Next">
-              <ChevronRight size={16} strokeWidth={1.5} />
-            </button>
+            <button className="reader-toolbar-btn" onClick={navigateNext} disabled={emailIdx >= emailCount - 1} title="Next"><ChevronRight size={16} strokeWidth={1.5} /></button>
           </div>
         </div>
-
-        {/* Content plane — full width bg-2 */}
-        <div
-          className={`reader-content${readerCompact ? ' reader--compact' : ''}`}
-        >
-          {/* Subject */}
+        <div className={`reader-content${readerCompact ? ' reader--compact' : ''}`}>
           <h1 className="reader-subject">{email.subject || '(no subject)'}</h1>
-
-          {/* Meta row: avatar, sender, email, spacer, date */}
           <div className="reader-meta">
-            <div className="reader-avatar">
-              {stripName(email.from || '').charAt(0).toUpperCase()}
-            </div>
+            <div className="reader-avatar">{stripName(email.from || '').charAt(0).toUpperCase()}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px' }}>
                 <span className="reader-sender">{stripName(email.from || '')}</span>
@@ -1100,31 +851,19 @@ const AllTheMail = () => {
               )}
             </div>
             <span className="reader-date">{new Date(email.date).toLocaleString()}</span>
-            <button
-              onClick={() => setShowMetadata(!showMetadata)}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-2)', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-              title={showMetadata ? 'Hide details' : 'Show details'}
-            >
+            <button onClick={() => setShowMetadata(!showMetadata)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-2)', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }} title={showMetadata ? 'Hide details' : 'Show details'}>
               {showMetadata ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
           </div>
-
-          {/* Action icons — inline, no background fills */}
           <div className="reader-actions-row">
             <button className="reader-action-icon" onClick={() => openCompose('reply', email)} title="Reply"><Reply size={16} strokeWidth={1.5} /></button>
             <button className="reader-action-icon" onClick={() => openCompose('replyAll', email)} title="Reply all"><Users size={16} strokeWidth={1.5} /></button>
             <button className="reader-action-icon" onClick={() => openCompose('forward', email)} title="Forward"><Forward size={16} strokeWidth={1.5} /></button>
           </div>
-
-          {/* Thread */}
           {email.threadId && selectedThread?.messages?.length > 1 && (
             <div style={{ border: '1px solid var(--line)', background: 'var(--bg-1)', padding: 12, marginBottom: 24, borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-2)', marginBottom: 10, fontWeight: 500 }}>
-                Conversation ({selectedThread.messages.length})
-              </div>
-              {isLoadingThread ? (
-                <div style={{ fontSize: '12px', color: 'var(--text-2)' }}>Loading thread...</div>
-              ) : (
+              <div style={{ fontSize: '12px', color: 'var(--text-2)', marginBottom: 10, fontWeight: 500 }}>Conversation ({selectedThread.messages.length})</div>
+              {isLoadingThread ? (<div style={{ fontSize: '12px', color: 'var(--text-2)' }}>Loading thread...</div>) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {selectedThread.messages.map(m => {
                     const active = selectedThreadActiveMessageId === m.id;
@@ -1140,8 +879,6 @@ const AllTheMail = () => {
               )}
             </div>
           )}
-
-          {/* Email body — white surface */}
           <div className="email-body-wrapper">
             {isLoadingBody ? (
               <div style={{ padding: '48px', textAlign: 'center', background: '#fff', color: '#666' }}>Loading message...</div>
@@ -1154,9 +891,7 @@ const AllTheMail = () => {
                   if (iframeResizeCleanupRef.current) iframeResizeCleanupRef.current();
                   const iframe = iframeRef.current;
                   if (!iframe?.contentDocument?.body) return;
-                  const resize = () => {
-                    try { const h = iframe.contentDocument.body.scrollHeight; if (h > 0) iframe.style.height = h + 'px'; } catch(e) {}
-                  };
+                  const resize = () => { try { const h = iframe.contentDocument.body.scrollHeight; if (h > 0) iframe.style.height = h + 'px'; } catch(e) {} };
                   resize();
                   const timers = [100, 500, 1000, 2000].map(ms => setTimeout(resize, ms));
                   const imgs = [];
@@ -1167,8 +902,6 @@ const AllTheMail = () => {
                 style={{ width: '100%', border: '0', display: 'block', background: '#F5F7FA', borderRadius: '8px', overflow: 'hidden' }} />
             )}
           </div>
-
-          {/* Attachments */}
           {emailAttachments[email.id]?.length > 0 && (
             <div style={{ marginTop: '24px', padding: '14px', border: '1px solid var(--line)', background: 'var(--bg-1)', borderRadius: '8px' }}>
               <div style={{ marginBottom: '10px', fontSize: '12px', color: 'var(--text-2)' }}>
@@ -1201,41 +934,26 @@ const AllTheMail = () => {
         <div style={{ borderBottom: '1px solid var(--line-0)', background: 'transparent' }}>
           <div className="ev-header">
             <div className="ev-dots"><span /><span /><span /></div>
-            <span className="ev-title">
-              {activeView === 'everything' ? 'All inboxes' : (connectedAccounts.find(a => a.id === activeView)?.account_name || connectedAccounts.find(a => a.id === activeView)?.gmail_email || 'Inbox')}
-            </span>
+            <span className="ev-title">{activeView === 'everything' ? 'All inboxes' : (connectedAccounts.find(a => a.id === activeView)?.account_name || connectedAccounts.find(a => a.id === activeView)?.gmail_email || 'Inbox')}</span>
             <span className="ev-wordmark">All the mail</span>
           </div>
         </div>
       )}
-
       <div style={{ borderBottom: '1px solid var(--line)' }}>
         {activeView !== 'everything' && (
           <div style={{ padding: '14px 20px 8px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>
-              {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}
-            </div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}</div>
             {(() => {
               const idx = connectedAccounts.findIndex(a => a.id === activeView);
               if (idx === -1) return null;
               const g = getAccountGradient(idx);
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: '11px', color: 'var(--text-3)' }}>
-                  <span className="account-dot" style={{ background: g.gradient, width: 6, height: 6 }} />
-                  <span>{connectedAccounts[idx].account_name || connectedAccounts[idx].gmail_email}</span>
-                </div>
-              );
+              return (<div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: '11px', color: 'var(--text-3)' }}><span className="account-dot" style={{ background: g.gradient, width: 6, height: 6 }} /><span>{connectedAccounts[idx].account_name || connectedAccounts[idx].gmail_email}</span></div>);
             })()}
           </div>
         )}
-
         <div style={{ padding: activeView === 'everything' ? '12px 20px 8px' : '0 20px 8px' }}>
-          <div className="search-pill">
-            <Search size={14} />
-            <input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search messages..." />
-          </div>
+          <div className="search-pill"><Search size={14} /><input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search messages..." /></div>
         </div>
-
         <div style={{ padding: '4px 20px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => { if (selectedCount === filteredEmails.length && filteredEmails.length > 0) clearSelection(); else selectAllVisible(); }}
@@ -1247,17 +965,12 @@ const AllTheMail = () => {
           </div>
           {selectedCount > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} title="Archive selected" style={{ padding: '4px 10px', fontSize: 11 }}>
-                <Archive size={13} /> Archive
-              </button>
-              <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} title="Delete selected" style={{ padding: '4px 10px', fontSize: 11 }}>
-                <Trash2 size={13} /> Delete
-              </button>
+              <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} title="Archive selected" style={{ padding: '4px 10px', fontSize: 11 }}><Archive size={13} /> Archive</button>
+              <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} title="Delete selected" style={{ padding: '4px 10px', fontSize: 11 }}><Trash2 size={13} /> Delete</button>
             </div>
           )}
         </div>
       </div>
-
       {isLoadingEmails && filteredEmails.length === 0 ? (
         Array.from({ length: 8 }).map((_, i) => (
           <div className="skeleton-row" key={`sk-${i}`} style={{ minHeight: rowHeight }}>
@@ -1271,9 +984,7 @@ const AllTheMail = () => {
       ) : filteredEmails.length === 0 ? (
         <div style={{ padding: '64px 24px', textAlign: 'center' }}>
           <Mail size={32} style={{ margin: '0 auto 12px', opacity: 0.05, display: 'block' }} />
-          <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>
-            {searchQuery ? 'No messages match your search' : `No messages in ${activeCategory}`}
-          </div>
+          <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>{searchQuery ? 'No messages match your search' : `No messages in ${activeCategory}`}</div>
         </div>
       ) : (
         filteredEmails.map((email, idx) => {
@@ -1291,7 +1002,6 @@ const AllTheMail = () => {
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
               style={{ position: 'relative', padding: '0 16px', minHeight: `${rowHeight}px`, ...cs }}>
               {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
-
               {useStackedRows ? (
                 <div className="email-row-stacked">
                   <div className="row-icon-slot">{grad && <span className="account-dot" style={{ background: grad.gradient }} title={connectedAccounts[accountIndex]?.account_name || ''} />}</div>
@@ -1323,209 +1033,137 @@ const AllTheMail = () => {
   );
 
   // ==================== RENDER: EVERYTHING DASHBOARD ====================
-  const renderEverything = () => {
-    return (
-      <PanelGroup orientation="horizontal" id="atm-everything-layout">
-        {/* Mail column — 40% */}
-        <Panel defaultSize="40%" minSize="30%" id="ev-mail">
-          <div className="ev-column">
-            <div className="ev-col-header">
-              <span className="ev-col-title">Mail</span>
-              <div className="ev-col-filters">
-                <button className={`ev-filter-btn${evMailFilter==='all'?' active':''}`} onClick={()=>setEvMailFilter('all')}>All</button>
-                <button className={`ev-filter-btn${evMailFilter==='unread'?' active':''}`} onClick={()=>setEvMailFilter('unread')}>Unread</button>
-              </div>
-            </div>
-            <div className="ev-col-body">
-              {evFilteredEmails.length === 0 ? (
-                <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                  <Mail size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} />
-                  <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No messages</div>
-                </div>
-              ) : (
-                evFilteredEmails.slice(0, 50).map((email, idx) => {
-                  const accountIndex = connectedAccounts.findIndex(a => a.id === email.accountId);
-                  const grad = accountIndex !== -1 ? getAccountGradient(accountIndex) : null;
-                  const isCascading = (Date.now() - cascadeTimestampRef.current) < 1200;
-                  const cc = isCascading && idx <= 23 ? ' row--intro' : '';
-                  const cs = isCascading && idx <= 23 ? { '--d': `${Math.min(idx, 23) * 36}ms` } : {};
-
-                  return (
-                    <div key={`ev-${email.id}:${cascadeKey}`} className={`email-item${cc}`}
-                      onClick={() => openSlideOverEmail(email, idx)}
-                      style={{ position: 'relative', padding: '0 16px', minHeight: '48px', ...cs }}>
-                      {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
-                      <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 72px', gap: '0 10px', alignItems: 'center', width: '100%', minWidth: 0 }}>
-                        <div className="row-icon-slot" style={{ width: 24 }}>{grad && <span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />}</div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline', minWidth: 0 }}>
-                            <span className="row-sender" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)', flexShrink: 0, maxWidth: '140px' }}>{stripName(email.from || '')}</span>
-                            <span className="row-subject" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
-                          </div>
-                        </div>
-                        <span className="row-time">{formatTime(email.date)}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+  const renderEverything = () => (
+    <PanelGroup orientation="horizontal" id="atm-everything-layout">
+      <Panel defaultSize="40%" minSize="30%" id="ev-mail">
+        <div className="ev-column">
+          <div className="ev-col-header">
+            <span className="ev-col-title">Mail</span>
+            <div className="ev-col-filters">
+              <button className={`ev-filter-btn${evMailFilter==='all'?' active':''}`} onClick={()=>setEvMailFilter('all')}>All</button>
+              <button className={`ev-filter-btn${evMailFilter==='unread'?' active':''}`} onClick={()=>setEvMailFilter('unread')}>Unread</button>
             </div>
           </div>
-        </Panel>
-
-        <PanelResizeHandle className="panel-resize-handle" />
-
-        {/* Docs column — 30% */}
-        <Panel defaultSize="30%" minSize="22%" id="ev-docs">
-          <div className="ev-column">
-            <div className="ev-col-header">
-              <span className="ev-col-title">Docs</span>
-              <div className="ev-col-filters">
-                <button className={`ev-filter-btn${evDocsFilter==='recent'?' active':''}`} onClick={()=>setEvDocsFilter('recent')}>Recent</button>
-                <button className={`ev-filter-btn${evDocsFilter==='shared'?' active':''}`} onClick={()=>setEvDocsFilter('shared')}>Shared</button>
-              </div>
-            </div>
-            <div className="ev-col-body">
-              {isLoadingDocs && evFilteredDocs.length === 0 ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div className="skeleton-row" key={`edsk-${i}`} style={{ minHeight: 48, padding: '12px 16px' }}>
-                    <div className="skeleton-block" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0 }} />
-                    <div className="skeleton-block" style={{ flex: 1 }} />
-                  </div>
-                ))
-              ) : (!anyHasDocs || hasDocsError) && evFilteredDocs.length === 0 ? (
-                <div className="connect-cta-compact">
-                  <FileText size={24} strokeWidth={1.5} style={{ color: 'var(--text-3)' }} />
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasDocs ? 'Reconnect Google Drive' : 'Connect Google Drive'}</div>
-                  <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}>
-                    <Plus size={12} strokeWidth={1.5} /> {anyHasDocs ? 'Reconnect' : 'Connect'}
-                  </button>
-                </div>
-              ) : evFilteredDocs.length === 0 ? (
-                <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                  <FileText size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} />
-                  <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No documents</div>
-                </div>
-              ) : evFilteredDocs.map((doc, idx) => {
+          <div className="ev-col-body">
+            {evFilteredEmails.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}><Mail size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No messages</div></div>
+            ) : (
+              evFilteredEmails.slice(0, 50).map((email, idx) => {
+                const accountIndex = connectedAccounts.findIndex(a => a.id === email.accountId);
+                const grad = accountIndex !== -1 ? getAccountGradient(accountIndex) : null;
                 const isCascading = (Date.now() - cascadeTimestampRef.current) < 1200;
                 const cc = isCascading && idx <= 23 ? ' row--intro' : '';
-                const cs = isCascading && idx <= 23 ? { '--d': `${Math.min(idx + 8, 23) * 36}ms` } : {};
-                const EvDocIcon = getDocIcon(doc.mimeType);
-                const editUrl = getDocEditUrl(doc);
-
+                const cs = isCascading && idx <= 23 ? { '--d': `${Math.min(idx, 23) * 36}ms` } : {};
                 return (
-                  <div key={doc.id} className={`email-item${cc}`}
-                    onClick={() => openSlideOverDoc(doc, idx)}
-                    style={{ padding: '10px 16px', minHeight: '48px', cursor: 'pointer', ...cs }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: '0 10px', alignItems: 'center' }}>
-                      <div className="row-icon-slot" style={{ width: 24 }}><EvDocIcon size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)' }} /></div>
+                  <div key={`ev-${email.id}:${cascadeKey}`} className={`email-item${cc}`} onClick={() => openSlideOverEmail(email, idx)}
+                    style={{ position: 'relative', padding: '0 16px', minHeight: '48px', ...cs }}>
+                    {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
+                    <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 72px', gap: '0 10px', alignItems: 'center', width: '100%', minWidth: 0 }}>
+                      <div className="row-icon-slot" style={{ width: 24 }}>{grad && <span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />}</div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.title}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '1px' }}>{doc.owner} · {formatRelativeEdit(doc.lastEdited)}</div>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline', minWidth: 0 }}>
+                          <span className="row-sender" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)', flexShrink: 0, maxWidth: '140px' }}>{stripName(email.from || '')}</span>
+                          <span className="row-subject" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
+                        </div>
                       </div>
-                      <span className="row-time">{new Date(doc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                      <span className="row-time">{formatTime(email.date)}</span>
                     </div>
                   </div>
                 );
-              })}
+              })
+            )}
+          </div>
+        </div>
+      </Panel>
+      <PanelResizeHandle className="panel-resize-handle" />
+      <Panel defaultSize="30%" minSize="22%" id="ev-docs">
+        <div className="ev-column">
+          <div className="ev-col-header">
+            <span className="ev-col-title">Docs</span>
+            <div className="ev-col-filters">
+              <button className={`ev-filter-btn${evDocsFilter==='recent'?' active':''}`} onClick={()=>setEvDocsFilter('recent')}>Recent</button>
+              <button className={`ev-filter-btn${evDocsFilter==='shared'?' active':''}`} onClick={()=>setEvDocsFilter('shared')}>Shared</button>
             </div>
           </div>
-        </Panel>
-
-        <PanelResizeHandle className="panel-resize-handle" />
-
-        {/* Cals column — 30% */}
-        <Panel defaultSize="30%" minSize="22%" id="ev-cals">
-          <div className="ev-column">
-            <div className="ev-col-header">
-              <span className="ev-col-title">Cals</span>
-              <div className="ev-col-filters">
-                <button className={`ev-filter-btn${evCalsFilter==='upcoming'?' active':''}`} onClick={()=>setEvCalsFilter('upcoming')}>Upcoming</button>
-                <button className={`ev-filter-btn${evCalsFilter==='week'?' active':''}`} onClick={()=>setEvCalsFilter('week')}>Week</button>
+          <div className="ev-col-body">
+            {isLoadingDocs && evFilteredDocs.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (<div className="skeleton-row" key={`edsk-${i}`} style={{ minHeight: 48, padding: '12px 16px' }}><div className="skeleton-block" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
+            ) : (!anyHasDocs || hasDocsError) && evFilteredDocs.length === 0 ? (
+              <div className="connect-cta-compact">
+                <FileText size={24} strokeWidth={1.5} style={{ color: 'var(--text-3)' }} />
+                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasDocs ? 'Reconnect Google Drive' : 'Connect Google Drive'}</div>
+                <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}><Plus size={12} strokeWidth={1.5} /> {anyHasDocs ? 'Reconnect' : 'Connect'}</button>
               </div>
-            </div>
-            <div className="ev-col-body">
-              {(() => {
-                const grouped = {};
-                evFilteredEvents.forEach(ev => { if (!grouped[ev.day]) grouped[ev.day] = []; grouped[ev.day].push(ev); });
-                if (isLoadingEvents && evFilteredEvents.length === 0) return Array.from({ length: 4 }).map((_, i) => (
-                  <div className="skeleton-row" key={`ecsk-${i}`} style={{ minHeight: 48, padding: '12px 16px' }}>
-                    <div className="skeleton-block" style={{ width: 3, height: 28, borderRadius: 2, flexShrink: 0 }} />
-                    <div className="skeleton-block" style={{ width: 40 }} />
-                    <div className="skeleton-block" style={{ flex: 1 }} />
+            ) : evFilteredDocs.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}><FileText size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No documents</div></div>
+            ) : evFilteredDocs.map((doc, idx) => {
+              const isCascading = (Date.now() - cascadeTimestampRef.current) < 1200;
+              const cc = isCascading && idx <= 23 ? ' row--intro' : '';
+              const cs = isCascading && idx <= 23 ? { '--d': `${Math.min(idx + 8, 23) * 36}ms` } : {};
+              const EvDocIcon = getDocIcon(doc.mimeType);
+              return (
+                <div key={doc.id} className={`email-item${cc}`} onClick={() => openSlideOverDoc(doc, idx)} style={{ padding: '10px 16px', minHeight: '48px', cursor: 'pointer', ...cs }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: '0 10px', alignItems: 'center' }}>
+                    <div className="row-icon-slot" style={{ width: 24 }}><EvDocIcon size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)' }} /></div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.title}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-2)', marginTop: '1px' }}>{doc.owner} · {formatRelativeEdit(doc.lastEdited)}</div>
+                    </div>
+                    <span className="row-time">{new Date(doc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   </div>
-                ));
-                if ((!anyHasCals || hasEventsError) && evFilteredEvents.length === 0) return (
-                  <div className="connect-cta-compact">
-                    <Calendar size={24} strokeWidth={1.5} style={{ color: 'var(--text-3)' }} />
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
-                    <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}>
-                      <Plus size={12} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect'}
-                    </button>
-                  </div>
-                );
-                return evFilteredEvents.length === 0 ? (
-                  <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                    <Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} />
-                    <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div>
-                  </div>
-                ) : Object.entries(grouped).map(([day, events]) => (
-                  <div key={day}>
-                    <div className="cal-day-header">{day}</div>
-                    {events.map((ev, idx) => {
-                      const isCascading = (Date.now() - cascadeTimestampRef.current) < 1200;
-                      const globalIdx = idx + 16;
-                      const cc = isCascading && globalIdx <= 23 ? ' row--intro' : '';
-                      const cs = isCascading && globalIdx <= 23 ? { '--d': `${Math.min(globalIdx, 23) * 36}ms` } : {};
-
-                      return (
-                        <div key={ev.id} className={`cal-event${cc}`} onClick={() => { setSelectedEvent(ev); openEventEdit(ev); }} style={cs}>
-                          <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
-                          <div className="cal-event-time">{ev.time}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="cal-event-title">{ev.title}</div>
-                            <div className="cal-event-meta">{ev.meta}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ));
-              })()}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Panel>
+      <PanelResizeHandle className="panel-resize-handle" />
+      <Panel defaultSize="30%" minSize="22%" id="ev-cals">
+        <div className="ev-column">
+          <div className="ev-col-header">
+            <span className="ev-col-title">Cals</span>
+            <div className="ev-col-filters">
+              <button className={`ev-filter-btn${evCalsFilter==='upcoming'?' active':''}`} onClick={()=>setEvCalsFilter('upcoming')}>Upcoming</button>
+              <button className={`ev-filter-btn${evCalsFilter==='week'?' active':''}`} onClick={()=>setEvCalsFilter('week')}>Week</button>
             </div>
           </div>
-        </Panel>
-      </PanelGroup>
-    );
-  };
-
-  // ==================== RENDER: MAIL SIDEBAR ====================
-  const renderMailSidebar = () => (
-    <div className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`} style={{ width: '100%' }}>
-      <div style={{ padding: '10px 16px 0', display: 'flex', justifyContent: sidebarCollapsed ? 'center' : 'flex-end' }}>
-        <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-2)', padding: '4px', display: 'flex', alignItems: 'center' }}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
-      </div>
-      <div style={{ padding: '10px 16px 16px' }}>
-        <button className="btn-compose" style={{ width: '100%', padding: sidebarCollapsed ? '0' : '0 14px' }} onClick={() => openCompose('compose')} title="New message">
-          {sidebarCollapsed ? <Mail size={16} /> : 'New message'}
-        </button>
-      </div>
-      <div style={{ padding: '0 0 24px' }}>
-        {[{key:'primary',label:'Primary'},{key:'social',label:'Social'},{key:'promotions',label:'Promotions'},{key:'sent',label:'Sent'},{key:'drafts',label:'Drafts'},{key:'trash',label:'Trash'}].map(({key,label}) => (
-          <button key={key}
-            onClick={() => { setActiveCategory(key); setSelectedEmail(null); setSelectedThread(null); setSelectedThreadActiveMessageId(null); setEditMode(false); clearSelection(); setFullPageReaderOpen(false); }}
-            className={`category-btn${activeCategory === key ? ' active' : ''}`}
-            title={sidebarCollapsed ? label : undefined}
-            style={{ width: '100%', padding: sidebarCollapsed ? '10px 0' : '9px 20px', textAlign: sidebarCollapsed ? 'center' : 'left', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', color: activeCategory === key ? 'var(--text-0)' : 'var(--text-2)', position: 'relative', fontSize: '13px', fontWeight: activeCategory === key ? 500 : 400, fontFamily: 'inherit' }}>
-            {sidebarCollapsed ? <span>{label.charAt(0)}</span> : <><span className="category-label">{label}</span><span className="category-count">{categoryCounts[key] || ''}</span></>}
-          </button>
-        ))}
-      </div>
-    </div>
+          <div className="ev-col-body">
+            {(() => {
+              const grouped = {};
+              evFilteredEvents.forEach(ev => { if (!grouped[ev.day]) grouped[ev.day] = []; grouped[ev.day].push(ev); });
+              if (isLoadingEvents && evFilteredEvents.length === 0) return Array.from({ length: 4 }).map((_, i) => (<div className="skeleton-row" key={`ecsk-${i}`} style={{ minHeight: 48, padding: '12px 16px' }}><div className="skeleton-block" style={{ width: 3, height: 28, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 40 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>));
+              if ((!anyHasCals || hasEventsError) && evFilteredEvents.length === 0) return (
+                <div className="connect-cta-compact">
+                  <Calendar size={24} strokeWidth={1.5} style={{ color: 'var(--text-3)' }} />
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
+                  <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}><Plus size={12} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect'}</button>
+                </div>
+              );
+              return evFilteredEvents.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
+              ) : Object.entries(grouped).map(([day, dayEvents]) => (
+                <div key={day}>
+                  <div className="cal-day-header">{day}</div>
+                  {dayEvents.map((ev, idx) => {
+                    const isCascading = (Date.now() - cascadeTimestampRef.current) < 1200;
+                    const globalIdx = idx + 16;
+                    const cc = isCascading && globalIdx <= 23 ? ' row--intro' : '';
+                    const cs = isCascading && globalIdx <= 23 ? { '--d': `${Math.min(globalIdx, 23) * 36}ms` } : {};
+                    return (
+                      <div key={ev.id} className={`cal-event${cc}`} onClick={() => { setSelectedEvent(ev); openEventEdit(ev); }} style={cs}>
+                        <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
+                        <div className="cal-event-time">{ev.time}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}><div className="cal-event-title">{ev.title}</div><div className="cal-event-meta">{ev.meta}</div></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      </Panel>
+    </PanelGroup>
   );
 
   // ==================== RENDER: DOCS MODULE ====================
@@ -1533,9 +1171,7 @@ const AllTheMail = () => {
     <>
       <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-docs">
         <div className="sidebar" style={{ width: '100%' }}>
-          <div style={{ padding: '16px 16px 16px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>All the docs</div>
-          </div>
+          <div style={{ padding: '16px 16px 16px' }}><div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>All the docs</div></div>
           <div style={{ padding: '0 0 24px' }}>
             {[{key:'recent',label:'Recent',icon:Clock},{key:'shared',label:'Shared with me',icon:Share2},{key:'starred',label:'Starred',icon:Star},{key:'trash',label:'Trash',icon:Trash2}].map(({key,label,icon:Icon}) => (
               <button key={key} onClick={()=>{setDocsCategory(key);setSelectedDoc(null);}}
@@ -1550,11 +1186,7 @@ const AllTheMail = () => {
       <PanelResizeHandle className="panel-resize-handle" />
       <Panel defaultSize="40%" minSize="28%" id="docs-list">
         <div style={{ height: '100%', overflow: 'auto', background: 'var(--surface-list)' }}>
-          <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>
-              {docsCategory.charAt(0).toUpperCase() + docsCategory.slice(1)}
-            </span>
-          </div>
+          <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px' }}><span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{docsCategory.charAt(0).toUpperCase() + docsCategory.slice(1)}</span></div>
           <div className="doc-row" style={{ minHeight: '34px', cursor: 'default', borderBottom: '1px solid var(--line-0)' }}>
             <div /><div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>Title</div>
             <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>Owner</div>
@@ -1562,38 +1194,26 @@ const AllTheMail = () => {
             <div style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500, textAlign: 'right' }}>Date</div>
           </div>
           {isLoadingDocs && filteredDocs.length === 0 ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <div className="skeleton-row" key={`dsk-${i}`} style={{ minHeight: 48 }}>
-                <div className="skeleton-block" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0 }} />
-                <div className="skeleton-block" style={{ flex: 1 }} />
-                <div className="skeleton-block" style={{ width: 80 }} />
-                <div className="skeleton-block" style={{ width: 64 }} />
-              </div>
-            ))
+            Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`dsk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0 }} /><div className="skeleton-block" style={{ flex: 1 }} /><div className="skeleton-block" style={{ width: 80 }} /><div className="skeleton-block" style={{ width: 64 }} /></div>))
           ) : (!anyHasDocs || hasDocsError) && filteredDocs.length === 0 ? (
             <div className="connect-cta">
               <FileText size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
               <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasDocs ? 'Reconnect Google Drive' : 'Connect Google Drive'}</div>
               <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasDocs ? 'Drive permissions were revoked. Reconnect to see your documents.' : 'Grant Drive permissions to see your documents here'}</div>
-              <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}>
-                <Plus size={14} strokeWidth={1.5} /> {anyHasDocs ? 'Reconnect' : 'Connect account'}
-              </button>
+              <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasDocs ? 'Reconnect' : 'Connect account'}</button>
             </div>
           ) : filteredDocs.length === 0 ? (
-            <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-              <FileText size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} />
-              <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No documents in {docsCategory}</div>
-            </div>
+            <div style={{ padding: '48px 24px', textAlign: 'center' }}><FileText size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No documents in {docsCategory}</div></div>
           ) : filteredDocs.map(doc => {
             const DocIcon = getDocIcon(doc.mimeType);
             return (
-            <div key={doc.id} className={`doc-row${selectedDoc?.id===doc.id?' active':''}`} onClick={()=>setSelectedDoc(doc)}>
-              <div className="row-icon-slot"><DocIcon size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)' }} /></div>
-              <div className="doc-col-title">{doc.title}</div>
-              <div className="doc-col-owner">{doc.owner}</div>
-              <div className="doc-col-edited">{formatRelativeEdit(doc.lastEdited)}</div>
-              <div className="doc-col-date">{new Date(doc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
-            </div>
+              <div key={doc.id} className={`doc-row${selectedDoc?.id===doc.id?' active':''}`} onClick={()=>setSelectedDoc(doc)}>
+                <div className="row-icon-slot"><DocIcon size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)' }} /></div>
+                <div className="doc-col-title">{doc.title}</div>
+                <div className="doc-col-owner">{doc.owner}</div>
+                <div className="doc-col-edited">{formatRelativeEdit(doc.lastEdited)}</div>
+                <div className="doc-col-date">{new Date(doc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
+              </div>
             );
           })}
         </div>
@@ -1607,55 +1227,31 @@ const AllTheMail = () => {
             const editorLabel = getDocEditorLabel(selectedDoc.mimeType);
             const fileType = FILE_TYPES[selectedDoc.mimeType];
             return (
-            <div className="email-detail-content">
-              <div style={{ padding: '24px 32px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: 'var(--r-sm)', background: 'rgba(139, 124, 255, 0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <DetailIcon size={18} strokeWidth={1.5} style={{ color: 'var(--accent)' }} />
+              <div className="email-detail-content">
+                <div style={{ padding: '24px 32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: 'var(--r-sm)', background: 'rgba(139, 124, 255, 0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><DetailIcon size={18} strokeWidth={1.5} style={{ color: 'var(--accent)' }} /></div>
+                    <div style={{ flex: 1, minWidth: 0 }}><h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: 0 }}>{selectedDoc.title}</h1></div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: 0 }}>{selectedDoc.title}</h1>
+                  <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', fontSize: '12px', color: 'var(--text-2)' }}>
+                    <span>Owner: <span style={{ color: 'var(--text-1)' }}>{selectedDoc.owner}</span></span>
+                    <span>{formatRelativeEdit(selectedDoc.lastEdited)}</span>
+                    <span>{new Date(selectedDoc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', fontSize: '12px', color: 'var(--text-2)' }}>
-                  <span>Owner: <span style={{ color: 'var(--text-1)' }}>{selectedDoc.owner}</span></span>
-                  <span>{formatRelativeEdit(selectedDoc.lastEdited)}</span>
-                  <span>{new Date(selectedDoc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                </div>
-                <div style={{ height: '1px', background: 'var(--line-0)', marginBottom: '24px' }} />
-                {editUrl && (
-                  <button className="btn-ghost btn-edit-doc" onClick={() => window.open(editUrl, '_blank', 'noopener,noreferrer')}
-                    style={{ marginBottom: '20px', fontSize: '13px', gap: '6px' }}>
-                    <ExternalLink size={14} strokeWidth={1.5} /> Edit in {editorLabel}
-                  </button>
-                )}
-                <div style={{ background: 'var(--bg-3)', borderRadius: '8px', padding: '20px', border: '1px solid var(--line-0)', minHeight: '200px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-2)' }}>Type</span>
-                      <span style={{ color: 'var(--text-1)' }}>{fileType?.label || 'Document'}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-2)' }}>Shared</span>
-                      <span style={{ color: 'var(--text-1)' }}>{selectedDoc.shared ? 'Yes' : 'No'}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-2)' }}>Starred</span>
-                      <span style={{ color: 'var(--text-1)' }}>{selectedDoc.starred ? 'Yes' : 'No'}</span>
+                  <div style={{ height: '1px', background: 'var(--line-0)', marginBottom: '24px' }} />
+                  {editUrl && (<button className="btn-ghost btn-edit-doc" onClick={() => window.open(editUrl, '_blank', 'noopener,noreferrer')} style={{ marginBottom: '20px', fontSize: '13px', gap: '6px' }}><ExternalLink size={14} strokeWidth={1.5} /> Edit in {editorLabel}</button>)}
+                  <div style={{ background: 'var(--bg-3)', borderRadius: '8px', padding: '20px', border: '1px solid var(--line-0)', minHeight: '200px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Type</span><span style={{ color: 'var(--text-1)' }}>{fileType?.label || 'Document'}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Shared</span><span style={{ color: 'var(--text-1)' }}>{selectedDoc.shared ? 'Yes' : 'No'}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Starred</span><span style={{ color: 'var(--text-1)' }}>{selectedDoc.starred ? 'Yes' : 'No'}</span></div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
             );
           })() : (
-            <div className="empty-state">
-              <div style={{ textAlign: 'center' }}>
-                <FileText size={72} style={{ display: 'block', margin: '0 auto 16px', opacity: 0.04 }} />
-                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '4px' }}>Select a document</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-3)' }}>Choose a doc from the list to preview</div>
-              </div>
-            </div>
+            <div className="empty-state"><div style={{ textAlign: 'center' }}><FileText size={72} style={{ display: 'block', margin: '0 auto 16px', opacity: 0.04 }} /><div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '4px' }}>Select a document</div><div style={{ fontSize: '12px', color: 'var(--text-3)' }}>Choose a doc from the list to preview</div></div></div>
           )}
         </div>
       </Panel>
@@ -1670,9 +1266,7 @@ const AllTheMail = () => {
       <>
         <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-cals">
           <div className="sidebar" style={{ width: '100%' }}>
-            <div style={{ padding: '16px 16px 16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>All the cals</div>
-            </div>
+            <div style={{ padding: '16px 16px 16px' }}><div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>All the cals</div></div>
             <div style={{ padding: '0 0 24px' }}>
               {[{key:'upcoming',label:'Upcoming',icon:Clock},{key:'today',label:'Today',icon:Calendar},{key:'this-week',label:'This week',icon:Calendar},{key:'month',label:'Month',icon:LayoutGrid}].map(({key,label,icon:Icon}) => (
                 <button key={key} onClick={()=>{setCalsCategory(key);setSelectedEvent(null);}}
@@ -1686,9 +1280,7 @@ const AllTheMail = () => {
               <div style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: 500, marginBottom: '8px' }}>Accounts</div>
               {connectedAccounts.map((a, i) => {
                 const g = getAccountGradient(i);
-                return (<div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', fontSize: '12px', color: 'var(--text-2)' }}>
-                  <span className="account-dot" style={{ background: g.gradient, width: 8, height: 8 }} />{a.account_name}
-                </div>);
+                return (<div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', fontSize: '12px', color: 'var(--text-2)' }}><span className="account-dot" style={{ background: g.gradient, width: 8, height: 8 }} />{a.account_name}</div>);
               })}
             </div>
           </div>
@@ -1697,37 +1289,24 @@ const AllTheMail = () => {
         <Panel defaultSize="40%" minSize="28%" id="cals-list">
           <div style={{ height: '100%', overflow: 'auto', background: 'var(--surface-list)' }}>
             <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>
-                {calsCategory === 'this-week' ? 'This week' : calsCategory.charAt(0).toUpperCase() + calsCategory.slice(1)}
-              </span>
+              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{calsCategory === 'this-week' ? 'This week' : calsCategory.charAt(0).toUpperCase() + calsCategory.slice(1)}</span>
               <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>Agenda view</span>
             </div>
             {isLoadingEvents && filteredAllEvents.length === 0 ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}>
-                  <div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} />
-                  <div className="skeleton-block" style={{ width: 48 }} />
-                  <div className="skeleton-block" style={{ flex: 1 }} />
-                </div>
-              ))
+              Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 48 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
             ) : (!anyHasCals || hasEventsError) && Object.keys(grouped).length === 0 ? (
               <div className="connect-cta">
                 <Calendar size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
                 <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
                 <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasCals ? 'Calendar permissions were revoked. Reconnect to see your events.' : 'Grant Calendar permissions to see your events here'}</div>
-                <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}>
-                  <Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect account'}
-                </button>
+                <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect account'}</button>
               </div>
             ) : Object.keys(grouped).length === 0 ? (
-              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                <Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} />
-                <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div>
-              </div>
-            ) : Object.entries(grouped).map(([day, events]) => (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
+            ) : Object.entries(grouped).map(([day, dayEvents]) => (
               <div key={day}>
                 <div className="cal-day-header">{day}</div>
-                {events.map(ev => (
+                {dayEvents.map(ev => (
                   <div key={ev.id} className={`cal-event${selectedEvent?.id === ev.id ? ' active' : ''}`} onClick={() => setSelectedEvent(ev)}>
                     <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
                     <div className="cal-event-time">{ev.time}</div>
@@ -1751,47 +1330,23 @@ const AllTheMail = () => {
                     <div style={{ width: '4px', height: '36px', borderRadius: '2px', background: selectedEvent.urgent ? 'var(--warm-0)' : 'var(--accent)', flexShrink: 0, marginTop: '4px' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: '0 0 4px' }}>{selectedEvent.title}</h1>
-                      {selectedEvent.urgent && (
-                        <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 500, color: 'var(--warm-0)', background: 'rgba(255, 140, 66, 0.10)', padding: '2px 8px', borderRadius: 'var(--r-xs)' }}>Priority</span>
-                      )}
+                      {selectedEvent.urgent && (<span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 500, color: 'var(--warm-0)', background: 'rgba(255, 140, 66, 0.10)', padding: '2px 8px', borderRadius: 'var(--r-xs)' }}>Priority</span>)}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <Clock size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>
-                        {selectedEvent.day} at {selectedEvent.time}{selectedEvent.endTime ? ` – ${selectedEvent.endTime}` : ''}
-                      </span>
-                    </div>
-                    {selectedEvent.meta && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <MapPin size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
-                        <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.meta}</span>
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Clock size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} /><span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.day} at {selectedEvent.time}{selectedEvent.endTime ? ` – ${selectedEvent.endTime}` : ''}</span></div>
+                    {selectedEvent.meta && (<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><MapPin size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} /><span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.meta}</span></div>)}
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                    <button className="btn-ghost btn-edit-doc" onClick={() => openEventEdit(selectedEvent)} style={{ fontSize: '13px', gap: '6px' }}>
-                      <FileText size={14} strokeWidth={1.5} /> Edit event
-                    </button>
-                    {selectedEvent.htmlLink && (
-                      <button className="btn-ghost btn-edit-doc" onClick={() => window.open(selectedEvent.htmlLink, '_blank', 'noopener,noreferrer')} style={{ fontSize: '13px', gap: '6px' }}>
-                        <ExternalLink size={14} strokeWidth={1.5} /> Open in Google Calendar
-                      </button>
-                    )}
+                    <button className="btn-ghost btn-edit-doc" onClick={() => openEventEdit(selectedEvent)} style={{ fontSize: '13px', gap: '6px' }}><FileText size={14} strokeWidth={1.5} /> Edit event</button>
+                    {selectedEvent.htmlLink && (<button className="btn-ghost btn-edit-doc" onClick={() => window.open(selectedEvent.htmlLink, '_blank', 'noopener,noreferrer')} style={{ fontSize: '13px', gap: '6px' }}><ExternalLink size={14} strokeWidth={1.5} /> Open in Google Calendar</button>)}
                   </div>
                   <div style={{ height: '1px', background: 'var(--line-0)', marginBottom: '24px' }} />
                   <div style={{ background: 'var(--bg-3)', borderRadius: '8px', padding: '20px', border: '1px solid var(--line-0)' }}>
                     <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '12px' }}>Details</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Status</span>
-                        <span style={{ color: 'var(--text-1)' }}>{selectedEvent.status === 'confirmed' ? 'Confirmed' : selectedEvent.status || 'Confirmed'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Organizer</span>
-                        <span style={{ color: 'var(--text-1)' }}>{selectedEvent.organizer || 'You'}</span>
-                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Status</span><span style={{ color: 'var(--text-1)' }}>{selectedEvent.status === 'confirmed' ? 'Confirmed' : selectedEvent.status || 'Confirmed'}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Organizer</span><span style={{ color: 'var(--text-1)' }}>{selectedEvent.organizer || 'You'}</span></div>
                       {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
                         <div style={{ marginTop: '8px' }}>
                           <div style={{ color: 'var(--text-2)', marginBottom: '6px' }}>Attendees</div>
@@ -1808,13 +1363,7 @@ const AllTheMail = () => {
                 </div>
               </div>
             ) : (
-              <div className="empty-state">
-                <div style={{ textAlign: 'center' }}>
-                  <Calendar size={72} style={{ display: 'block', margin: '0 auto 16px', opacity: 0.04 }} />
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '4px' }}>Select an event</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-3)' }}>Choose an event to view details</div>
-                </div>
-              </div>
+              <div className="empty-state"><div style={{ textAlign: 'center' }}><Calendar size={72} style={{ display: 'block', margin: '0 auto 16px', opacity: 0.04 }} /><div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '4px' }}>Select an event</div><div style={{ fontSize: '12px', color: 'var(--text-3)' }}>Choose an event to view details</div></div></div>
             )}
           </div>
         </Panel>
@@ -1826,16 +1375,18 @@ const AllTheMail = () => {
   const renderMailModule = () => {
     if (splitMode === 'none') return (
       <>
-        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-none">{renderMailSidebar()}</Panel>
-        <PanelResizeHandle className="panel-resize-handle" />
-        <Panel minSize="30%" id="main-none">
-          {fullPageReaderOpen && selectedEmail ? renderReader(selectedEmail, { fullPage: true }) : renderEmailList()}
+        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-none">
+          <Sidebar sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} activeCategory={activeCategory} setActiveCategory={setActiveCategory} categoryCounts={categoryCounts} openCompose={openCompose} clearSelection={clearSelection} setSelectedEmail={setSelectedEmail} setSelectedThread={setSelectedThread} setSelectedThreadActiveMessageId={setSelectedThreadActiveMessageId} setEditMode={setEditMode} setFullPageReaderOpen={setFullPageReaderOpen} />
         </Panel>
+        <PanelResizeHandle className="panel-resize-handle" />
+        <Panel minSize="30%" id="main-none">{fullPageReaderOpen && selectedEmail ? renderReader(selectedEmail, { fullPage: true }) : renderEmailList()}</Panel>
       </>
     );
     if (splitMode === 'vertical') return (
       <>
-        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-vert">{renderMailSidebar()}</Panel>
+        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-vert">
+          <Sidebar sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} activeCategory={activeCategory} setActiveCategory={setActiveCategory} categoryCounts={categoryCounts} openCompose={openCompose} clearSelection={clearSelection} setSelectedEmail={setSelectedEmail} setSelectedThread={setSelectedThread} setSelectedThreadActiveMessageId={setSelectedThreadActiveMessageId} setEditMode={setEditMode} setFullPageReaderOpen={setFullPageReaderOpen} />
+        </Panel>
         <PanelResizeHandle className="panel-resize-handle" />
         <Panel defaultSize="32%" minSize="22%" id="list-vert">{renderEmailList()}</Panel>
         <PanelResizeHandle className="panel-resize-handle" />
@@ -1844,7 +1395,9 @@ const AllTheMail = () => {
     );
     if (splitMode === 'horizontal') return (
       <>
-        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-horiz">{renderMailSidebar()}</Panel>
+        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-horiz">
+          <Sidebar sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} activeCategory={activeCategory} setActiveCategory={setActiveCategory} categoryCounts={categoryCounts} openCompose={openCompose} clearSelection={clearSelection} setSelectedEmail={setSelectedEmail} setSelectedThread={setSelectedThread} setSelectedThreadActiveMessageId={setSelectedThreadActiveMessageId} setEditMode={setEditMode} setFullPageReaderOpen={setFullPageReaderOpen} />
+        </Panel>
         <PanelResizeHandle className="panel-resize-handle" />
         <Panel minSize="40%" id="content-horiz">
           <PanelGroup orientation="vertical" id="atm-horizontal-inner">
@@ -1888,53 +1441,34 @@ const AllTheMail = () => {
       {/* Top bar */}
       <div className="top-bar">
         <img src="/logo-horizontal.svg" alt="All the mail" className="top-bar-logo" />
-
         <div className="module-tabs">
-          <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')}>
-            <LayoutGrid size={15} strokeWidth={1.5} /> Everything
-          </button>
-          <button className={`module-tab${activeModule==='mail'?' active':''}`} onClick={()=>setActiveModule('mail')}>
-            <Mail size={15} strokeWidth={1.5} /> Mail
-          </button>
-          <button className={`module-tab${activeModule==='docs'?' active':''}`} onClick={()=>setActiveModule('docs')}>
-            <FileText size={15} strokeWidth={1.5} /> Docs
-          </button>
-          <button className={`module-tab${activeModule==='cals'?' active':''}`} onClick={()=>setActiveModule('cals')}>
-            <Calendar size={15} strokeWidth={1.5} /> Cals
-          </button>
+          <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')}><LayoutGrid size={15} strokeWidth={1.5} /> Everything</button>
+          <button className={`module-tab${activeModule==='mail'?' active':''}`} onClick={()=>setActiveModule('mail')}><Mail size={15} strokeWidth={1.5} /> Mail</button>
+          <button className={`module-tab${activeModule==='docs'?' active':''}`} onClick={()=>setActiveModule('docs')}><FileText size={15} strokeWidth={1.5} /> Docs</button>
+          <button className={`module-tab${activeModule==='cals'?' active':''}`} onClick={()=>setActiveModule('cals')}><Calendar size={15} strokeWidth={1.5} /> Cals</button>
         </div>
-
         <div className="module-divider" />
         <div className={`account-rail${fadeLeft ? ' fade-left' : ''}${fadeRight ? ' fade-right' : ''}`}>
           <div className="account-rail-scroll" ref={railScrollRef} onScroll={updateRailFades}>
-            <button className={`account-pill${activeView === 'everything' ? ' active' : ''}`}
-              onClick={() => switchAccount('everything')}>
-              <Users size={14} strokeWidth={1.5} style={{ opacity: 0.7 }} />
-              <span className="account-pill-label">All</span>
+            <button className={`account-pill${activeView === 'everything' ? ' active' : ''}`} onClick={() => switchAccount('everything')}>
+              <Users size={14} strokeWidth={1.5} style={{ opacity: 0.7 }} /><span className="account-pill-label">All</span>
             </button>
             {connectedAccounts.map((a, i) => {
               const g = getAccountGradient(i);
               return (
-                <button key={a.id} className={`account-pill${activeView === a.id ? ' active' : ''}`}
-                  onClick={() => switchAccount(a.id)} title={a.gmail_email}>
-                  <span className="account-pill-avatar" style={{ background: g.gradient }}>
-                    {(a.account_name || a.gmail_email || '?').charAt(0).toUpperCase()}
-                  </span>
+                <button key={a.id} className={`account-pill${activeView === a.id ? ' active' : ''}`} onClick={() => switchAccount(a.id)} title={a.gmail_email}>
+                  <span className="account-pill-avatar" style={{ background: g.gradient }}>{(a.account_name || a.gmail_email || '?').charAt(0).toUpperCase()}</span>
                   <span className="account-pill-label">{getShortLabel(a)}</span>
                 </button>
               );
             })}
-            <button className="account-pill add-pill" onClick={handleAddAccount} title="Add account">
-              <Plus size={14} strokeWidth={1.5} />
-            </button>
+            <button className="account-pill add-pill" onClick={handleAddAccount} title="Add account"><Plus size={14} strokeWidth={1.5} /></button>
           </div>
         </div>
-
         <div className="top-bar-controls">
           {activeModule === 'mail' && lastSyncTime && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
-              <span className="sync-dot" />
-              <span style={{ fontSize: '11px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{getRelativeTime(lastSyncTime)}</span>
+              <span className="sync-dot" /><span style={{ fontSize: '11px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{getRelativeTime(lastSyncTime)}</span>
             </div>
           )}
           {activeModule === 'mail' && (
@@ -1953,131 +1487,60 @@ const AllTheMail = () => {
             </>
           )}
           <div style={{ position: 'relative', marginLeft: '4px' }}>
-            <button
-              ref={avatarButtonRef}
-              className="avatar-btn"
-              onClick={() => { setAvatarDropdownOpen(o => !o); setRemovingAccountId(null); }}
-              title="Account menu"
-            >
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: connectedAccounts.length > 0 ? getAccountGradient(0).gradient : 'var(--bg-3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.85)'
-              }}>
+            <button ref={avatarButtonRef} className="avatar-btn" onClick={() => { setAvatarDropdownOpen(o => !o); setRemovingAccountId(null); }} title="Account menu">
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: connectedAccounts.length > 0 ? getAccountGradient(0).gradient : 'var(--bg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
                 {(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
               </div>
             </button>
-
             {avatarDropdownOpen && (
               <div className="avatar-dropdown" ref={avatarDropdownRef}>
-                {/* Profile section */}
                 <div style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-                    background: connectedAccounts.length > 0 ? getAccountGradient(0).gradient : 'var(--bg-3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '16px', fontWeight: 600, color: 'rgba(255,255,255,0.85)'
-                  }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: connectedAccounts.length > 0 ? getAccountGradient(0).gradient : 'var(--bg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
                     {(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {userProfile?.name || 'User'}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {userProfile?.email || ''}
-                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userProfile?.name || 'User'}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userProfile?.email || ''}</div>
                   </div>
                 </div>
-
                 <div className="avatar-dropdown-divider" />
-
-                {/* Connected accounts */}
                 <div style={{ padding: '8px 0' }}>
                   <div style={{ padding: '4px 16px 8px', fontSize: '11px', fontWeight: 500, color: 'var(--text-3)' }}>Connected accounts</div>
                   {connectedAccounts.map((a, idx) => {
                     const grad = getAccountGradient(idx);
                     return (
                       <div key={a.id} className="avatar-dropdown-account-row">
-                        <div style={{
-                          width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                          background: grad.gradient,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.85)'
-                        }}>
+                        <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: grad.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
                           {(a.account_name || a.gmail_email || '?')[0].toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {a.account_name || a.gmail_email}
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {a.gmail_email}
-                          </div>
+                          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.account_name || a.gmail_email}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.gmail_email}</div>
                         </div>
                         {connectedAccounts.length > 1 && (
-                          <button
-                            onClick={() => handleRemoveAccount(a.id)}
-                            style={{
-                              background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0,
-                              fontSize: '11px', fontWeight: 500, padding: '4px 8px', borderRadius: 'var(--r-xs)',
-                              color: removingAccountId === a.id ? 'var(--danger)' : 'var(--text-3)',
-                              transition: 'color var(--t-micro) var(--ease)'
-                            }}
-                          >
+                          <button onClick={() => handleRemoveAccount(a.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, fontSize: '11px', fontWeight: 500, padding: '4px 8px', borderRadius: 'var(--r-xs)', color: removingAccountId === a.id ? 'var(--danger)' : 'var(--text-3)', transition: 'color var(--t-micro) var(--ease)' }}>
                             {removingAccountId === a.id ? 'Confirm?' : 'Remove'}
                           </button>
                         )}
                       </div>
                     );
                   })}
-                  <button className="avatar-dropdown-add-btn" onClick={() => { setAvatarDropdownOpen(false); handleAddAccount(); }}>
-                    <Plus size={14} strokeWidth={1.5} /> Add account
-                  </button>
+                  <button className="avatar-dropdown-add-btn" onClick={() => { setAvatarDropdownOpen(false); handleAddAccount(); }}><Plus size={14} strokeWidth={1.5} /> Add account</button>
                 </div>
-
                 <div className="avatar-dropdown-divider" />
-
-                {/* Billing */}
                 <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>Plan</span>
                     <span className={`plan-badge ${billingPlan}`}>{billingPlan === 'pro' ? 'Pro' : 'Free'}</span>
                   </div>
                   {billingPlan === 'pro' ? (
-                    <button
-                      onClick={handleManageBilling}
-                      disabled={billingLoading}
-                      style={{
-                        background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)',
-                        color: 'var(--text-1)', fontSize: '12px', fontWeight: 500, padding: '4px 10px',
-                        cursor: 'pointer', fontFamily: 'inherit'
-                      }}
-                    >
-                      Manage
-                    </button>
+                    <button onClick={handleManageBilling} disabled={billingLoading} style={{ background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', color: 'var(--text-1)', fontSize: '12px', fontWeight: 500, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>Manage</button>
                   ) : (
-                    <button
-                      onClick={handleUpgrade}
-                      disabled={billingLoading}
-                      style={{
-                        background: 'var(--accent)', border: 'none', borderRadius: 'var(--r-xs)',
-                        color: '#fff', fontSize: '12px', fontWeight: 500, padding: '4px 10px',
-                        cursor: 'pointer', fontFamily: 'inherit'
-                      }}
-                    >
-                      Upgrade
-                    </button>
+                    <button onClick={handleUpgrade} disabled={billingLoading} style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--r-xs)', color: '#fff', fontSize: '12px', fontWeight: 500, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>Upgrade</button>
                   )}
                 </div>
-
                 <div className="avatar-dropdown-divider" />
-
-                {/* Sign out */}
-                <button className="avatar-dropdown-signout" onClick={() => { setAvatarDropdownOpen(false); handleLogout(); }}>
-                  <LogOut size={14} strokeWidth={1.5} /> Sign out
-                </button>
+                <button className="avatar-dropdown-signout" onClick={() => { setAvatarDropdownOpen(false); handleLogout(); }}><LogOut size={14} strokeWidth={1.5} /> Sign out</button>
               </div>
             )}
           </div>
@@ -2097,94 +1560,26 @@ const AllTheMail = () => {
       </div>
 
       {/* Compose modal */}
-      {composeOpen && (
-        <div className="modal-overlay" onMouseDown={closeCompose}>
-          <div className="modal" onMouseDown={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ fontSize: '16px', fontWeight: 600 }}>
-                {composeMode === 'compose' ? 'New message' : composeMode === 'reply' ? 'Reply' : composeMode === 'replyAll' ? 'Reply all' : 'Forward'}
-              </div>
-              <button className="btn-ghost btn-icon" onClick={closeCompose} title="Close"><X size={16} /></button>
-            </div>
-            <div className="modal-body">
-              <div className="field-row">
-                <label>From</label>
-                <select value={composeFromAccountId} onChange={e => setComposeFromAccountId(e.target.value)}>
-                  {connectedAccounts.map(a => <option key={a.id} value={a.id}>{a.account_name} — {a.gmail_email}</option>)}
-                </select>
-              </div>
-              <div className="field-row">
-                <label>To</label>
-                <input value={composeTo} onChange={e => setComposeTo(e.target.value)} placeholder="recipient@example.com" />
-              </div>
-              <div className="field-row-inline">
-                <button className="btn-ghost" onClick={() => setComposeShowCcBcc(!composeShowCcBcc)} style={{ fontSize: '12px', padding: '5px 10px' }}>
-                  {composeShowCcBcc ? 'Hide Cc/Bcc' : 'Show Cc/Bcc'}
-                </button>
-              </div>
-              {composeShowCcBcc && (
-                <>
-                  <div className="field-row"><label>Cc</label><input value={composeCc} onChange={e => setComposeCc(e.target.value)} placeholder="cc@example.com" /></div>
-                  <div className="field-row"><label>Bcc</label><input value={composeBcc} onChange={e => setComposeBcc(e.target.value)} placeholder="bcc@example.com" /></div>
-                </>
-              )}
-              <div className="field-row">
-                <label>Subject</label>
-                <input value={composeSubject} onChange={e => setComposeSubject(e.target.value)} placeholder="Subject" />
-              </div>
-              <div className="field-row">
-                <label>Message</label>
-                <ReactQuill theme="snow" value={composeBody} onChange={setComposeBody} placeholder="Write your message..."
-                  modules={{ toolbar: [['bold','italic','underline','strike'],['link'],[{'list':'ordered'},{'list':'bullet'}],['clean']] }}
-                  style={{ height: '200px', marginBottom: '60px' }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
-                <div />
-                <div>
-                  <input type="file" multiple onChange={handleFileSelect} style={{ display: 'none' }} id="file-input" />
-                  <button type="button" className="btn-ghost" onClick={() => document.getElementById('file-input').click()} style={{ width: '100%', justifyContent: 'center' }}>
-                    <Paperclip size={14} /> Add attachments
-                  </button>
-                  {composeAttachments.length > 0 && (
-                    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {composeAttachments.map((file, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', background: 'var(--bg-1)', border: '1px solid var(--line)', borderRadius: '4px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Paperclip size={13} /><span style={{ fontSize: '13px' }}>{file.name}</span>
-                            <span style={{ fontSize: '11px', opacity: 0.5 }}>({(file.size / 1024).toFixed(1)} KB)</span>
-                          </div>
-                          <button type="button" className="btn-ghost btn-icon" onClick={() => removeAttachment(idx)} title="Remove"><X size={13} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {composeError && <div className="modal-error">{composeError}</div>}
-              <div className="modal-hint">If send fails, you may need to reconnect the account with updated permissions.</div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={closeCompose} disabled={composeSending}>Cancel</button>
-              <button className="btn btn-primary" onClick={sendCompose} disabled={composeSending} style={{ fontSize: '13px', padding: '10px 20px' }}>
-                {composeSending ? 'Sending...' : 'Send'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ComposeModal
+        composeOpen={composeOpen} composeMode={composeMode} composeSending={composeSending} composeError={composeError}
+        composeFromAccountId={composeFromAccountId} setComposeFromAccountId={setComposeFromAccountId}
+        composeTo={composeTo} setComposeTo={setComposeTo}
+        composeCc={composeCc} setComposeCc={setComposeCc}
+        composeBcc={composeBcc} setComposeBcc={setComposeBcc}
+        composeSubject={composeSubject} setComposeSubject={setComposeSubject}
+        composeBody={composeBody} setComposeBody={setComposeBody}
+        composeShowCcBcc={composeShowCcBcc} setComposeShowCcBcc={setComposeShowCcBcc}
+        composeAttachments={composeAttachments} handleFileSelect={handleFileSelect} removeAttachment={removeAttachment}
+        connectedAccounts={connectedAccounts}
+        closeCompose={closeCompose} sendCompose={sendCompose}
+      />
 
       {/* Slide-over preview panel */}
       {(slideOverEmail || slideOverDoc) && (
         <div className="slide-over-backdrop" onClick={closeSlideOver}>
           <div className="slide-over-panel" onClick={e => e.stopPropagation()}>
-            {slideOverIndex !== null && (
-              <span className="slide-over-position">
-                {slideOverIndex + 1} / {slideOverEmail ? evFilteredEmails.slice(0, 50).length : evFilteredDocs.length}
-              </span>
-            )}
+            {slideOverIndex !== null && (<span className="slide-over-position">{slideOverIndex + 1} / {slideOverEmail ? evFilteredEmails.slice(0, 50).length : evFilteredDocs.length}</span>)}
             <button className="slide-over-close" onClick={closeSlideOver} title="Close"><X size={16} strokeWidth={1.5} /></button>
-
-            {/* Email preview */}
             {slideOverEmail && (() => {
               const eid = slideOverEmail.id;
               const body = emailBodies[eid];
@@ -2194,71 +1589,37 @@ const AllTheMail = () => {
               const accountName = connectedAccounts[accountIndex]?.account_name || connectedAccounts[accountIndex]?.gmail_email || '';
               return (
                 <div style={{ padding: '32px 32px 24px' }}>
-                  {/* Source chip */}
-                  {grad && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '16px', padding: '3px 10px 3px 6px', borderRadius: 'var(--r-pill)', background: grad.midRgba(0.08), fontSize: '11px', fontWeight: 500, color: 'var(--text-1)' }}>
-                      <span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />{accountName}
-                    </div>
-                  )}
-                  <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: '0 0 16px', lineHeight: 1.3 }}>
-                    {slideOverEmail.subject || '(no subject)'}
-                  </h1>
+                  {grad && (<div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '16px', padding: '3px 10px 3px 6px', borderRadius: 'var(--r-pill)', background: grad.midRgba(0.08), fontSize: '11px', fontWeight: 500, color: 'var(--text-1)' }}><span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />{accountName}</div>)}
+                  <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: '0 0 16px', lineHeight: 1.3 }}>{slideOverEmail.subject || '(no subject)'}</h1>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                     <div className="reader-avatar">{stripName(headers?.from || slideOverEmail.from || '').charAt(0).toUpperCase()}</div>
                     <div>
                       <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-0)' }}>{stripName(headers?.from || slideOverEmail.from || '')}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-2)' }}>
-                        {headers?.to ? `To: ${stripName(headers.to)}` : ''} · {formatTime(slideOverEmail.date)}
-                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-2)' }}>{headers?.to ? `To: ${stripName(headers.to)}` : ''} · {formatTime(slideOverEmail.date)}</div>
                     </div>
                   </div>
-                  {/* Actions */}
                   <div style={{ display: 'flex', gap: '8px', margin: '16px 0' }}>
-                    <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 12px' }}
-                      onClick={() => { closeSlideOver(); setActiveModule('mail'); setActiveView('everything'); onSelectEmail(slideOverEmail); }}>
-                      <ArrowLeft size={14} strokeWidth={1.5} /> Open full view
-                    </button>
-                    <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 12px' }}
-                      onClick={() => { closeSlideOver(); openCompose('reply', slideOverEmail); }}>
-                      <Reply size={14} strokeWidth={1.5} /> Reply
-                    </button>
-                    <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 12px' }}
-                      onClick={async () => {
-                        const aid = slideOverEmail.accountId || connectedAccounts[0]?.id;
-                        if (!aid) return;
-                        try {
-                          await fetch(`${API_BASE}/emails/${aid}/${slideOverEmail.id}/archive`, { method: 'POST', credentials: 'include' });
-                          setEmails(p => { const n = { ...p }; Object.keys(n).forEach(ai => { Object.keys(n[ai]).forEach(c => { if (n[ai][c]) n[ai][c] = n[ai][c].filter(e => e.id !== slideOverEmail.id); }); }); return n; });
-                          closeSlideOver();
-                        } catch (err) { setError('Failed to archive'); }
-                      }}>
-                      <Archive size={14} strokeWidth={1.5} /> Archive
-                    </button>
+                    <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={() => { closeSlideOver(); setActiveModule('mail'); setActiveView('everything'); onSelectEmail(slideOverEmail); }}><ArrowLeft size={14} strokeWidth={1.5} /> Open full view</button>
+                    <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={() => { closeSlideOver(); openCompose('reply', slideOverEmail); }}><Reply size={14} strokeWidth={1.5} /> Reply</button>
+                    <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={async () => {
+                      const aid = slideOverEmail.accountId || connectedAccounts[0]?.id; if (!aid) return;
+                      try { await fetch(`${API_BASE}/emails/${aid}/${slideOverEmail.id}/archive`, { method: 'POST', credentials: 'include' }); setEmails(p => { const n = { ...p }; Object.keys(n).forEach(ai => { Object.keys(n[ai]).forEach(c => { if (n[ai][c]) n[ai][c] = n[ai][c].filter(e => e.id !== slideOverEmail.id); }); }); return n; }); closeSlideOver(); } catch (err) { setError('Failed to archive'); }
+                    }}><Archive size={14} strokeWidth={1.5} /> Archive</button>
                   </div>
                   <div style={{ height: '1px', background: 'var(--line-0)', marginBottom: '20px' }} />
-                  {/* Email body */}
                   {!body ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px 0' }}>
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 3 ? '60%' : '100%' }} />
-                      ))}
+                      {Array.from({ length: 4 }).map((_, i) => (<div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 3 ? '60%' : '100%' }} />))}
                     </div>
                   ) : (
                     <div className="email-body-wrapper" style={{ borderRadius: '8px', overflow: 'hidden' }}>
-                      <iframe
-                        title="Email preview"
-                        srcDoc={buildEmailSrcDoc(body)}
-                        style={{ width: '100%', border: 'none', minHeight: '300px', background: '#F5F7FA' }}
-                        sandbox="allow-same-origin allow-popups"
-                        onLoad={e => { try { const h = e.target.contentDocument?.body?.scrollHeight; if (h) e.target.style.height = h + 'px'; } catch {} }}
-                      />
+                      <iframe title="Email preview" srcDoc={buildEmailSrcDoc(body)} style={{ width: '100%', border: 'none', minHeight: '300px', background: '#F5F7FA' }} sandbox="allow-same-origin allow-popups"
+                        onLoad={e => { try { const h = e.target.contentDocument?.body?.scrollHeight; if (h) e.target.style.height = h + 'px'; } catch {} }} />
                     </div>
                   )}
                 </div>
               );
             })()}
-
-            {/* Doc preview */}
             {slideOverDoc && (() => {
               const DocPreviewIcon = getDocIcon(slideOverDoc.mimeType);
               const editUrl = getDocEditUrl(slideOverDoc);
@@ -2269,153 +1630,50 @@ const AllTheMail = () => {
               const accountName = connectedAccounts[accountIndex]?.account_name || connectedAccounts[accountIndex]?.gmail_email || '';
               return (
                 <div style={{ padding: '32px 32px 24px' }}>
-                  {grad && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '16px', padding: '3px 10px 3px 6px', borderRadius: 'var(--r-pill)', background: grad.midRgba(0.08), fontSize: '11px', fontWeight: 500, color: 'var(--text-1)' }}>
-                      <span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />{accountName}
-                    </div>
-                  )}
+                  {grad && (<div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '16px', padding: '3px 10px 3px 6px', borderRadius: 'var(--r-pill)', background: grad.midRgba(0.08), fontSize: '11px', fontWeight: 500, color: 'var(--text-1)' }}><span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />{accountName}</div>)}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ width: '44px', height: '44px', borderRadius: 'var(--r-sm)', background: 'rgba(139, 124, 255, 0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <DocPreviewIcon size={22} strokeWidth={1.5} style={{ color: 'var(--accent)' }} />
-                    </div>
+                    <div style={{ width: '44px', height: '44px', borderRadius: 'var(--r-sm)', background: 'rgba(139, 124, 255, 0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><DocPreviewIcon size={22} strokeWidth={1.5} style={{ color: 'var(--accent)' }} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: 0, lineHeight: 1.3 }}>{slideOverDoc.title}</h1>
                       <div style={{ fontSize: '12px', color: 'var(--text-2)', marginTop: '4px' }}>{fileType?.label || 'Document'}</div>
                     </div>
                   </div>
-                  {editUrl && (
-                    <button className="btn-ghost btn-edit-doc" onClick={() => window.open(editUrl, '_blank', 'noopener,noreferrer')}
-                      style={{ marginBottom: '24px', fontSize: '13px', gap: '6px' }}>
-                      <ExternalLink size={14} strokeWidth={1.5} /> Edit in {editorLabel}
-                    </button>
-                  )}
-                  {/* Document content preview */}
-                  {docPreviewLoading && (
-                    <div className="doc-preview-skeleton">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 4 ? '60%' : '100%' }} />
-                      ))}
-                    </div>
-                  )}
-                  {!docPreviewLoading && docPreview?.type === 'html' && (
-                    <div className="doc-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeDocHtml(docPreview.content) }} />
-                  )}
-                  {!docPreviewLoading && docPreview?.type === 'thumbnail' && (
-                    <div className="doc-preview-content">
-                      <img src={docPreview.url} alt={docPreview.name || slideOverDoc.title} style={{ maxWidth: '100%', borderRadius: '6px' }} />
-                    </div>
-                  )}
-                  {!docPreviewLoading && docPreview?.type === 'none' && (
-                    <p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>Preview not available for this file type</p>
-                  )}
+                  {editUrl && (<button className="btn-ghost btn-edit-doc" onClick={() => window.open(editUrl, '_blank', 'noopener,noreferrer')} style={{ marginBottom: '24px', fontSize: '13px', gap: '6px' }}><ExternalLink size={14} strokeWidth={1.5} /> Edit in {editorLabel}</button>)}
+                  {docPreviewLoading && (<div className="doc-preview-skeleton">{Array.from({ length: 5 }).map((_, i) => (<div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 4 ? '60%' : '100%' }} />))}</div>)}
+                  {!docPreviewLoading && docPreview?.type === 'html' && (<div className="doc-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeDocHtml(docPreview.content) }} />)}
+                  {!docPreviewLoading && docPreview?.type === 'thumbnail' && (<div className="doc-preview-content"><img src={docPreview.url} alt={docPreview.name || slideOverDoc.title} style={{ maxWidth: '100%', borderRadius: '6px' }} /></div>)}
+                  {!docPreviewLoading && docPreview?.type === 'none' && (<p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>Preview not available for this file type</p>)}
                   <div style={{ height: '1px', background: 'var(--line-0)', margin: '24px 0' }} />
                   <div style={{ background: 'var(--bg-3)', borderRadius: '8px', padding: '20px', border: '1px solid var(--line-0)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Owner</span>
-                        <span style={{ color: 'var(--text-1)' }}>{slideOverDoc.owner}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Last edited</span>
-                        <span style={{ color: 'var(--text-1)' }}>{formatRelativeEdit(slideOverDoc.lastEdited)}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Modified</span>
-                        <span style={{ color: 'var(--text-1)' }}>{new Date(slideOverDoc.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Shared</span>
-                        <span style={{ color: 'var(--text-1)' }}>{slideOverDoc.shared ? 'Yes' : 'No'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-2)' }}>Starred</span>
-                        <span style={{ color: 'var(--text-1)' }}>{slideOverDoc.starred ? 'Yes' : 'No'}</span>
-                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Owner</span><span style={{ color: 'var(--text-1)' }}>{slideOverDoc.owner}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Last edited</span><span style={{ color: 'var(--text-1)' }}>{formatRelativeEdit(slideOverDoc.lastEdited)}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Modified</span><span style={{ color: 'var(--text-1)' }}>{new Date(slideOverDoc.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Shared</span><span style={{ color: 'var(--text-1)' }}>{slideOverDoc.shared ? 'Yes' : 'No'}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Starred</span><span style={{ color: 'var(--text-1)' }}>{slideOverDoc.starred ? 'Yes' : 'No'}</span></div>
                     </div>
                   </div>
                 </div>
               );
             })()}
-
-            {/* Arrow key nav hints */}
             {slideOverIndex !== null && (() => {
               const items = slideOverEmail ? evFilteredEmails.slice(0, 50) : evFilteredDocs;
-              return (
-                <div className="slide-over-nav-hints">
-                  {slideOverIndex > 0 && <span>← Previous</span>}
-                  <span style={{ flex: 1 }} />
-                  {slideOverIndex < items.length - 1 && <span>Next →</span>}
-                </div>
-              );
+              return (<div className="slide-over-nav-hints">{slideOverIndex > 0 && <span>← Previous</span>}<span style={{ flex: 1 }} />{slideOverIndex < items.length - 1 && <span>Next →</span>}</div>);
             })()}
           </div>
         </div>
       )}
 
       {/* Event edit modal */}
-      {eventEditOpen && selectedEvent && (
-        <div className="modal-overlay" onMouseDown={closeEventEdit}>
-          <div className="modal" style={{ maxWidth: '520px' }} onMouseDown={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ fontSize: '16px', fontWeight: 600 }}>Edit event</div>
-              <button className="btn-ghost btn-icon" onClick={closeEventEdit} title="Close"><X size={16} /></button>
-            </div>
-            <div className="modal-body">
-              <div className="field-row">
-                <label>Title</label>
-                <input value={eventEditFields.summary || ''} onChange={e => setEventEditFields(f => ({ ...f, summary: e.target.value }))} placeholder="Event title" />
-              </div>
-              <div className="field-row">
-                <label>Date</label>
-                <input type="date" value={eventEditFields.date || ''} onChange={e => setEventEditFields(f => ({ ...f, date: e.target.value }))} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-1)', fontWeight: 500 }}>Time</label>
-                <input type="time" value={eventEditFields.startTime || ''} onChange={e => setEventEditFields(f => ({ ...f, startTime: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-0)', background: 'var(--bg-0)', color: 'var(--text-0)', fontSize: 'var(--text-sm)', fontFamily: 'inherit' }} />
-                <input type="time" value={eventEditFields.endTime || ''} onChange={e => setEventEditFields(f => ({ ...f, endTime: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-0)', background: 'var(--bg-0)', color: 'var(--text-0)', fontSize: 'var(--text-sm)', fontFamily: 'inherit' }} />
-              </div>
-              <div className="field-row">
-                <label>Location</label>
-                <input value={eventEditFields.location || ''} onChange={e => setEventEditFields(f => ({ ...f, location: e.target.value }))} placeholder="Add location" />
-              </div>
-              <div className="field-row">
-                <label>Description</label>
-                <textarea value={eventEditFields.description || ''} onChange={e => setEventEditFields(f => ({ ...f, description: e.target.value }))} placeholder="Add description" style={{ minHeight: '100px' }} />
-              </div>
-              {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
-                <div style={{ marginTop: '4px', marginBottom: '12px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-2)', fontWeight: 500, marginBottom: '6px', paddingLeft: '84px' }}>
-                    Attendees
-                  </div>
-                  <div style={{ paddingLeft: '84px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {selectedEvent.attendees.map((a, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '2px 0' }}>
-                        <span style={{ color: 'var(--text-1)' }}>{a.name || a.email}</span>
-                        <span style={{ color: 'var(--text-3)', fontSize: '11px' }}>{a.status === 'accepted' ? 'Accepted' : a.status === 'declined' ? 'Declined' : a.status === 'tentative' ? 'Maybe' : 'Pending'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {eventEditError && <div className="modal-error">{eventEditError}</div>}
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={closeEventEdit} disabled={eventEditSaving}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveEventEdit} disabled={eventEditSaving} style={{ fontSize: '13px', padding: '10px 20px' }}>
-                {eventEditSaving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EventEditModal
+        eventEditOpen={eventEditOpen} selectedEvent={selectedEvent}
+        eventEditFields={eventEditFields} setEventEditFields={setEventEditFields}
+        eventEditSaving={eventEditSaving} eventEditError={eventEditError}
+        closeEventEdit={closeEventEdit} saveEventEdit={saveEventEdit}
+      />
 
       {error && (
-        <div className="toast">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="toast-x" title="Dismiss"><X size={14} /></button>
-        </div>
+        <div className="toast"><span>{error}</span><button onClick={() => setError(null)} className="toast-x" title="Dismiss"><X size={14} /></button></div>
       )}
     </div>
   );
