@@ -1,0 +1,15 @@
+{
+  "name": "all-the-mail-main",
+  "version": "1.0.0",
+  "description": "All The Mail – unified email aggregation app (frontend + backend)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
