@@ -41,9 +41,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend running on port ${PORT}`);
-});
+// Start server only when run directly (not when imported for testing)
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend running on port ${PORT}`);
+  });
+}
 
 export default app;
