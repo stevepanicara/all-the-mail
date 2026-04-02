@@ -1,0 +1,15 @@
+{
+  "short_name": "ALL THE MAIL",
+  "name": "ALL THE MAIL - Every account. One inbox.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000"
+}
