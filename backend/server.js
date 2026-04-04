@@ -16,6 +16,8 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
+const ALLOWED_ORIGINS = [FRONTEND_URL, 'http://localhost:3001', 'http://localhost:3000'].filter(Boolean);
+if (process.env.VERCEL_URL) ALLOWED_ORIGINS.push(`https://${process.env.VERCEL_URL}`);
 
 // Security headers
 app.use(helmet({
@@ -25,7 +27,10 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.some(o => origin === o || origin.endsWith('.vercel.app'))) cb(null, true);
+    else cb(null, false);
+  },
   credentials: true
 }));
 
