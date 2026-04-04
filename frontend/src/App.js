@@ -1097,7 +1097,7 @@ const AllTheMail = () => {
     setComposeError(null);
     const fid=composeFromAccountId; if(!fid){setComposeError('Select a sending account');return;} if(!composeTo.trim()){setComposeError('Recipient is required');return;}
     setComposeSending(true);
-    const sigLine = includeAtmSignature ? '<br><div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">Sent via <a href="https://allthemail.com" style="color:#8b7cff;text-decoration:none;">All The Mail</a></div>' : '';
+    const sigLine = includeAtmSignature ? '<br><div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">Sent via <a href="https://allthemail.io" style="color:#8b7cff;text-decoration:none;">All The Mail</a></div>' : '';
     const bodyWithSig = composeBody + sigLine;
     try{
       let r;
