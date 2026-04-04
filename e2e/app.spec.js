@@ -133,21 +133,25 @@ test.describe('Landing Page', () => {
   });
 
   test('sign in button navigates to Google OAuth', async ({ page }) => {
+    // Intercept the backend OAuth redirect so we never actually leave to Google
+    let oauthRequestUrl = null;
+    await page.route('**/auth/google', route => {
+      oauthRequestUrl = route.request().url();
+      // Fulfill with a simple response instead of following the redirect to Google
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>OAuth redirect intercepted</body></html>' });
+    });
+
     await page.goto('/');
-    // Wait for the sign in button, then intercept navigation
     const signInBtn = page.locator('text=Sign in with Google').first();
     await signInBtn.waitFor({ timeout: 15000 });
+    await signInBtn.click();
 
-    // Listen for navigation triggered by clicking sign in
-    const [response] = await Promise.all([
-      page.waitForEvent('requestfailed', { timeout: 5000 }).catch(() => null),
-      page.waitForURL(/auth\/google|accounts\.google/, { timeout: 5000 }).catch(() => null),
-      signInBtn.click(),
-    ]);
+    // Wait for the navigation to complete
+    await page.waitForTimeout(2000);
 
-    // The URL should have changed toward /auth/google (the backend OAuth endpoint)
+    // Either we intercepted the route, or the page navigated to a URL containing auth/google
     const currentUrl = page.url();
-    expect(currentUrl).toContain('/auth/google');
+    expect(oauthRequestUrl || currentUrl).toContain('/auth/google');
   });
 });
 
