@@ -1,6 +1,7 @@
 {
-  "short_name": "ALL THE MAIL",
-  "name": "ALL THE MAIL - Every account. One inbox.",
+  "short_name": "All The Mail",
+  "name": "All The Mail — Every account. One inbox.",
+  "description": "Unified Gmail, Drive, and Calendar across all your Google accounts. One calm interface.",
   "icons": [
     {
       "src": "favicon.svg",
@@ -8,8 +9,11 @@
       "sizes": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/app",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#000000"
+  "theme_color": "#0b0f14",
+  "background_color": "#0b0f14",
+  "orientation": "any",
+  "categories": ["productivity", "email", "business"],
+  "scope": "/"
 }

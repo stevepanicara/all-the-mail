@@ -204,12 +204,23 @@ function Landing() {
           </div>
         </section>
 
-        {/* -------- STATEMENT BLOCK -------- */}
+        {/* -------- FEATURE STRIP -------- */}
         <section className="l-statement">
           <div className="l-statement-inner">
-            <p className="l-statement-text">
-              EVERY ACCOUNT.<br />ONE SYSTEM.
-            </p>
+            <div className="l-features">
+              <div className="l-feature">
+                <span className="l-feature-label">Gmail</span>
+                <span className="l-feature-desc">Read, send, archive across every account</span>
+              </div>
+              <div className="l-feature">
+                <span className="l-feature-label">Drive</span>
+                <span className="l-feature-desc">All your docs, sheets, and slides in one list</span>
+              </div>
+              <div className="l-feature">
+                <span className="l-feature-label">Calendar</span>
+                <span className="l-feature-desc">Every schedule, unified by account</span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -251,21 +262,120 @@ function Landing() {
           </div>
         </section>
 
+        {/* -------- COMPARISON TABLE -------- */}
+        <section className="l-section" id="compare">
+          <div className="l-container">
+            <h2 className="l-section-title">HOW WE COMPARE</h2>
+            <div className="l-compare-wrap">
+              <table className="l-compare-table">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Gmail</th>
+                    <th>Shift <span className="compare-price">($8/mo)</span></th>
+                    <th>Superhuman <span className="compare-price">($30/mo)</span></th>
+                    <th className="compare-highlight">All The Mail <span className="compare-price">($9/mo)</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Multi-account unified inbox</td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>Google Drive integration</td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>Google Calendar integration</td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>Source identification</td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>Conversation threading</td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>AI-powered features</td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>Dark + Light mode</td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-dash">&ndash;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                    <td><span className="compare-check">&#10003;</span></td>
+                  </tr>
+                  <tr>
+                    <td>Price</td>
+                    <td>Free</td>
+                    <td>$99/yr</td>
+                    <td>$30/mo</td>
+                    <td className="compare-highlight-cell">$9/mo</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         {/* -------- PRICING (Clinical) -------- */}
         <section className="l-section" id="pricing">
           <div className="l-container">
             <div className="l-pricing">
+              <div className="pricing-card pricing-card--free">
+                <span className="pricing-label pricing-label--free">FREE</span>
+                <div className="pricing-price">
+                  <span className="pricing-amount">$0</span>
+                  <span className="pricing-period">forever</span>
+                </div>
+                <p className="pricing-cancel">No credit card required.</p>
+                <ul className="pricing-list">
+                  <li>1 connected account</li>
+                  <li>Unified mail view</li>
+                  <li>Secure OAuth + encrypted tokens</li>
+                </ul>
+                <button
+                  className="l-cta l-cta--secondary"
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  type="button"
+                >
+                  {isSigningIn ? 'Signing in\u2026' : 'Get started'}
+                </button>
+              </div>
               <div className="pricing-card">
                 <span className="pricing-label">PRO</span>
                 <div className="pricing-price">
-                  <span className="pricing-amount">$7</span>
+                  <span className="pricing-amount">$9</span>
                   <span className="pricing-period">/ month</span>
                 </div>
                 <p className="pricing-cancel">Cancel anytime.</p>
                 <ul className="pricing-list">
                   <li>Unlimited accounts</li>
-                  <li>Unified inbox + cross-account search</li>
-                  <li>Account tags + quick filters</li>
+                  <li>Mail + Drive + Calendar unified</li>
+                  <li>Conversation view + AI search</li>
                   <li>Secure OAuth + encrypted tokens</li>
                 </ul>
                 <button

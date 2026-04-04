@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Paperclip } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Paperclip, Clock } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -15,7 +15,11 @@ const ComposeModal = ({
   composeAttachments, handleFileSelect, removeAttachment,
   connectedAccounts,
   closeCompose, sendCompose,
+  scheduleSend,
+  includeSignature, setIncludeSignature,
 }) => {
+  const [sendLaterOpen, setSendLaterOpen] = useState(false);
+
   if (!composeOpen) return null;
 
   return (
@@ -82,13 +86,45 @@ const ComposeModal = ({
             </div>
           </div>
           {composeError && <div className="modal-error">{composeError}</div>}
-          <div className="modal-hint">If send fails, you may need to reconnect the account with updated permissions.</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
+            <div className="modal-hint" style={{ margin: 0 }}>If send fails, you may need to reconnect the account with updated permissions.</div>
+            {setIncludeSignature && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <input type="checkbox" checked={includeSignature} onChange={e => setIncludeSignature(e.target.checked)}
+                  style={{ accentColor: 'var(--accent)', width: 14, height: 14 }} />
+                Sent via All The Mail
+              </label>
+            )}
+          </div>
         </div>
         <div className="modal-actions">
           <button className="btn-ghost" onClick={closeCompose} disabled={composeSending}>Cancel</button>
-          <button className="btn btn-primary" onClick={sendCompose} disabled={composeSending} style={{ fontSize: '13px', padding: '10px 20px' }}>
-            {composeSending ? 'Sending...' : 'Send'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ position: 'relative' }}>
+              <button className="btn-ghost" onClick={() => setSendLaterOpen(o => !o)} disabled={composeSending}
+                style={{ fontSize: '13px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={14} /> Send Later
+              </button>
+              {sendLaterOpen && (
+                <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: '4px', background: 'var(--bg-1)', border: '1px solid var(--line-0)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', zIndex: 100, padding: '12px', minWidth: '220px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-2)', marginBottom: '8px' }}>Schedule send</div>
+                  <input type="datetime-local"
+                    style={{ width: '100%', padding: '8px 10px', fontSize: '13px', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: '6px', outline: 'none' }}
+                    min={new Date().toISOString().slice(0, 16)}
+                    onChange={e => {
+                      if (e.target.value && scheduleSend) {
+                        scheduleSend(new Date(e.target.value));
+                        setSendLaterOpen(false);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+            <button className="btn btn-primary" onClick={sendCompose} disabled={composeSending} style={{ fontSize: '13px', padding: '10px 20px' }}>
+              {composeSending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

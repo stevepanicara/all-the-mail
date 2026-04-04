@@ -9,7 +9,7 @@ const router = Router();
 async function verifyAccountOwnership(accountId, userId) {
   const { data: account } = await supabase
     .from('gmail_accounts')
-    .select('*')
+    .select('id, user_id, gmail_email, account_name, granted_scopes')
     .eq('id', accountId)
     .eq('user_id', userId)
     .single();
@@ -33,11 +33,18 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
     const calendar = google.calendar({ version: 'v3', auth: client });
 
     const now = new Date();
-    let timeMax = new Date(now);
+    let timeMin = req.query.timeMin ? new Date(req.query.timeMin) : new Date(now);
+    let timeMax = new Date(timeMin);
     if (range === 'today') {
       timeMax.setHours(23, 59, 59, 999);
     } else if (range === 'week') {
       timeMax.setDate(timeMax.getDate() + 7);
+    } else if (range === '4day') {
+      timeMax.setDate(timeMax.getDate() + 4);
+    } else if (range === 'month') {
+      timeMax.setMonth(timeMax.getMonth() + 1);
+    } else if (range === 'year') {
+      timeMax.setFullYear(timeMax.getFullYear() + 1);
     } else {
       timeMax.setDate(timeMax.getDate() + 30);
     }
@@ -50,7 +57,7 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
         try {
           const resp = await calendar.events.list({
             calendarId: cal.id,
-            timeMin: now.toISOString(),
+            timeMin: timeMin.toISOString(),
             timeMax: timeMax.toISOString(),
             singleEvents: true,
             orderBy: 'startTime',

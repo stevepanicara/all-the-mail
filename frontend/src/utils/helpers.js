@@ -2,6 +2,53 @@ import DOMPurify from 'dompurify';
 import { FileText, Table2, Presentation } from 'lucide-react';
 import { GRADIENT_PRESETS, FILE_TYPES } from './constants';
 
+// Gmail-style deterministic avatar color from sender name
+const AVATAR_COLORS = [
+  '#1A73E8', '#D93025', '#188038', '#E37400',
+  '#A142F4', '#E8453C', '#1E8E3E', '#F29900',
+  '#8430CE', '#C5221F', '#0D652D', '#EA8600',
+  '#6200EA', '#B31412', '#137333', '#F9AB00',
+];
+
+export function getSenderColor(name) {
+  let hash = 0;
+  const str = (name || '?').toLowerCase();
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+export function getSenderInitial(name) {
+  const clean = (name || '?').replace(/<[^>]*>/g, '').trim();
+  return (clean[0] || '?').toUpperCase();
+}
+
+// Domains that are personal email providers — don't try to load a logo
+const PERSONAL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com',
+  'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'aol.com',
+  'icloud.com', 'me.com', 'mac.com', 'protonmail.com', 'proton.me',
+  'zoho.com', 'mail.com', 'gmx.com', 'gmx.net', 'fastmail.com',
+  'tutanota.com', 'hey.com', 'pm.me', 'yandex.com', 'yandex.ru',
+]);
+
+// Failed domain cache — avoid retrying domains with no logo
+const _failedLogoDomains = new Set();
+
+export function getSenderLogoUrl(fromHeader) {
+  const email = getEmailOnly(fromHeader || '').toLowerCase();
+  const domain = email.split('@')[1];
+  if (!domain || PERSONAL_DOMAINS.has(domain) || _failedLogoDomains.has(domain)) return null;
+  return `https://logo.clearbit.com/${domain}`;
+}
+
+export function markLogoFailed(fromHeader) {
+  const email = getEmailOnly(fromHeader || '').toLowerCase();
+  const domain = email.split('@')[1];
+  if (domain) _failedLogoDomains.add(domain);
+}
+
 export function hexToRgb(hex) {
   const h = hex.replace('#', '');
   return { r: parseInt(h.substring(0, 2), 16), g: parseInt(h.substring(2, 4), 16), b: parseInt(h.substring(4, 6), 16) };
@@ -23,8 +70,19 @@ export function getAccountGradient(accountIndex) {
 
 export function buildEmailSrcDoc(rawHtml) {
   const html = rawHtml || '<div style="padding:16px;color:#111;">(empty)</div>';
-  const stripped = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '').replace(/<link[\s\S]*?>/gi, '').replace(/<meta[\s\S]*?>/gi, '').replace(/<base[\s\S]*?>/gi, '');
-  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>html,body{margin:0;padding:24px;background:#F5F7FA;color:#111;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:14px;line-height:1.5}img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#0b57d0}body{overflow:hidden}</style></head><body>${stripped}<script>document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a&&a.href){e.preventDefault();window.open(a.href,'_blank','noopener,noreferrer')}});</script></body></html>`;
+  const clean = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['div','span','p','br','hr','h1','h2','h3','h4','h5','h6',
+      'a','img','table','thead','tbody','tr','td','th','caption','colgroup','col',
+      'ul','ol','li','strong','b','em','i','u','s','strike','del',
+      'blockquote','pre','code','sup','sub','small','center',
+      'font','section','article','header','footer'],
+    ALLOWED_ATTR: ['href','src','alt','title','width','height','style',
+      'class','id','colspan','rowspan','align','valign','border',
+      'cellpadding','cellspacing','bgcolor','color','size','face',
+      'target','rel'],
+    ALLOW_DATA_ATTR: false,
+  });
+  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>html,body{margin:0;padding:24px;background:#F5F7FA;color:#111;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:14px;line-height:1.5}img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#0b57d0}body{overflow:hidden}</style></head><body>${clean}</body></html>`;
 }
 
 export function stripName(s = '') { return (s || '').replace(/<.*?>/g, '').trim(); }
@@ -67,13 +125,24 @@ export function formatRelativeEdit(isoDate) {
   return `Edited ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
 
-export function getShortLabel(account) {
+export function getShortLabel(account, allAccounts = []) {
   const name = account.account_name || '';
+  const email = account.gmail_email || '';
+
+  // If multiple accounts share the same name, use email prefix instead
+  if (name && allAccounts.length > 1) {
+    const sameName = allAccounts.filter(a => (a.account_name || '') === name);
+    if (sameName.length > 1) {
+      const prefix = email.split('@')[0];
+      return prefix.length > 14 ? prefix.slice(0, 13) + '\u2026' : prefix;
+    }
+  }
+
   if (name) {
     const first = name.split(/\s+/)[0];
     return first.length > 14 ? first.slice(0, 13) + '\u2026' : first;
   }
-  const prefix = (account.gmail_email || '').split('@')[0];
+  const prefix = email.split('@')[0];
   return prefix.length > 14 ? prefix.slice(0, 13) + '\u2026' : prefix;
 }
 

@@ -1,7 +1,7 @@
 /* =====================================================
    ALL THE MAIL — Landing Page
    Infrastructure-first · restrained spectral identity
-   #000 bg · #2EE6D6 accent · 8pt spacing system
+   #000 bg · #8b7cff accent · 8pt spacing system
    ===================================================== */
 
 /* ---------- SPACING TOKENS ---------- */
@@ -92,17 +92,17 @@
 }
 
 .l-nav-link:focus-visible {
-  outline: 2px solid #2EE6D6;
+  outline: 2px solid #8b7cff;
   outline-offset: 4px;
   border-radius: 2px;
 }
 
 .l-nav-signin {
-  color: #2EE6D6;
+  color: #8b7cff;
 }
 
 .l-nav-signin:hover {
-  color: #5CEDE0;
+  color: #a99aff;
 }
 
 /* ---------- HERO ---------- */
@@ -205,7 +205,7 @@
 }
 
 .l-h1-accent {
-  color: #2EE6D6;
+  color: #8b7cff;
 }
 
 /* Subhead */
@@ -229,8 +229,8 @@
 
 /* ---------- CTA (solid accent only, no gradient) ---------- */
 .l-cta {
-  background: #2EE6D6;
-  color: #000;
+  background: #8b7cff;
+  color: #fff;
   border: none;
   padding: 0 22px;
   height: 48px;
@@ -249,11 +249,11 @@
 }
 
 .l-cta:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
 }
 
 .l-cta:focus-visible {
-  outline: 2px solid #2EE6D6;
+  outline: 2px solid #8b7cff;
   outline-offset: 4px;
 }
 
@@ -397,27 +397,43 @@
   flex-shrink: 0;
 }
 
-/* ---------- STATEMENT BLOCK ---------- */
+/* ---------- FEATURE STRIP ---------- */
 .l-statement {
   max-width: 1200px;
   margin: 0 auto;
-  padding: var(--sp-8) var(--sp-4);
+  padding: var(--sp-7) var(--sp-4);
   width: 100%;
 }
 
 .l-statement-inner {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: var(--sp-7);
+  padding-top: var(--sp-6);
 }
 
-.l-statement-text {
-  font-size: clamp(28px, 4vw, 48px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-  color: rgba(255, 255, 255, 0.12);
-  margin: 0;
-  max-width: 720px;
+.l-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-5);
+}
+
+.l-feature {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.l-feature-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.80);
+}
+
+.l-feature-desc {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.38);
+  line-height: 1.45;
 }
 
 /* ---------- GALLERY (Product Focus) ---------- */
@@ -432,7 +448,7 @@
   position: relative;
   background-image: radial-gradient(
     600px circle at 50% 50%,
-    rgba(0, 229, 255, 0.03),
+    rgba(139, 124, 255, 0.03),
     transparent 70%
   );
   padding: var(--sp-4);
@@ -528,19 +544,95 @@
   line-height: 1.5;
 }
 
+/* ---------- COMPARISON TABLE ---------- */
+.l-compare-wrap {
+  max-width: 800px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.l-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 600px;
+}
+
+.l-compare-table th,
+.l-compare-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+.l-compare-table th {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.l-compare-table th:first-child,
+.l-compare-table td:first-child {
+  text-align: left;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 500;
+}
+
+.l-compare-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.compare-price {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.compare-highlight {
+  color: #8b7cff !important;
+}
+
+.compare-highlight-cell {
+  color: #8b7cff;
+  font-weight: 600;
+}
+
+.compare-check {
+  color: #8b7cff;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.compare-dash {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 16px;
+}
+
 /* ---------- PRICING (Clinical) ---------- */
 .l-pricing {
   display: flex;
   justify-content: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
 }
 
 .pricing-card {
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(139, 124, 255, 0.15);
   border-radius: 12px;
   padding: var(--sp-6) 40px;
-  max-width: 400px;
+  max-width: 360px;
   width: 100%;
   text-align: center;
+  position: relative;
+}
+
+.pricing-card--free {
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .pricing-label {
@@ -549,7 +641,7 @@
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #2EE6D6;
+  color: #8b7cff;
   margin-bottom: var(--sp-3);
 }
 
@@ -601,13 +693,28 @@
 .pricing-list li::before {
   content: '\2713';
   margin-right: 12px;
-  color: #2EE6D6;
+  color: #8b7cff;
   font-weight: 700;
+}
+
+.pricing-label--free {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .pricing-card .l-cta {
   width: 100%;
   align-self: stretch;
+}
+
+.l-cta--secondary {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.l-cta--secondary:hover:not(:disabled) {
+  filter: none;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .pricing-note {
@@ -652,7 +759,7 @@
 }
 
 .faq-trigger:focus-visible {
-  outline: 2px solid #2EE6D6;
+  outline: 2px solid #8b7cff;
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -807,6 +914,16 @@
   .l-cta {
     width: 100%;
     align-self: stretch;
+  }
+
+  .l-features {
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+  }
+
+  .l-pricing {
+    flex-direction: column;
+    align-items: center;
   }
 
   .mock-subj {

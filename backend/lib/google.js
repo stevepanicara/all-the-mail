@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import crypto from 'crypto';
 import supabase from './supabase.js';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -15,7 +16,7 @@ const SERVICE_SCOPES = {
     'https://www.googleapis.com/auth/drive.readonly',
   ],
   cals: [
-    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar',
   ],
   profile: [
     'https://www.googleapis.com/auth/userinfo.email',
@@ -31,12 +32,33 @@ const oauth2Client = new google.auth.OAuth2(
   GOOGLE_REDIRECT_URI
 );
 
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
 function encryptToken(token) {
-  return Buffer.from(JSON.stringify(token)).toString('base64');
+  if (!ENCRYPTION_KEY) {
+    // Fallback for dev without key — still base64 but log warning
+    console.warn('[SECURITY] No ENCRYPTION_KEY set — tokens stored as base64 only');
+    return Buffer.from(JSON.stringify(token)).toString('base64');
+  }
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+  let encrypted = cipher.update(JSON.stringify(token), 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+  return iv.toString('hex') + ':' + authTag + ':' + encrypted;
 }
 
 function decryptToken(encrypted) {
-  return JSON.parse(Buffer.from(encrypted, 'base64').toString());
+  if (!ENCRYPTION_KEY || !encrypted.includes(':')) {
+    // Legacy base64 fallback
+    return JSON.parse(Buffer.from(encrypted, 'base64').toString());
+  }
+  const [ivHex, authTagHex, encryptedData] = encrypted.split(':');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'hex'), Buffer.from(ivHex, 'hex'));
+  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+  let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return JSON.parse(decrypted);
 }
 
 async function getOAuth2ClientForAccount(accountId) {

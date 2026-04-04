@@ -6,6 +6,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'fakekey';
 process.env.GOOGLE_CLIENT_ID = 'fake-client-id';
 process.env.GOOGLE_CLIENT_SECRET = 'fake-client-secret';
 process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
+process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only-32chars!';
 
 // Mock @supabase/supabase-js before anything imports it
 jest.unstable_mockModule('@supabase/supabase-js', () => ({

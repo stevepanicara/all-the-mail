@@ -1,7 +1,8 @@
 import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = 'your-secret-key-change-in-production';
+process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only-32chars!';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Set required env vars before any module imports
 // Deliberately NOT setting STRIPE_SECRET_KEY so stripe is null

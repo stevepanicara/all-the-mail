@@ -1,7 +1,8 @@
 import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = 'your-secret-key-change-in-production';
+process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only-32chars!';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // We test the authenticateToken middleware logic directly
 // by simulating what it does (since importing it triggers module-level side effects)

@@ -4,7 +4,8 @@ import {
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Forward, Reply, Archive, Trash2, CheckSquare, Square, MinusSquare,
   Paperclip, Download, ArrowLeft, FileText, Calendar, Star, Clock,
-  Share2, MoreHorizontal, LayoutGrid, ExternalLink, MapPin,
+  Share2, MoreHorizontal, LayoutGrid, ExternalLink, MapPin, Sun, Moon, MessagesSquare,
+  Send,
 } from 'lucide-react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import 'react-quill/dist/quill.snow.css';
@@ -21,6 +22,7 @@ import Sidebar from './components/common/Sidebar';
 import ComposeModal from './components/common/ComposeModal';
 import EventEditModal from './components/common/EventEditModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import SenderAvatar from './components/common/SenderAvatar';
 
 import './design-system.css';
 
@@ -31,6 +33,7 @@ const AllTheMail = () => {
   const [authError, setAuthError] = useState(null);
   const [introActive, setIntroActive] = useState(true);
   const [cascadeKey, setCascadeKey] = useState(0);
+  const [theme, setTheme] = useState(() => localStorage.getItem('atm-theme') || 'dark');
 
   const [activeModule, setActiveModule] = useState('everything');
 
@@ -42,8 +45,8 @@ const AllTheMail = () => {
   const [docsSortDir, setDocsSortDir] = useState('desc');
 
   // Cals state
-  const [calsCategory, setCalsCategory] = useState('upcoming');
-  const [calsViewMode, setCalsViewMode] = useState('agenda');
+  const [calsViewMode, setCalsViewMode] = useState(() => localStorage.getItem('atm_calview') || 'week');
+  const [calDate, setCalDate] = useState(() => new Date());
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventEditOpen, setEventEditOpen] = useState(false);
   const [eventEditFields, setEventEditFields] = useState({});
@@ -112,6 +115,14 @@ const AllTheMail = () => {
   const [composeError, setComposeError] = useState(null);
   const [composeAttachments, setComposeAttachments] = useState([]);
   const [composeDraftId, setComposeDraftId] = useState(null);
+  const [includeAtmSignature, setIncludeAtmSignature] = useState(() => localStorage.getItem('atm_signature') !== 'false');
+
+  // Snooze state
+  const [snoozedEmails, setSnoozedEmails] = useState(() => JSON.parse(localStorage.getItem('atm_snoozed') || '{}'));
+  const [snoozeDropdownEmailId, setSnoozeDropdownEmailId] = useState(null);
+
+  // Scheduled sends state
+  const [scheduledSends, setScheduledSends] = useState(() => JSON.parse(localStorage.getItem('atm_scheduled_sends') || '[]'));
 
   const [error, setError] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -122,6 +133,7 @@ const AllTheMail = () => {
     return localStorage.getItem('atm_split_mode') || 'none';
   });
   const [densityMode, setDensityMode] = useState(() => localStorage.getItem('atm_density') || 'default');
+  const [conversationView, setConversationView] = useState(() => localStorage.getItem('atm_conversation') !== 'false');
   const [fullPageReaderOpen, setFullPageReaderOpen] = useState(false);
   const [listWidth, setListWidth] = useState(600);
 
@@ -160,6 +172,11 @@ const AllTheMail = () => {
   useEffect(() => { const t = setTimeout(()=>setIntroActive(false),900); return ()=>clearTimeout(t); }, []);
   useEffect(() => { localStorage.setItem('atm_split_mode',splitMode); }, [splitMode]);
   useEffect(() => { localStorage.setItem('atm_density',densityMode); }, [densityMode]);
+  useEffect(() => { localStorage.setItem('atm_conversation', conversationView); }, [conversationView]);
+  useEffect(() => { localStorage.setItem('atm_calview', calsViewMode); }, [calsViewMode]);
+  useEffect(() => { localStorage.setItem('atm_signature', includeAtmSignature); }, [includeAtmSignature]);
+  useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('atm-theme', theme); }, [theme]);
+  const toggleTheme = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'), []);
 
   useEffect(() => {
     const url = new URL(window.location);
@@ -204,6 +221,16 @@ const AllTheMail = () => {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [avatarDropdownOpen]);
+
+  // Close snooze dropdown on outside click or Escape
+  useEffect(() => {
+    if (!snoozeDropdownEmailId) return;
+    const handler = () => setSnoozeDropdownEmailId(null);
+    const keyHandler = (e) => { if (e.key === 'Escape') setSnoozeDropdownEmailId(null); };
+    setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    document.addEventListener('keydown', keyHandler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler); };
+  }, [snoozeDropdownEmailId]);
 
   const handleReaderScroll = useCallback((e) => {
     setReaderCompact(e.target.scrollTop > 60);
@@ -295,12 +322,46 @@ const AllTheMail = () => {
   }, []);
 
   const getCurrentEmails = useCallback(() => {
+    let list;
     if (activeView==='everything') {
       const all=[]; connectedAccounts.forEach(a => { const ae=emails[a.id]?.[activeCategory]||[]; all.push(...ae.map(e=>({...e,accountId:a.id}))); });
-      return all.sort((a,b)=>new Date(b.date)-new Date(a.date));
+      list = all.sort((a,b)=>new Date(b.date)-new Date(a.date));
+    } else {
+      list = emails[activeView]?.[activeCategory]||[];
     }
-    return emails[activeView]?.[activeCategory]||[];
-  }, [activeView, activeCategory, connectedAccounts, emails]);
+
+    if (!conversationView) return list;
+
+    // Group by threadId — keep the newest message per thread, add threadCount
+    const threadMap = new Map();
+    for (const email of list) {
+      const tid = email.threadId || email.id;
+      if (!threadMap.has(tid)) {
+        threadMap.set(tid, { emails: [], newest: email });
+      }
+      const entry = threadMap.get(tid);
+      entry.emails.push(email);
+      if (new Date(email.date) > new Date(entry.newest.date)) {
+        entry.newest = email;
+      }
+    }
+
+    const grouped = [];
+    for (const [, entry] of threadMap) {
+      const { newest, emails: threadEmails } = entry;
+      const participants = [...new Set(threadEmails.map(e => stripName(e.from || '')))];
+      const hasUnread = threadEmails.some(e => !e.isRead);
+      grouped.push({
+        ...newest,
+        threadCount: threadEmails.length,
+        threadParticipants: participants,
+        threadMessageIds: threadEmails.map(e => e.id),
+        isRead: !hasUnread,
+      });
+    }
+
+    return grouped.sort((a,b) => new Date(b.date) - new Date(a.date));
+  }, [activeView, activeCategory, connectedAccounts, emails, conversationView]);
 
   const allEmails = useMemo(() => {
     const all = [];
@@ -341,17 +402,37 @@ const AllTheMail = () => {
     return allEvents.filter(e => e.accountId === activeView);
   }, [allEvents, activeView]);
 
-  const weekDays = useMemo(() => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-    monday.setHours(0, 0, 0, 0);
+  // Generate day columns for calendar grid views
+  const calGridDays = useMemo(() => {
+    const today = new Date();
+    const anchor = new Date(calDate);
+    let startDate, numDays;
+
+    if (calsViewMode === 'day') {
+      startDate = new Date(anchor); startDate.setHours(0, 0, 0, 0);
+      numDays = 1;
+    } else if (calsViewMode === '4day') {
+      startDate = new Date(anchor); startDate.setHours(0, 0, 0, 0);
+      numDays = 4;
+    } else if (calsViewMode === 'week') {
+      const dow = anchor.getDay();
+      startDate = new Date(anchor);
+      startDate.setDate(anchor.getDate() - ((dow + 6) % 7));
+      startDate.setHours(0, 0, 0, 0);
+      numDays = 7;
+    } else {
+      // month/year/schedule use list, not grid
+      const dow = anchor.getDay();
+      startDate = new Date(anchor);
+      startDate.setDate(anchor.getDate() - ((dow + 6) % 7));
+      startDate.setHours(0, 0, 0, 0);
+      numDays = 7;
+    }
 
     const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
+    for (let i = 0; i < numDays; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
       const dayEnd = new Date(d);
       dayEnd.setHours(23, 59, 59, 999);
 
@@ -363,12 +444,73 @@ const AllTheMail = () => {
       days.push({
         date: d,
         label: d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }),
-        isToday: d.toDateString() === now.toDateString(),
+        shortLabel: d.toLocaleDateString(undefined, { weekday: 'short' }),
+        dayNum: d.getDate(),
+        isToday: d.toDateString() === today.toDateString(),
         events: dayEvents,
       });
     }
     return days;
-  }, [filteredAllEvents]);
+  }, [filteredAllEvents, calDate, calsViewMode]);
+
+  // Generate month grid for month view (6 weeks)
+  const calMonthDays = useMemo(() => {
+    const today = new Date();
+    const anchor = new Date(calDate);
+    const firstOfMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const startDow = firstOfMonth.getDay();
+    const startDate = new Date(firstOfMonth);
+    startDate.setDate(1 - ((startDow + 6) % 7));
+    startDate.setHours(0, 0, 0, 0);
+
+    const weeks = [];
+    for (let w = 0; w < 6; w++) {
+      const week = [];
+      for (let d = 0; d < 7; d++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + w * 7 + d);
+        const dayEnd = new Date(date); dayEnd.setHours(23, 59, 59, 999);
+        const dayEvents = filteredAllEvents.filter(ev => {
+          const evDate = new Date(ev.startISO || 0);
+          return evDate >= date && evDate <= dayEnd;
+        });
+        week.push({
+          date,
+          dayNum: date.getDate(),
+          isToday: date.toDateString() === today.toDateString(),
+          isCurrentMonth: date.getMonth() === anchor.getMonth(),
+          events: dayEvents,
+        });
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  }, [filteredAllEvents, calDate]);
+
+  // Calendar navigation
+  const calNavigate = useCallback((dir) => {
+    setCalDate(prev => {
+      const d = new Date(prev);
+      if (calsViewMode === 'day') d.setDate(d.getDate() + dir);
+      else if (calsViewMode === '4day') d.setDate(d.getDate() + dir * 4);
+      else if (calsViewMode === 'week') d.setDate(d.getDate() + dir * 7);
+      else if (calsViewMode === 'month') d.setMonth(d.getMonth() + dir);
+      else if (calsViewMode === 'year') d.setFullYear(d.getFullYear() + dir);
+      else d.setDate(d.getDate() + dir * 7);
+      return d;
+    });
+  }, [calsViewMode]);
+
+  const calTitle = useMemo(() => {
+    const d = new Date(calDate);
+    if (calsViewMode === 'day') return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (calsViewMode === 'month' || calsViewMode === 'year') return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    // week, 4day, schedule
+    const end = new Date(d);
+    end.setDate(d.getDate() + (calsViewMode === '4day' ? 3 : 6));
+    if (d.getMonth() === end.getMonth()) return `${d.toLocaleDateString(undefined, { month: 'long' })} ${d.getDate()} – ${end.getDate()}, ${d.getFullYear()}`;
+    return `${d.toLocaleDateString(undefined, { month: 'short' })} ${d.getDate()} – ${end.toLocaleDateString(undefined, { month: 'short' })} ${end.getDate()}, ${d.getFullYear()}`;
+  }, [calDate, calsViewMode]);
 
   const filteredDocs = useMemo(() => {
     let pool = allDocs;
@@ -538,9 +680,9 @@ const AllTheMail = () => {
       const r=await fetch(`${API_BASE}/emails/${aid}/${eid}`,{credentials:'include'});
       if(r.ok){
         setIsAuthed(true); const d=await r.json();
-        setEmailBodies(p=>({...p,[eid]:d.body}));
-        if(d.headers) setEmailHeaders(p=>({...p,[eid]:d.headers}));
-        if(d.attachments) setEmailAttachments(p=>({...p,[eid]:d.attachments}));
+        setEmailBodies(p=>{const u={...p,[eid]:d.body};const k=Object.keys(u);if(k.length>100)k.slice(0,k.length-100).forEach(x=>delete u[x]);return u;});
+        if(d.headers) setEmailHeaders(p=>{const u={...p,[eid]:d.headers};const k=Object.keys(u);if(k.length>100)k.slice(0,k.length-100).forEach(x=>delete u[x]);return u;});
+        if(d.attachments) setEmailAttachments(p=>{const u={...p,[eid]:d.attachments};const k=Object.keys(u);if(k.length>100)k.slice(0,k.length-100).forEach(x=>delete u[x]);return u;});
         if(!email.isRead){
           setEmails(p=>{const n={...p};Object.keys(n).forEach(ai=>{Object.keys(n[ai]).forEach(c=>{if(n[ai][c])n[ai][c]=n[ai][c].map(e=>e.id===eid?{...e,isRead:true}:e);});});return n;});
           fetch(`${API_BASE}/emails/${aid}/${eid}/read`,{method:'POST',credentials:'include'}).catch(()=>{});
@@ -717,10 +859,25 @@ const AllTheMail = () => {
   }, [slideOverEmail, slideOverDoc, slideOverIndex, evFilteredEmails, evFilteredDocs, closeSlideOver, loadEmailDetails, loadDocPreview]);
 
   const filteredEmails = useMemo(() => {
-    const list=getCurrentEmails(); if(!searchQuery) return list;
-    const q=searchQuery.toLowerCase();
-    return list.filter(e=>(e.subject||'').toLowerCase().includes(q)||(e.from||'').toLowerCase().includes(q)||(e.snippet||'').toLowerCase().includes(q));
-  }, [getCurrentEmails, searchQuery]);
+    const isSnoozed = e => snoozedEmails[`${e.accountId || ''}_${e.id}`];
+    if (!searchQuery) {
+      return getCurrentEmails().filter(e => !isSnoozed(e));
+    }
+    // Cross-account search: when query is active, search ALL accounts and ALL categories
+    const q = searchQuery.toLowerCase();
+    const matchFn = e => (e.subject||'').toLowerCase().includes(q)||(e.from||'').toLowerCase().includes(q)||(e.snippet||'').toLowerCase().includes(q);
+    const all = [];
+    connectedAccounts.forEach(a => {
+      Object.values(emails[a.id] || {}).forEach(catEmails => {
+        (catEmails || []).forEach(e => {
+          if (matchFn(e)) all.push({ ...e, accountId: a.id });
+        });
+      });
+    });
+    const seen = new Set();
+    return all.filter(e => { if (seen.has(e.id) || isSnoozed(e)) return false; seen.add(e.id); return true; })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [getCurrentEmails, searchQuery, snoozedEmails, connectedAccounts, emails]);
 
   useEffect(() => {
     if(!composeOpen) return;
@@ -841,6 +998,96 @@ const AllTheMail = () => {
 
   useEffect(()=>{saveDraftRef.current=saveDraft;}, [saveDraft]);
 
+  // Persist snoozed emails to localStorage
+  useEffect(() => { localStorage.setItem('atm_snoozed', JSON.stringify(snoozedEmails)); }, [snoozedEmails]);
+
+  // Check snoozed emails every 60 seconds — un-snooze when time is up
+  useEffect(() => {
+    const checkSnoozed = () => {
+      const now = Date.now();
+      setSnoozedEmails(prev => {
+        const updated = { ...prev };
+        let changed = false;
+        for (const key of Object.keys(updated)) {
+          if (new Date(updated[key].until).getTime() <= now) {
+            delete updated[key];
+            changed = true;
+          }
+        }
+        return changed ? updated : prev;
+      });
+    };
+    checkSnoozed();
+    const interval = setInterval(checkSnoozed, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const snoozeEmail = useCallback((email, until) => {
+    if (!email?.id) return;
+    const key = `${email.accountId || ''}_${email.id}`;
+    setSnoozedEmails(prev => ({ ...prev, [key]: { emailId: email.id, accountId: email.accountId, until: until.toISOString() } }));
+    setSnoozeDropdownEmailId(null);
+    // Clear selected email if it was snoozed
+    if (selectedEmail?.id === email.id) {
+      setSelectedEmail(null); setSelectedThread(null); setSelectedThreadActiveMessageId(null);
+      setShowMetadata(false); setFullPageReaderOpen(false);
+    }
+  }, [selectedEmail]);
+
+  const getSnoozeOptions = useCallback(() => {
+    const now = new Date();
+    const laterToday = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    const tomorrowMorning = new Date(now);
+    tomorrowMorning.setDate(tomorrowMorning.getDate() + 1);
+    tomorrowMorning.setHours(8, 0, 0, 0);
+    const nextMonday = new Date(now);
+    nextMonday.setDate(nextMonday.getDate() + ((8 - nextMonday.getDay()) % 7 || 7));
+    nextMonday.setHours(8, 0, 0, 0);
+    return [
+      { label: 'Later today', time: laterToday },
+      { label: 'Tomorrow morning', time: tomorrowMorning },
+      { label: 'Next week', time: nextMonday },
+    ];
+  }, []);
+
+  // Persist scheduled sends to localStorage
+  useEffect(() => { localStorage.setItem('atm_scheduled_sends', JSON.stringify(scheduledSends)); }, [scheduledSends]);
+
+  // Check scheduled sends every 30 seconds — send when time is up
+  useEffect(() => {
+    const checkScheduled = async () => {
+      const now = Date.now();
+      const due = scheduledSends.filter(s => new Date(s.scheduledFor).getTime() <= now);
+      if (due.length === 0) return;
+      for (const item of due) {
+        try {
+          await fetch(`${API_BASE}/emails/${item.accountId}/send`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'compose', to: item.to, cc: item.cc || '', bcc: item.bcc || '', subject: item.subject, body: item.body, includeSignature: true }),
+          });
+        } catch (err) { console.error('Scheduled send failed:', err); }
+      }
+      setScheduledSends(prev => prev.filter(s => new Date(s.scheduledFor).getTime() > now));
+    };
+    checkScheduled();
+    const interval = setInterval(checkScheduled, 30000);
+    return () => clearInterval(interval);
+  }, [scheduledSends]);
+
+  const scheduleSend = useCallback((scheduledFor) => {
+    const fid = composeFromAccountId;
+    if (!fid) { setComposeError('Select a sending account'); return; }
+    if (!composeTo.trim()) { setComposeError('Recipient is required'); return; }
+    setScheduledSends(prev => [...prev, {
+      to: composeTo.trim(), cc: composeCc.trim(), bcc: composeBcc.trim(),
+      subject: composeSubject.trim(), body: composeBody,
+      accountId: fid, scheduledFor: scheduledFor.toISOString(),
+    }]);
+    setComposeOpen(false); setComposeOriginalEmail(null); setComposeAttachments([]); setComposeDraftId(null);
+  }, [composeFromAccountId, composeTo, composeCc, composeBcc, composeSubject, composeBody]);
+
+
   const closeCompose = useCallback(async ()=>{
     if(composeSending) return; await saveDraft(); setComposeOpen(false);setComposeError(null);setComposeOriginalEmail(null);setComposeAttachments([]);setComposeDraftId(null);
     if(composeFromAccountId) await loadEmailsForAccount(composeFromAccountId,'drafts');
@@ -850,14 +1097,16 @@ const AllTheMail = () => {
     setComposeError(null);
     const fid=composeFromAccountId; if(!fid){setComposeError('Select a sending account');return;} if(!composeTo.trim()){setComposeError('Recipient is required');return;}
     setComposeSending(true);
+    const sigLine = includeAtmSignature ? '<br><div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">Sent via <a href="https://allthemail.com" style="color:#8b7cff;text-decoration:none;">All The Mail</a></div>' : '';
+    const bodyWithSig = composeBody + sigLine;
     try{
       let r;
-      if(composeAttachments.length>0){const fd=new FormData();fd.append('to',composeTo.trim());fd.append('subject',composeSubject.trim());fd.append('body',composeBody);if(composeCc.trim())fd.append('cc',composeCc.trim());if(composeBcc.trim())fd.append('bcc',composeBcc.trim());if(composeOriginalEmail?.threadId)fd.append('threadId',composeOriginalEmail.threadId);if(composeDraftId)fd.append('draftId',composeDraftId);composeAttachments.forEach(f=>fd.append('attachments',f));r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',body:fd});}
-      else{r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:composeMode,to:composeTo.trim(),cc:composeCc.trim(),bcc:composeBcc.trim(),subject:composeSubject.trim(),body:composeBody,originalEmailId:composeOriginalEmail?.id||null,threadId:composeOriginalEmail?.threadId||null,draftId:composeDraftId||null,includeSignature:true})});}
+      if(composeAttachments.length>0){const fd=new FormData();fd.append('to',composeTo.trim());fd.append('subject',composeSubject.trim());fd.append('body',bodyWithSig);if(composeCc.trim())fd.append('cc',composeCc.trim());if(composeBcc.trim())fd.append('bcc',composeBcc.trim());if(composeOriginalEmail?.threadId)fd.append('threadId',composeOriginalEmail.threadId);if(composeDraftId)fd.append('draftId',composeDraftId);composeAttachments.forEach(f=>fd.append('attachments',f));r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',body:fd});}
+      else{r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:composeMode,to:composeTo.trim(),cc:composeCc.trim(),bcc:composeBcc.trim(),subject:composeSubject.trim(),body:bodyWithSig,originalEmailId:composeOriginalEmail?.id||null,threadId:composeOriginalEmail?.threadId||null,draftId:composeDraftId||null,includeSignature:true})});}
       if(r.ok){await loadEmailsForAccount(fid,activeCategory);await loadEmailsForAccount(fid,'drafts');if(activeView==='everything')connectedAccounts.forEach(a=>{if(a.id!==fid)loadEmailsForAccount(a.id,activeCategory);});setComposeOpen(false);setComposeOriginalEmail(null);setComposeAttachments([]);setComposeDraftId(null);}
       else{const d=await r.json().catch(()=>({}));setComposeError(d?.error||'Send failed. If permissions changed, reconnect the account.');}
     } catch(err){setComposeError(String(err?.message||err));} finally{setComposeSending(false);}
-  }, [composeFromAccountId,composeMode,composeTo,composeCc,composeBcc,composeSubject,composeBody,composeOriginalEmail,composeAttachments,composeDraftId,loadEmailsForAccount,activeCategory,activeView,connectedAccounts]);
+  }, [composeFromAccountId,composeMode,composeTo,composeCc,composeBcc,composeSubject,composeBody,composeOriginalEmail,composeAttachments,composeDraftId,loadEmailsForAccount,activeCategory,activeView,connectedAccounts,includeAtmSignature]);
 
   const onSelectEmail = useCallback((email) => {
     setSelectedEmail(email);setShowMetadata(false);setReaderCompact(false);loadEmailDetails(email);loadThread(email);setSelectedThreadActiveMessageId(email.id);
@@ -900,6 +1149,18 @@ const AllTheMail = () => {
             {isFullPage && (<button className="reader-toolbar-btn" onClick={goBackToList} title="Back to inbox"><ArrowLeft size={16} strokeWidth={1.5} /></button>)}
             <button className="reader-toolbar-btn" onClick={() => archiveEmail(email)} title="Archive"><Archive size={16} strokeWidth={1.5} /></button>
             <button className="reader-toolbar-btn danger" onClick={() => trashEmail(email)} title="Delete"><Trash2 size={16} strokeWidth={1.5} /></button>
+            <div style={{ position: 'relative' }}>
+              <button className="reader-toolbar-btn" onClick={() => setSnoozeDropdownEmailId(prev => prev === email.id ? null : email.id)} title="Snooze"><Clock size={16} strokeWidth={1.5} /></button>
+              {snoozeDropdownEmailId === email.id && (
+                <div onMouseDown={e => e.stopPropagation()} className="dropdown-menu">
+                  {getSnoozeOptions().map(opt => (
+                    <button key={opt.label} className="dropdown-item" onClick={() => snoozeEmail(email, opt.time)}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button className="reader-toolbar-btn" title="More"><MoreHorizontal size={16} strokeWidth={1.5} /></button>
           </div>
           <div className="reader-toolbar-right">
@@ -945,7 +1206,7 @@ const AllTheMail = () => {
                     const active = selectedThreadActiveMessageId === m.id;
                     return (
                       <button key={m.id} onClick={() => onSelectThreadMessage(m)}
-                        style={{ textAlign: 'left', padding: '8px 12px', border: 'none', borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent', background: active ? 'rgba(255,255,255,0.03)' : 'transparent', cursor: 'pointer', borderRadius: 0, color: 'inherit', fontFamily: 'inherit', width: '100%', transition: 'background 150ms ease' }}>
+                        style={{ textAlign: 'left', padding: '8px 12px', border: 'none', borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent', background: active ? 'var(--accent-weak)' : 'transparent', cursor: 'pointer', borderRadius: 0, color: 'inherit', fontFamily: 'inherit', width: '100%', transition: 'background 150ms ease' }}>
                         <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: 2 }}>{stripName(m.from || '')}</div>
                         <div style={{ fontSize: '11px', color: 'var(--text-2)' }}>{m.snippet || ''}</div>
                       </button>
@@ -957,10 +1218,10 @@ const AllTheMail = () => {
           )}
           <div className="email-body-wrapper">
             {isLoadingBody ? (
-              <div style={{ padding: '48px', textAlign: 'center', background: '#fff', color: '#666' }}>Loading message...</div>
+              <div style={{ padding: '48px', textAlign: 'center', background: 'var(--email-bg)', color: 'var(--text-2)' }}>Loading message...</div>
             ) : (
               <iframe title="Email content" ref={iframeRef}
-                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+                sandbox="allow-same-origin allow-popups"
                 srcDoc={buildEmailSrcDoc(emailBodies[email.id] || '<div style="padding:16px;">(no content)</div>')}
                 scrolling="no"
                 onLoad={() => {
@@ -975,7 +1236,7 @@ const AllTheMail = () => {
                   let ro; try { ro = new ResizeObserver(resize); ro.observe(iframe.contentDocument.body); } catch(e) {}
                   iframeResizeCleanupRef.current = () => { timers.forEach(clearTimeout); imgs.forEach(i => { try { i.removeEventListener('load', resize); } catch(e) {} }); if (ro) ro.disconnect(); };
                 }}
-                style={{ width: '100%', border: '0', display: 'block', background: '#F5F7FA', borderRadius: '8px', overflow: 'hidden' }} />
+                style={{ width: '100%', border: '0', display: 'block', background: 'var(--email-bg)', borderRadius: '8px', overflow: 'hidden' }} />
             )}
           </div>
           {emailAttachments[email.id]?.length > 0 && (
@@ -1028,7 +1289,7 @@ const AllTheMail = () => {
           </div>
         )}
         <div style={{ padding: activeView === 'everything' ? '12px 20px 8px' : '0 20px 8px' }}>
-          <div className="search-pill"><Search size={14} /><input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search messages..." /></div>
+          <div className="search-pill"><Search size={14} /><input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search across all accounts..." /></div>
         </div>
         <div style={{ padding: '4px 20px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1073,6 +1334,11 @@ const AllTheMail = () => {
           const cc = isCascading && idx <= 23 ? ' row--intro' : '';
           const cs = isCascading && idx <= 23 ? { '--d': `${Math.min(idx, 23) * 36}ms` } : {};
 
+          const senderLabel = conversationView && email.threadCount > 1 && email.threadParticipants?.length > 1
+            ? email.threadParticipants.slice(0, 3).map(p => p.split(' ')[0]).join(', ') + (email.threadParticipants.length > 3 ? ` +${email.threadParticipants.length - 3}` : '')
+            : stripName(email.from || '');
+          const threadBadge = conversationView && email.threadCount > 1;
+
           return (
             <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
@@ -1080,9 +1346,12 @@ const AllTheMail = () => {
               {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
               {useStackedRows ? (
                 <div className="email-row-stacked">
-                  <div className="row-icon-slot">{grad && <span className="account-dot" style={{ background: grad.gradient }} title={connectedAccounts[accountIndex]?.account_name || ''} />}</div>
+                  <SenderAvatar from={email.from || ''} size={24} />
                   <div className="email-row-stacked-content">
-                    <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>{stripName(email.from || '')}</span>
+                    <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
+                      {senderLabel}
+                      {threadBadge && <span className="thread-count-badge">{email.threadCount}</span>}
+                    </span>
                     <span className="row-subject" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
                   </div>
                   <span className="row-time">{formatTime(email.date)}</span>
@@ -1092,8 +1361,14 @@ const AllTheMail = () => {
                   <button className={`email-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => { e.stopPropagation(); toggleSelectId(email.id); }} title={isSelected ? 'Deselect' : 'Select'}>
                     {isSelected ? <CheckSquare size={15} /> : <Square size={15} />}
                   </button>
-                  <div className="row-icon-slot">{grad && <span className="account-dot" style={{ background: grad.gradient }} title={connectedAccounts[accountIndex]?.account_name || ''} />}</div>
-                  <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>{stripName(email.from || '')}</span>
+                  <div className="sender-avatar-wrap">
+                    <SenderAvatar from={email.from || ''} size={32} />
+                    {grad && activeView === 'everything' && <span className="account-indicator" style={{ background: grad.gradient }} title={connectedAccounts[accountIndex]?.account_name || ''} />}
+                  </div>
+                  <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
+                    {senderLabel}
+                    {threadBadge && <span className="thread-count-badge">{email.threadCount}</span>}
+                  </span>
                   <span className="row-subject">
                     <span className="row-subject-title" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
                     {email.snippet && <span className="row-subject-preview">{' \u2014 '}{email.snippet}</span>}
@@ -1151,7 +1426,7 @@ const AllTheMail = () => {
           </div>
         </div>
       </Panel>
-      <PanelResizeHandle className="panel-resize-handle" />
+      <PanelResizeHandle className="ev-column-divider ev-column-divider--mail-docs" />
       <Panel defaultSize="30%" minSize="22%" id="ev-docs">
         <div className="ev-column">
           <div className="ev-col-header">
@@ -1167,8 +1442,9 @@ const AllTheMail = () => {
             ) : (!anyHasDocs || hasDocsError) && evFilteredDocs.length === 0 ? (
               <div className="connect-cta-compact">
                 <FileText size={24} strokeWidth={1.5} style={{ color: 'var(--text-3)' }} />
-                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasDocs ? 'Reconnect Google Drive' : 'Connect Google Drive'}</div>
-                <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}><Plus size={12} strokeWidth={1.5} /> {anyHasDocs ? 'Reconnect' : 'Connect'}</button>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasDocs ? 'Drive permissions need updating' : 'Connect Google Drive'}</div>
+                {anyHasDocs && <div style={{ fontSize: '11px', color: 'var(--text-3)', maxWidth: 200, textAlign: 'center' }}>Re-grant Drive access to restore your documents</div>}
+                <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}><Plus size={12} strokeWidth={1.5} /> {anyHasDocs ? 'Re-authorize' : 'Connect'}</button>
               </div>
             ) : evFilteredDocs.length === 0 ? (
               <div style={{ padding: '48px 24px', textAlign: 'center' }}><FileText size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No documents</div></div>
@@ -1193,7 +1469,7 @@ const AllTheMail = () => {
           </div>
         </div>
       </Panel>
-      <PanelResizeHandle className="panel-resize-handle" />
+      <PanelResizeHandle className="ev-column-divider ev-column-divider--docs-cals" />
       <Panel defaultSize="30%" minSize="22%" id="ev-cals">
         <div className="ev-column">
           <div className="ev-col-header">
@@ -1211,8 +1487,9 @@ const AllTheMail = () => {
               if ((!anyHasCals || hasEventsError) && evFilteredEvents.length === 0) return (
                 <div className="connect-cta-compact">
                   <Calendar size={24} strokeWidth={1.5} style={{ color: 'var(--text-3)' }} />
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
-                  <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}><Plus size={12} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect'}</button>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{anyHasCals ? 'Calendar permissions need updating' : 'Connect Google Calendar'}</div>
+                  {anyHasCals && <div style={{ fontSize: '11px', color: 'var(--text-3)', maxWidth: 200, textAlign: 'center' }}>Re-grant Calendar access to restore your events</div>}
+                  <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '11px', padding: '4px 10px' }}><Plus size={12} strokeWidth={1.5} /> {anyHasCals ? 'Re-authorize' : 'Connect'}</button>
                 </div>
               );
               return evFilteredEvents.length === 0 ? (
@@ -1280,9 +1557,9 @@ const AllTheMail = () => {
           ) : (!anyHasDocs || hasDocsError) && filteredDocs.length === 0 ? (
             <div className="connect-cta">
               <FileText size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
-              <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasDocs ? 'Reconnect Google Drive' : 'Connect Google Drive'}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasDocs ? 'Drive permissions were revoked. Reconnect to see your documents.' : 'Grant Drive permissions to see your documents here'}</div>
-              <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasDocs ? 'Reconnect' : 'Connect account'}</button>
+              <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasDocs ? 'Drive permissions need updating' : 'Connect Google Drive'}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasDocs ? 'Re-grant Drive access to restore your documents. You\'ll be asked to approve permissions again.' : 'Grant Drive permissions to see your documents here'}</div>
+              <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasDocs ? 'Re-authorize Drive' : 'Connect account'}</button>
             </div>
           ) : filteredDocs.length === 0 ? (
             <div style={{ padding: '48px 24px', textAlign: 'center' }}><FileText size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No documents in {docsCategory}</div></div>
@@ -1342,201 +1619,211 @@ const AllTheMail = () => {
 
   // ==================== RENDER: CALS MODULE ====================
   const renderCalsModule = () => {
+    const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6am–11pm
     const grouped = {};
     filteredAllEvents.forEach(ev => { if (!grouped[ev.day]) grouped[ev.day] = []; grouped[ev.day].push(ev); });
+
+    const renderEventChip = (ev) => (
+      <div key={ev.id} className={`gcal-chip${selectedEvent?.id === ev.id ? ' active' : ''}`}
+        style={{ borderLeftColor: ev.calendarColor || 'var(--accent)', background: ev.calendarColor ? `${ev.calendarColor}18` : 'rgba(139, 124, 255, 0.08)' }}
+        onClick={() => setSelectedEvent(prev => prev?.id === ev.id ? null : ev)}>
+        <span className="gcal-chip-time">{ev.time !== 'All day' ? ev.time : ''}</span>
+        <span className="gcal-chip-title">{ev.title}</span>
+      </div>
+    );
+
+    const renderDayGrid = (days) => {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      return (
+      <div className="gcal-grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
+        {/* Header row */}
+        <div className="gcal-corner" />
+        {days.map(day => (
+          <div key={day.label} className={`gcal-col-header${day.isToday ? ' gcal-today' : ''}`}>
+            <span className="gcal-col-weekday">{day.shortLabel}</span>
+            <span className={`gcal-col-daynum${day.isToday ? ' gcal-today-num' : ''}`}>{day.dayNum}</span>
+          </div>
+        ))}
+        {/* All-day row */}
+        <div className="gcal-time-label" style={{ fontSize: '10px', color: 'var(--text-3)' }}>all-day</div>
+        {days.map(day => (
+          <div key={`ad-${day.label}`} className="gcal-allday-cell">
+            {day.events.filter(ev => ev.time === 'All day').map(renderEventChip)}
+          </div>
+        ))}
+        {/* Time grid */}
+        {HOURS.map(h => (
+          <React.Fragment key={h}>
+            <div className="gcal-time-label">{h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`}</div>
+            {days.map(day => {
+              const hourEvents = day.events.filter(ev => {
+                if (ev.time === 'All day') return false;
+                const evDate = new Date(ev.startISO || 0);
+                return evDate.getHours() === h;
+              });
+              return (
+                <div key={`${h}-${day.label}`} className="gcal-cell">
+                  {hourEvents.map(renderEventChip)}
+                  {h === currentHour && day.isToday && (
+                    <div className="gcal-now-line" style={{ top: `${(currentMinutes / 60) * 48}px` }} />
+                  )}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+      );
+    };
+
+    const isGridView = calsViewMode === 'day' || calsViewMode === 'week' || calsViewMode === '4day';
+
     return (
-      <>
-        <Panel defaultSize="15%" minSize="12%" maxSize="22%" id="sidebar-cals">
-          <div className="sidebar" style={{ width: '100%' }}>
-            <div style={{ padding: '16px 16px 16px' }}><div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>All the cals</div></div>
-            <div style={{ padding: '0 0 24px' }}>
-              {[{key:'upcoming',label:'Upcoming',icon:Clock},{key:'today',label:'Today',icon:Calendar},{key:'this-week',label:'This week',icon:Calendar},{key:'month',label:'Month',icon:LayoutGrid}].map(({key,label,icon:Icon}) => (
-                <button key={key} onClick={()=>{setCalsCategory(key);setSelectedEvent(null);}}
-                  className={`category-btn${calsCategory===key?' active':''}`}
-                  style={{ width:'100%',padding:'9px 20px',textAlign:'left',display:'flex',alignItems:'center',gap:'8px',background:'transparent',border:'none',cursor:'pointer',color:calsCategory===key?'var(--text-0)':'var(--text-2)',position:'relative',fontSize:'13px',fontWeight:calsCategory===key?500:400,fontFamily:'inherit' }}>
-                  <Icon size={14} strokeWidth={1.5} /><span className="category-label">{label}</span>
-                </button>
+      <div className="gcal-root">
+        {/* Toolbar */}
+        <div className="gcal-toolbar">
+          <div className="gcal-toolbar-left">
+            <button className="btn-ghost" style={{ padding: '6px 14px', fontSize: '13px' }} onClick={() => {
+              const calsAccount = connectedAccounts.find(a => a.granted_scopes?.includes('cals'));
+              if (!calsAccount) return;
+              const now = new Date();
+              const oneHourLater = new Date(now.getTime() + 3600000);
+              setSelectedEvent({ id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() });
+              openEventEdit({ id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() });
+            }}><Plus size={14} strokeWidth={1.5} /> New event</button>
+            <div className="gcal-nav-group">
+              <button className="btn-ghost" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={() => setCalDate(new Date())}>Today</button>
+              <button className="gcal-nav-btn" onClick={() => calNavigate(-1)}><ChevronLeft size={16} strokeWidth={1.5} /></button>
+              <button className="gcal-nav-btn" onClick={() => calNavigate(1)}><ChevronRight size={16} strokeWidth={1.5} /></button>
+            </div>
+            <span className="gcal-title">{calTitle}</span>
+          </div>
+          <div className="gcal-toolbar-right">
+            {['day', 'week', 'month', 'year', 'schedule', '4day'].map(v => (
+              <button key={v} className={`ev-filter-btn${calsViewMode === v ? ' active' : ''}`} onClick={() => setCalsViewMode(v)}>
+                {v === '4day' ? '4 days' : v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Calendar body */}
+        <div className="gcal-body">
+          {(!anyHasCals || hasEventsError) && filteredAllEvents.length === 0 ? (
+            <div className="connect-cta">
+              <Calendar size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
+              <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasCals ? 'Calendar permissions need updating' : 'Connect Google Calendar'}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasCals ? 'Re-grant Calendar access to restore your events.' : 'Grant Calendar permissions to see your events here'}</div>
+              <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Re-authorize Calendar' : 'Connect account'}</button>
+            </div>
+          ) : isGridView ? (
+            renderDayGrid(calGridDays)
+          ) : calsViewMode === 'month' ? (
+            <div className="gcal-month">
+              <div className="gcal-month-header">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                  <div key={d} className="gcal-month-weekday">{d}</div>
+                ))}
+              </div>
+              {calMonthDays.map((week, wi) => (
+                <div key={wi} className="gcal-month-row">
+                  {week.map((day, di) => (
+                    <div key={di} className={`gcal-month-cell${day.isToday ? ' gcal-today' : ''}${!day.isCurrentMonth ? ' gcal-muted' : ''}`}
+                      onClick={() => { setCalDate(day.date); setCalsViewMode('day'); }}>
+                      <span className={`gcal-month-daynum${day.isToday ? ' gcal-today-num' : ''}`}>{day.dayNum}</span>
+                      {day.events.slice(0, 3).map(renderEventChip)}
+                      {day.events.length > 3 && <div className="gcal-more">+{day.events.length - 3} more</div>}
+                    </div>
+                  ))}
+                </div>
               ))}
             </div>
-            <div style={{ padding: '0 16px 16px' }}>
-              <button className="btn-compose" style={{ width: '100%' }} onClick={() => {
-                const calsAccount = connectedAccounts.find(a => a.granted_scopes?.includes('cals'));
-                if (!calsAccount) return;
-                const now = new Date();
-                const oneHourLater = new Date(now.getTime() + 3600000);
-                const newEv = { id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() };
-                setSelectedEvent(newEv);
-                openEventEdit(newEv);
-              }}>
-                <Plus size={14} strokeWidth={1.5} /> New event
-              </button>
-            </div>
-            <div style={{ padding: '0 16px 24px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: 500, marginBottom: '8px' }}>Accounts</div>
-              {connectedAccounts.map((a, i) => {
-                const g = getAccountGradient(i);
-                return (<div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', fontSize: '12px', color: 'var(--text-2)' }}><span className="account-dot" style={{ background: g.gradient, width: 8, height: 8 }} />{a.account_name}</div>);
+          ) : calsViewMode === 'year' ? (
+            <div className="gcal-year">
+              {Array.from({ length: 12 }, (_, mi) => {
+                const monthDate = new Date(calDate.getFullYear(), mi, 1);
+                const monthName = monthDate.toLocaleDateString(undefined, { month: 'long' });
+                const monthEvents = filteredAllEvents.filter(ev => {
+                  const d = new Date(ev.startISO || 0);
+                  return d.getFullYear() === calDate.getFullYear() && d.getMonth() === mi;
+                });
+                return (
+                  <div key={mi} className="gcal-year-month" onClick={() => { setCalDate(monthDate); setCalsViewMode('month'); }}>
+                    <div className="gcal-year-month-name">{monthName}</div>
+                    <div className="gcal-year-month-count">{monthEvents.length > 0 ? `${monthEvents.length} event${monthEvents.length !== 1 ? 's' : ''}` : ''}</div>
+                  </div>
+                );
               })}
             </div>
-          </div>
-        </Panel>
-        <PanelResizeHandle className="panel-resize-handle" />
-        <Panel defaultSize="40%" minSize="28%" id="cals-list">
-          <div style={{ height: '100%', overflow: 'auto', background: 'var(--surface-list)' }}>
-            <div style={{ borderBottom: '1px solid var(--line-0)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{calsCategory === 'this-week' ? 'This week' : calsCategory.charAt(0).toUpperCase() + calsCategory.slice(1)}</span>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <button className={`ev-filter-btn${calsViewMode === 'agenda' ? ' active' : ''}`} onClick={() => setCalsViewMode('agenda')} style={{ fontSize: '11px', padding: '2px 8px' }}>Agenda</button>
-                <button className={`ev-filter-btn${calsViewMode === 'week' ? ' active' : ''}`} onClick={() => setCalsViewMode('week')} style={{ fontSize: '11px', padding: '2px 8px' }}>Week</button>
-              </div>
+          ) : /* schedule */ (
+            <div style={{ overflow: 'auto', flex: 1 }}>
+              {isLoadingEvents && filteredAllEvents.length === 0 ? (
+                Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 48 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
+              ) : Object.keys(grouped).length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
+              ) : Object.entries(grouped).map(([day, dayEvents]) => (
+                <div key={day}>
+                  <div className="cal-day-header">{day}</div>
+                  {dayEvents.map(ev => (
+                    <div key={ev.id} className={`cal-event${selectedEvent?.id === ev.id ? ' active' : ''}`} onClick={() => setSelectedEvent(ev)}>
+                      <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
+                      <div className="cal-event-time">{ev.time}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="cal-event-title">{ev.title}</div>
+                        <div className="cal-event-meta">{ev.calendarName && ev.calendarName !== 'primary' ? `${ev.calendarName}${ev.meta ? ' · ' : ''}` : ''}{ev.meta}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
-            {calsViewMode === 'week' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', background: 'var(--line-0)', flex: 1 }}>
-                {weekDays.map(day => (
-                  <div key={day.label} style={{ background: 'var(--surface-list)', padding: '8px', minHeight: '100px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 500, color: day.isToday ? 'var(--accent)' : 'var(--text-2)', marginBottom: '6px' }}>
-                      {day.label}
-                    </div>
-                    {day.events.map(ev => (
-                      <div key={ev.id} style={{ fontSize: '11px', padding: '2px 4px', marginBottom: '2px', borderRadius: '3px', background: ev.calendarColor ? `${ev.calendarColor}22` : 'rgba(139, 124, 255, 0.08)', borderLeft: `2px solid ${ev.calendarColor || 'var(--accent)'}`, cursor: 'pointer' }}
-                        onClick={() => setSelectedEvent(ev)}>
-                        <div style={{ fontWeight: 500, color: 'var(--text-0)' }}>{ev.time !== 'All day' ? ev.time : ''}</div>
-                        <div style={{ color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                {isLoadingEvents && filteredAllEvents.length === 0 ? (
-                  Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 48 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
-                ) : (!anyHasCals || hasEventsError) && Object.keys(grouped).length === 0 ? (
-                  <div className="connect-cta">
-                    <Calendar size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasCals ? 'Reconnect Google Calendar' : 'Connect Google Calendar'}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasCals ? 'Calendar permissions were revoked. Reconnect to see your events.' : 'Grant Calendar permissions to see your events here'}</div>
-                    <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Reconnect' : 'Connect account'}</button>
-                  </div>
-                ) : Object.keys(grouped).length === 0 ? (
-                  <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
-                ) : Object.entries(grouped).map(([day, dayEvents]) => (
-                  <div key={day}>
-                    <div className="cal-day-header">{day}</div>
-                    {dayEvents.map(ev => (
-                      <div key={ev.id} className={`cal-event${selectedEvent?.id === ev.id ? ' active' : ''}`} onClick={() => setSelectedEvent(ev)}>
-                        <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
-                        <div className="cal-event-time">{ev.time}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="cal-event-title">{ev.title}</div>
-                          <div className="cal-event-meta">{ev.calendarName && ev.calendarName !== 'primary' ? `${ev.calendarName}${ev.meta ? ' · ' : ''}` : ''}{ev.meta}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </Panel>
-        <PanelResizeHandle className="panel-resize-handle" />
-        <Panel minSize="26%" id="cals-detail">
-          <div style={{ height: '100%', background: 'var(--surface-detail)', overflow: 'auto' }}>
-            {selectedEvent ? (
-              <div className="email-detail-content">
-                <div style={{ padding: '24px 32px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
-                    <div style={{ width: '4px', height: '36px', borderRadius: '2px', background: selectedEvent.urgent ? 'var(--warm-0)' : 'var(--accent)', flexShrink: 0, marginTop: '4px' }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: '0 0 4px' }}>{selectedEvent.title}</h1>
-                      {selectedEvent.urgent && (<span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 500, color: 'var(--warm-0)', background: 'rgba(255, 140, 66, 0.10)', padding: '2px 8px', borderRadius: 'var(--r-xs)' }}>Priority</span>)}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <Clock size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.day} at </span>
-                      {selectedEvent.id !== 'new' && selectedEvent.startISO && selectedEvent.startISO.includes('T') ? (
-                        <input type="time"
-                          defaultValue={selectedEvent.startISO.split('T')[1]?.substring(0, 5) || ''}
-                          onBlur={async (e) => {
-                            const newTime = e.target.value;
-                            if (!newTime || !selectedEvent.startISO) return;
-                            const date = selectedEvent.startISO.split('T')[0];
-                            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                            const patch = { start: { dateTime: `${date}T${newTime}:00`, timeZone: tz } };
-                            if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
-                            try {
-                              const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
-                                method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
-                              });
-                              if (r.ok) loadEventsForAccount(selectedEvent.accountId);
-                            } catch (err) { console.error('Inline time update failed:', err); }
-                          }}
-                          style={{ fontSize: '13px', color: 'var(--text-1)', background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', padding: '2px 6px', fontFamily: 'inherit', width: '90px' }}
-                        />
-                      ) : (
-                        <span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.time}</span>
-                      )}
-                      {selectedEvent.endTime && selectedEvent.id !== 'new' && selectedEvent.endISO && selectedEvent.endISO.includes('T') ? (
-                        <>
-                          <span style={{ fontSize: '13px', color: 'var(--text-2)' }}> -- </span>
-                          <input type="time"
-                            defaultValue={selectedEvent.endISO.split('T')[1]?.substring(0, 5) || ''}
-                            onBlur={async (e) => {
-                              const newTime = e.target.value;
-                              if (!newTime || !selectedEvent.endISO) return;
-                              const date = selectedEvent.endISO.split('T')[0];
-                              const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                              const patch = { end: { dateTime: `${date}T${newTime}:00`, timeZone: tz } };
-                              if (selectedEvent.calendarId) patch.calendarId = selectedEvent.calendarId;
-                              try {
-                                const r = await fetch(`${API_BASE}/cals/${selectedEvent.accountId}/events/${selectedEvent.id}`, {
-                                  method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
-                                });
-                                if (r.ok) loadEventsForAccount(selectedEvent.accountId);
-                              } catch (err) { console.error('Inline time update failed:', err); }
-                            }}
-                            style={{ fontSize: '13px', color: 'var(--text-1)', background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', padding: '2px 6px', fontFamily: 'inherit', width: '90px' }}
-                          />
-                        </>
-                      ) : selectedEvent.endTime ? (
-                        <span style={{ fontSize: '13px', color: 'var(--text-1)' }}> -- {selectedEvent.endTime}</span>
-                      ) : null}
-                    </div>
-                    {selectedEvent.meta && (<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><MapPin size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} /><span style={{ fontSize: '13px', color: 'var(--text-1)' }}>{selectedEvent.meta}</span></div>)}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                    <button className="btn-ghost btn-edit-doc" onClick={() => openEventEdit(selectedEvent)} style={{ fontSize: '13px', gap: '6px' }}><FileText size={14} strokeWidth={1.5} /> Edit event</button>
-                    {selectedEvent.htmlLink && (<button className="btn-ghost btn-edit-doc" onClick={() => window.open(selectedEvent.htmlLink, '_blank', 'noopener,noreferrer')} style={{ fontSize: '13px', gap: '6px' }}><ExternalLink size={14} strokeWidth={1.5} /> Open in Google Calendar</button>)}
-                  </div>
-                  <div style={{ height: '1px', background: 'var(--line-0)', marginBottom: '24px' }} />
-                  <div style={{ background: 'var(--bg-3)', borderRadius: '8px', padding: '20px', border: '1px solid var(--line-0)' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '12px' }}>Details</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Status</span><span style={{ color: 'var(--text-1)' }}>{selectedEvent.status === 'confirmed' ? 'Confirmed' : selectedEvent.status || 'Confirmed'}</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-2)' }}>Organizer</span><span style={{ color: 'var(--text-1)' }}>{selectedEvent.organizer || 'You'}</span></div>
-                      {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
-                        <div style={{ marginTop: '8px' }}>
-                          <div style={{ color: 'var(--text-2)', marginBottom: '6px' }}>Attendees</div>
-                          {selectedEvent.attendees.map((a, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                              <span style={{ color: 'var(--text-1)' }}>{a.name || a.email}</span>
-                              <span style={{ color: 'var(--text-3)', fontSize: '11px' }}>{a.status === 'accepted' ? 'Accepted' : a.status === 'declined' ? 'Declined' : a.status === 'tentative' ? 'Maybe' : 'Pending'}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+          )}
+        </div>
+
+        {/* Event detail slide-out */}
+        {selectedEvent && (
+          <div className="gcal-detail">
+            <button className="slide-over-close" onClick={() => setSelectedEvent(null)} style={{ top: 12, right: 12 }}><X size={16} strokeWidth={1.5} /></button>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ width: '4px', height: '28px', borderRadius: '2px', background: selectedEvent.calendarColor || (selectedEvent.urgent ? 'var(--warm-0)' : 'var(--accent)'), flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 style={{ fontSize: '16px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: 0 }}>{selectedEvent.title}</h2>
                 </div>
               </div>
-            ) : (
-              <div className="empty-state"><div style={{ textAlign: 'center' }}><Calendar size={72} style={{ display: 'block', margin: '0 auto 16px', opacity: 0.04 }} /><div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-2)', marginBottom: '4px' }}>Select an event</div><div style={{ fontSize: '12px', color: 'var(--text-3)' }}>Choose an event to view details</div></div></div>
-            )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', fontSize: '13px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-1)' }}>
+                  <Clock size={13} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
+                  {selectedEvent.day} · {selectedEvent.time}{selectedEvent.endTime ? ` – ${selectedEvent.endTime}` : ''}
+                </div>
+                {selectedEvent.meta && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-1)' }}>
+                    <MapPin size={13} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
+                    {selectedEvent.meta}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button className="btn-ghost" onClick={() => openEventEdit(selectedEvent)} style={{ fontSize: '12px', padding: '5px 10px' }}>Edit</button>
+                {selectedEvent.htmlLink && <button className="btn-ghost" onClick={() => window.open(selectedEvent.htmlLink, '_blank', 'noopener,noreferrer')} style={{ fontSize: '12px', padding: '5px 10px' }}><ExternalLink size={13} strokeWidth={1.5} /> Google</button>}
+              </div>
+              {selectedEvent.attendees?.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--line-0)', paddingTop: '12px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-3)', marginBottom: '6px' }}>Attendees</div>
+                  {selectedEvent.attendees.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-1)' }}>{a.name || a.email}</span>
+                      <span style={{ color: 'var(--text-3)' }}>{a.status === 'accepted' ? 'Yes' : a.status === 'declined' ? 'No' : a.status === 'tentative' ? 'Maybe' : '?'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </Panel>
-      </>
+        )}
+      </div>
     );
   };
 
@@ -1583,15 +1870,19 @@ const AllTheMail = () => {
   // ==================== MAIN RENDER ====================
 
   if (isAuthed === null) return (
-    <div className={`app-container${introActive ? ' intro' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-2)', fontSize: '13px' }}>Loading...</div>
+    <div className="app-loading">
+      <img src="/logo-horizontal.svg" alt="All the mail" className="app-loading-logo" />
+      <div className="app-loading-bar" />
     </div>
   );
 
   if (isAuthed === false) return (
     <div className={`app-container${introActive ? ' intro' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <button className="toolbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ position: 'absolute', top: 16, right: 16 }}>
+        {theme === 'dark' ? <Sun size={16} strokeWidth={1.5} /> : <Moon size={16} strokeWidth={1.5} />}
+      </button>
       <div style={{ textAlign: 'center', maxWidth: '420px', padding: '48px' }}>
-        {authError && <div style={{ background: 'rgba(255,59,59,0.12)', border: '1px solid rgba(255,59,59,0.22)', color: 'white', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '13px' }}>{authError}</div>}
+        {authError && <div style={{ background: 'rgba(255,59,59,0.12)', border: '1px solid rgba(255,59,59,0.22)', color: 'var(--text-0)', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '13px' }}>{authError}</div>}
         <div style={{ fontSize: 'clamp(36px,5vw,52px)', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 0.95, marginBottom: '24px' }}>
           Everything.<br /><span style={{ color: 'var(--accent)' }}>Unified.</span>
         </div>
@@ -1627,7 +1918,7 @@ const AllTheMail = () => {
               return (
                 <button key={a.id} className={`account-pill${activeView === a.id ? ' active' : ''}`} onClick={() => switchAccount(a.id)} title={a.gmail_email}>
                   <span className="account-pill-avatar" style={{ background: g.gradient }}>{(a.account_name || a.gmail_email || '?').charAt(0).toUpperCase()}</span>
-                  <span className="account-pill-label">{getShortLabel(a)}</span>
+                  <span className="account-pill-label">{getShortLabel(a, connectedAccounts)}</span>
                 </button>
               );
             })}
@@ -1635,6 +1926,12 @@ const AllTheMail = () => {
           </div>
         </div>
         <div className="top-bar-controls">
+          {scheduledSends.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginRight: '8px', padding: '3px 10px', background: 'var(--bg-1)', border: '1px solid var(--line-0)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
+              <Send size={12} strokeWidth={1.5} />
+              {scheduledSends.length} scheduled
+            </div>
+          )}
           {activeModule === 'mail' && lastSyncTime && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
               <span className="sync-dot" /><span style={{ fontSize: '11px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{getRelativeTime(lastSyncTime)}</span>
@@ -1653,8 +1950,15 @@ const AllTheMail = () => {
               <button className="toolbar-btn" onClick={cycleDensity} title={`Density: ${densityMode}`}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
               </button>
+              <div className="module-divider" />
+              <button className={`toolbar-btn${conversationView?' toolbar-active':''}`} onClick={()=>setConversationView(v=>!v)} title={conversationView ? 'Conversation view on' : 'Conversation view off'}>
+                <MessagesSquare size={15} strokeWidth={1.5} />
+              </button>
             </>
           )}
+          <button className="toolbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ marginLeft: '4px' }}>
+            {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
+          </button>
           <div style={{ position: 'relative', marginLeft: '4px' }}>
             <button ref={avatarButtonRef} className="avatar-btn" onClick={() => { setAvatarDropdownOpen(o => !o); setRemovingAccountId(null); }} title="Account menu">
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: connectedAccounts.length > 0 ? getAccountGradient(0).gradient : 'var(--bg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
@@ -1720,11 +2024,11 @@ const AllTheMail = () => {
       <div className="main-content">
         <ErrorBoundary>
           {activeModule === 'everything' && renderEverything()}
-          {activeModule !== 'everything' && (
+          {activeModule === 'cals' && renderCalsModule()}
+          {activeModule !== 'everything' && activeModule !== 'cals' && (
             <PanelGroup orientation="horizontal" id={`atm-${activeModule}-${activeModule==='mail'?splitMode:'default'}-layout`}>
               {activeModule === 'mail' && renderMailModule()}
               {activeModule === 'docs' && renderDocsModule()}
-              {activeModule === 'cals' && renderCalsModule()}
             </PanelGroup>
           )}
         </ErrorBoundary>
@@ -1743,6 +2047,8 @@ const AllTheMail = () => {
         composeAttachments={composeAttachments} handleFileSelect={handleFileSelect} removeAttachment={removeAttachment}
         connectedAccounts={connectedAccounts}
         closeCompose={closeCompose} sendCompose={sendCompose}
+        scheduleSend={scheduleSend}
+        includeSignature={includeAtmSignature} setIncludeSignature={setIncludeAtmSignature}
       />
 
       {/* Slide-over preview panel */}
@@ -1784,7 +2090,7 @@ const AllTheMail = () => {
                     </div>
                   ) : (
                     <div className="email-body-wrapper" style={{ borderRadius: '8px', overflow: 'hidden' }}>
-                      <iframe title="Email preview" srcDoc={buildEmailSrcDoc(body)} style={{ width: '100%', border: 'none', minHeight: '300px', background: '#F5F7FA' }} sandbox="allow-same-origin allow-popups"
+                      <iframe title="Email preview" srcDoc={buildEmailSrcDoc(body)} style={{ width: '100%', border: 'none', minHeight: '300px', background: 'var(--email-bg)' }} sandbox="allow-same-origin allow-popups"
                         onLoad={e => { try { const h = e.target.contentDocument?.body?.scrollHeight; if (h) e.target.style.height = h + 'px'; } catch {} }} />
                     </div>
                   )}

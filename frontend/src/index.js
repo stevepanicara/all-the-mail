@@ -7,6 +7,22 @@ import Landing from './Landing';
 import Privacy from './Privacy';
 import Terms from './Terms';
 
+// Suppress benign ResizeObserver loop errors from react-resizable-panels
+const ro = window.addEventListener;
+window.addEventListener = function(type, listener, options) {
+  if (type === 'error') {
+    const wrapped = function(event) {
+      if (event.message?.includes?.('ResizeObserver loop')) {
+        event.stopImmediatePropagation();
+        return;
+      }
+      return listener.call(this, event);
+    };
+    return ro.call(this, type, wrapped, options);
+  }
+  return ro.call(this, type, listener, options);
+};
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(

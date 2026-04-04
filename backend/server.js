@@ -1,6 +1,8 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 // Route modules
 import authRoutes from './routes/auth.js';
@@ -15,6 +17,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // CSP handled by frontend
+  crossOriginEmbedderPolicy: false, // needed for Google OAuth redirects
+}));
+
 // CORS
 app.use(cors({
   origin: FRONTEND_URL,
@@ -27,6 +35,31 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), billingR
 // Body parsing
 app.use(express.json());
 app.use(cookieParser());
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 600, // 600 requests per minute per IP (accounts for multi-account burst on load)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 auth attempts per 15 minutes
+  message: { error: 'Too many login attempts, please try again later' },
+});
+
+const sendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10, // 10 sends per minute
+  message: { error: 'Send rate limit reached' },
+});
+
+app.use(apiLimiter);
+app.use('/auth', authLimiter);
+app.use('/emails/*/send', sendLimiter);
 
 // Mount routes
 app.use('/auth', authRoutes);

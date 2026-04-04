@@ -142,11 +142,25 @@ function buildMimeEmail(to, subject, htmlBody, options = {}) {
 async function verifyAccountOwnership(accountId, userId) {
   const { data: account } = await supabase
     .from('gmail_accounts')
-    .select('*')
+    .select('id, user_id, gmail_email, account_name, granted_scopes')
     .eq('id', accountId)
     .eq('user_id', userId)
     .single();
   return account;
+}
+
+// Concurrency-limited Promise.all to avoid Gmail API rate limits
+async function pMap(items, fn, concurrency = 10) {
+  const results = [];
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
 }
 
 // List emails
@@ -180,31 +194,30 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
     });
 
     const messages = response.data.messages || [];
-    const emails = await Promise.all(
-      messages.map(async (msg) => {
-        const detail = await gmail.users.messages.get({
-          userId: 'me',
-          id: msg.id,
-          format: 'metadata',
-          metadataHeaders: ['From', 'Subject', 'Date']
-        });
+    // Concurrency-limited to 10 parallel requests to avoid Gmail API rate limits
+    const emails = await pMap(messages, async (msg) => {
+      const detail = await gmail.users.messages.get({
+        userId: 'me',
+        id: msg.id,
+        format: 'metadata',
+        metadataHeaders: ['From', 'Subject', 'Date']
+      });
 
-        const headers = detail.data.payload.headers;
-        const from = headers.find(h => h.name === 'From')?.value || '';
-        const subject = headers.find(h => h.name === 'Subject')?.value || '(no subject)';
-        const date = headers.find(h => h.name === 'Date')?.value || '';
+      const headers = detail.data.payload.headers;
+      const from = headers.find(h => h.name === 'From')?.value || '';
+      const subject = headers.find(h => h.name === 'Subject')?.value || '(no subject)';
+      const date = headers.find(h => h.name === 'Date')?.value || '';
 
-        return {
-          id: msg.id,
-          threadId: msg.threadId,
-          from,
-          subject,
-          snippet: detail.data.snippet,
-          date: date ? new Date(date).toISOString() : new Date().toISOString(),
-          isRead: !detail.data.labelIds?.includes('UNREAD')
-        };
-      })
-    );
+      return {
+        id: msg.id,
+        threadId: msg.threadId,
+        from,
+        subject,
+        snippet: detail.data.snippet,
+        date: date ? new Date(date).toISOString() : new Date().toISOString(),
+        isRead: !detail.data.labelIds?.includes('UNREAD')
+      };
+    }, 10);
 
     res.json({ emails });
   } catch (error) {
@@ -272,8 +285,10 @@ router.get('/:accountId/:messageId/attachments/:attachmentId', authenticateToken
 
     const buffer = Buffer.from(attachment.data.data, 'base64');
 
+    // Sanitize filename to prevent header injection
+    const safeName = (filename || 'download').replace(/["\r\n\\]/g, '_');
     res.setHeader('Content-Type', mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(buffer);
   } catch (error) {
     console.error('Download attachment error:', error);
@@ -351,7 +366,7 @@ router.post('/:accountId/draft', authenticateToken, async (req, res) => {
     res.json({ success: true, draftId: result.data.id });
   } catch (error) {
     console.error('Save draft error:', error);
-    res.status(500).json({ error: error.message || 'Failed to save draft' });
+    res.status(500).json({ error: 'Failed to save draft' });
   }
 });
 
@@ -404,7 +419,7 @@ router.post('/:accountId/send', authenticateToken, upload.array('attachments', 1
     res.json({ success: true });
   } catch (error) {
     console.error('Send email error:', error);
-    res.status(500).json({ error: error.message || 'Failed to send email' });
+    res.status(500).json({ error: 'Failed to send email' });
   }
 });
 
@@ -445,7 +460,7 @@ router.post('/:accountId/drafts', authenticateToken, async (req, res) => {
     res.json({ success: true, draftId: result.data.id });
   } catch (error) {
     console.error('Save draft error:', error);
-    res.status(500).json({ error: error.message || 'Failed to save draft' });
+    res.status(500).json({ error: 'Failed to save draft' });
   }
 });
 
@@ -465,7 +480,7 @@ router.delete('/:accountId/drafts/:draftId', authenticateToken, async (req, res)
     res.json({ success: true });
   } catch (error) {
     console.error('Delete draft error:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete draft' });
+    res.status(500).json({ error: 'Failed to delete draft' });
   }
 });
 

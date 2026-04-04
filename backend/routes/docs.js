@@ -9,7 +9,7 @@ const router = Router();
 async function verifyAccountOwnership(accountId, userId) {
   const { data: account } = await supabase
     .from('gmail_accounts')
-    .select('*')
+    .select('id, user_id, gmail_email, account_name, granted_scopes')
     .eq('id', accountId)
     .eq('user_id', userId)
     .single();

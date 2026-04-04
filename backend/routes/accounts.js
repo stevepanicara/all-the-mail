@@ -1,7 +1,15 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import supabase from '../lib/supabase.js';
 import { oauth2Client, ALL_SCOPES } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
+
+function signState(userId) {
+  const hmac = crypto.createHmac('sha256', process.env.JWT_SECRET);
+  hmac.update(userId);
+  const sig = hmac.digest('hex').slice(0, 16);
+  return `${userId}.${sig}`;
+}
 
 const router = Router();
 
@@ -26,7 +34,7 @@ router.get('/connect', authenticateToken, (req, res) => {
     scope: ALL_SCOPES,
     prompt: 'consent',
     include_granted_scopes: true,
-    state: req.userId
+    state: signState(req.userId)
   });
   res.redirect(authUrl);
 });
