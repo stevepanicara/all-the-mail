@@ -714,7 +714,8 @@ body {
 
 .sidebar.collapsed .category-btn {
   justify-content: center;
-  padding: 12px;
+  text-align: center;
+  padding: 10px 0;
 }
 
 /* Compose button — subtle surface, no glow */
@@ -742,6 +743,13 @@ body {
 
 /* Category nav items */
 .category-btn {
+  width: 100%;
+  padding: 9px 20px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
   transition: background var(--t-micro) var(--ease), color var(--t-micro) var(--ease);
   border: none;
   background: transparent;
@@ -957,7 +965,7 @@ body {
   padding: 0 4px;
   margin-left: 6px;
   border-radius: var(--r-pill);
-  background: rgba(139, 124, 255, 0.12);
+  background: var(--accent-weak);
   color: var(--accent);
   font-size: 10px;
   font-weight: 600;
@@ -967,9 +975,7 @@ body {
   flex-shrink: 0;
 }
 
-[data-theme="light"] .thread-count-badge {
-  background: rgba(124, 107, 240, 0.10);
-}
+/* thread-count-badge light mode handled by --accent-weak token */
 
 /* Account gradient dot */
 .account-dot {
@@ -1456,8 +1462,16 @@ body {
 
 .btn-primary:active,
 .btn-ghost:active,
+.btn-ghost-sm:active,
 .btn-compose:active,
-.btn-icon:active {
+.btn-icon:active,
+.reader-toolbar-btn:active,
+.module-tab:active,
+.account-pill:active,
+.category-btn:active,
+.toolbar-btn:active,
+.ev-filter-btn:active,
+.gcal-nav-btn:active {
   transform: scale(0.98);
   transition-duration: 60ms;
 }
@@ -2264,6 +2278,184 @@ select:focus-visible {
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.06);
 }
 
+.gcal-detail .slide-over-close {
+  top: 12px;
+  right: 12px;
+}
+
+.gcal-detail-body {
+  padding: 20px 24px;
+}
+
+.gcal-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.gcal-detail-marker {
+  width: 4px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.gcal-detail-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-0);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.gcal-detail-time {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.gcal-detail-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-1);
+}
+
+.gcal-detail-time-icon {
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.gcal-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.gcal-detail-attendees {
+  border-top: 1px solid var(--line-0);
+  padding-top: 12px;
+}
+
+.gcal-detail-attendees-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.gcal-detail-attendee-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.gcal-detail-attendee-name {
+  color: var(--text-1);
+}
+
+.gcal-detail-attendee-status {
+  color: var(--text-3);
+}
+
+/* Compact ghost button — toolbar-sized */
+.btn-ghost-sm {
+  border: 1px solid var(--line-0);
+  background: transparent;
+  color: var(--text-0);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  transition: background var(--t-micro) var(--ease);
+}
+
+.btn-ghost-sm:hover {
+  background: var(--hover-bg);
+}
+
+/* Calendar toolbar button sizes */
+.gcal-toolbar-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.gcal-toolbar-today {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* All-day label in time column */
+.gcal-allday-label {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* Schedule view scroll wrapper */
+.gcal-schedule-scroll {
+  overflow: auto;
+  flex: 1;
+}
+
+/* Schedule empty state */
+.gcal-schedule-empty {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.gcal-schedule-empty-icon {
+  margin: 0 auto 10px;
+  opacity: 0.05;
+  display: block;
+}
+
+.gcal-schedule-empty-text {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* Schedule event content wrapper */
+.cal-event-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Connect CTA inline style replacements */
+.connect-cta-icon {
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+
+.connect-cta-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+
+.connect-cta-subtitle {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 16px;
+  max-width: 260px;
+}
+
+.connect-cta-btn {
+  font-size: 12px;
+}
+
 [data-theme="light"] .gcal-chip:hover {
   filter: brightness(0.95);
 }
@@ -2631,6 +2823,131 @@ select:focus-visible {
 .ql-container.ql-snow:focus-visible {
   outline: 2px solid rgba(139, 124, 255, 0.35) !important;
   outline-offset: 2px !important;
+}
+
+/* ==========================================================
+   FORM INPUT STATES
+========================================================== */
+.field-row input:focus,
+.field-row textarea:focus,
+.field-row select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(139, 124, 255, 0.15);
+}
+
+[data-theme="light"] .field-row input:focus,
+[data-theme="light"] .field-row textarea:focus,
+[data-theme="light"] .field-row select:focus {
+  box-shadow: 0 0 0 2px rgba(124, 107, 240, 0.12);
+}
+
+.field-row input:disabled,
+.field-row textarea:disabled,
+.field-row select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================
+   LOGIN SCREEN
+========================================================== */
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 52px);
+}
+
+.login-card {
+  text-align: center;
+  max-width: 400px;
+  padding: var(--sp-7);
+}
+
+.login-icon {
+  display: block;
+  margin: 0 auto var(--sp-4);
+  opacity: 0.05;
+}
+
+.login-heading {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-0);
+  margin: 0 0 var(--sp-2);
+  letter-spacing: -0.02em;
+}
+
+.login-subheading {
+  font-size: var(--text-sm);
+  color: var(--text-3);
+  margin: 0 0 var(--sp-5);
+}
+
+.login-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  background: rgba(255, 59, 59, 0.08);
+  border-radius: var(--r-sm);
+}
+
+.login-theme-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.modal-header-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+/* ==========================================================
+   EMPTY STATES (consolidated)
+========================================================== */
+.empty-state-icon {
+  display: block;
+  margin: 0 auto var(--sp-4);
+  opacity: 0.04;
+}
+
+.empty-state-title {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-2);
+  margin: 0 0 var(--sp-1);
+}
+
+.empty-state-subtitle {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
+/* ==========================================================
+   METADATA INFO GRID (detail views)
+========================================================== */
+.metadata-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+}
+
+.metadata-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--sp-1) 0;
+}
+
+.metadata-label {
+  color: var(--text-2);
+}
+
+.metadata-value {
+  color: var(--text-1);
 }
 
 /* ==========================================================

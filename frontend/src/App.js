@@ -1647,7 +1647,7 @@ const AllTheMail = () => {
           </div>
         ))}
         {/* All-day row */}
-        <div className="gcal-time-label" style={{ fontSize: '10px', color: 'var(--text-3)' }}>all-day</div>
+        <div className="gcal-time-label gcal-allday-label">all-day</div>
         {days.map(day => (
           <div key={`ad-${day.label}`} className="gcal-allday-cell">
             {day.events.filter(ev => ev.time === 'All day').map(renderEventChip)}
@@ -1685,7 +1685,7 @@ const AllTheMail = () => {
         {/* Toolbar */}
         <div className="gcal-toolbar">
           <div className="gcal-toolbar-left">
-            <button className="btn-ghost" style={{ padding: '6px 14px', fontSize: '13px' }} onClick={() => {
+            <button className="btn-ghost gcal-toolbar-btn" onClick={() => {
               const calsAccount = connectedAccounts.find(a => a.granted_scopes?.includes('cals'));
               if (!calsAccount) return;
               const now = new Date();
@@ -1694,7 +1694,7 @@ const AllTheMail = () => {
               openEventEdit({ id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() });
             }}><Plus size={14} strokeWidth={1.5} /> New event</button>
             <div className="gcal-nav-group">
-              <button className="btn-ghost" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={() => setCalDate(new Date())}>Today</button>
+              <button className="btn-ghost gcal-toolbar-today" onClick={() => setCalDate(new Date())}>Today</button>
               <button className="gcal-nav-btn" onClick={() => calNavigate(-1)}><ChevronLeft size={16} strokeWidth={1.5} /></button>
               <button className="gcal-nav-btn" onClick={() => calNavigate(1)}><ChevronRight size={16} strokeWidth={1.5} /></button>
             </div>
@@ -1713,10 +1713,10 @@ const AllTheMail = () => {
         <div className="gcal-body">
           {(!anyHasCals || hasEventsError) && filteredAllEvents.length === 0 ? (
             <div className="connect-cta">
-              <Calendar size={32} strokeWidth={1.5} style={{ color: 'var(--text-3)', marginBottom: 12 }} />
-              <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }}>{anyHasCals ? 'Calendar permissions need updating' : 'Connect Google Calendar'}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 16, maxWidth: 260 }}>{anyHasCals ? 'Re-grant Calendar access to restore your events.' : 'Grant Calendar permissions to see your events here'}</div>
-              <button className="btn-ghost" onClick={handleAddAccount} style={{ fontSize: '12px' }}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Re-authorize Calendar' : 'Connect account'}</button>
+              <Calendar size={32} strokeWidth={1.5} className="connect-cta-icon" />
+              <div className="connect-cta-title">{anyHasCals ? 'Calendar permissions need updating' : 'Connect Google Calendar'}</div>
+              <div className="connect-cta-subtitle">{anyHasCals ? 'Re-grant Calendar access to restore your events.' : 'Grant Calendar permissions to see your events here'}</div>
+              <button className="btn-ghost connect-cta-btn" onClick={handleAddAccount}><Plus size={14} strokeWidth={1.5} /> {anyHasCals ? 'Re-authorize Calendar' : 'Connect account'}</button>
             </div>
           ) : isGridView ? (
             renderDayGrid(calGridDays)
@@ -1758,11 +1758,11 @@ const AllTheMail = () => {
               })}
             </div>
           ) : /* schedule */ (
-            <div style={{ overflow: 'auto', flex: 1 }}>
+            <div className="gcal-schedule-scroll">
               {isLoadingEvents && filteredAllEvents.length === 0 ? (
                 Array.from({ length: 5 }).map((_, i) => (<div className="skeleton-row" key={`esk-${i}`} style={{ minHeight: 48 }}><div className="skeleton-block" style={{ width: 3, height: 36, borderRadius: 2, flexShrink: 0 }} /><div className="skeleton-block" style={{ width: 48 }} /><div className="skeleton-block" style={{ flex: 1 }} /></div>))
               ) : Object.keys(grouped).length === 0 ? (
-                <div style={{ padding: '48px 24px', textAlign: 'center' }}><Calendar size={28} style={{ margin: '0 auto 10px', opacity: 0.05, display: 'block' }} /><div style={{ color: 'var(--text-2)', fontSize: '13px' }}>No events</div></div>
+                <div className="gcal-schedule-empty"><Calendar size={28} className="gcal-schedule-empty-icon" /><div className="gcal-schedule-empty-text">No events</div></div>
               ) : Object.entries(grouped).map(([day, dayEvents]) => (
                 <div key={day}>
                   <div className="cal-day-header">{day}</div>
@@ -1770,7 +1770,7 @@ const AllTheMail = () => {
                     <div key={ev.id} className={`cal-event${selectedEvent?.id === ev.id ? ' active' : ''}`} onClick={() => setSelectedEvent(ev)}>
                       <div className="cal-event-marker" style={ev.calendarColor ? { background: ev.calendarColor } : ev.urgent ? { background: 'var(--warm-0)' } : undefined} />
                       <div className="cal-event-time">{ev.time}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="cal-event-content">
                         <div className="cal-event-title">{ev.title}</div>
                         <div className="cal-event-meta">{ev.calendarName && ev.calendarName !== 'primary' ? `${ev.calendarName}${ev.meta ? ' · ' : ''}` : ''}{ev.meta}</div>
                       </div>
@@ -1785,37 +1785,35 @@ const AllTheMail = () => {
         {/* Event detail slide-out */}
         {selectedEvent && (
           <div className="gcal-detail">
-            <button className="slide-over-close" onClick={() => setSelectedEvent(null)} style={{ top: 12, right: 12 }}><X size={16} strokeWidth={1.5} /></button>
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
-                <div style={{ width: '4px', height: '28px', borderRadius: '2px', background: selectedEvent.calendarColor || (selectedEvent.urgent ? 'var(--warm-0)' : 'var(--accent)'), flexShrink: 0, marginTop: '2px' }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h2 style={{ fontSize: '16px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: 0 }}>{selectedEvent.title}</h2>
-                </div>
+            <button className="slide-over-close" onClick={() => setSelectedEvent(null)}><X size={16} strokeWidth={1.5} /></button>
+            <div className="gcal-detail-body">
+              <div className="gcal-detail-header">
+                <div className="gcal-detail-marker" style={selectedEvent.calendarColor ? { background: selectedEvent.calendarColor } : selectedEvent.urgent ? { background: 'var(--warm-0)' } : undefined} />
+                <h2 className="gcal-detail-title">{selectedEvent.title}</h2>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', fontSize: '13px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-1)' }}>
-                  <Clock size={13} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
+              <div className="gcal-detail-time">
+                <div className="gcal-detail-time-row">
+                  <Clock size={13} strokeWidth={1.5} className="gcal-detail-time-icon" />
                   {selectedEvent.day} · {selectedEvent.time}{selectedEvent.endTime ? ` – ${selectedEvent.endTime}` : ''}
                 </div>
                 {selectedEvent.meta && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-1)' }}>
-                    <MapPin size={13} strokeWidth={1.5} style={{ color: 'var(--text-2)', flexShrink: 0 }} />
+                  <div className="gcal-detail-time-row">
+                    <MapPin size={13} strokeWidth={1.5} className="gcal-detail-time-icon" />
                     {selectedEvent.meta}
                   </div>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                <button className="btn-ghost" onClick={() => openEventEdit(selectedEvent)} style={{ fontSize: '12px', padding: '5px 10px' }}>Edit</button>
-                {selectedEvent.htmlLink && <button className="btn-ghost" onClick={() => window.open(selectedEvent.htmlLink, '_blank', 'noopener,noreferrer')} style={{ fontSize: '12px', padding: '5px 10px' }}><ExternalLink size={13} strokeWidth={1.5} /> Google</button>}
+              <div className="gcal-detail-actions">
+                <button className="btn-ghost-sm" onClick={() => openEventEdit(selectedEvent)}>Edit</button>
+                {selectedEvent.htmlLink && <button className="btn-ghost-sm" onClick={() => window.open(selectedEvent.htmlLink, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} strokeWidth={1.5} /> Google</button>}
               </div>
               {selectedEvent.attendees?.length > 0 && (
-                <div style={{ borderTop: '1px solid var(--line-0)', paddingTop: '12px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-3)', marginBottom: '6px' }}>Attendees</div>
+                <div className="gcal-detail-attendees">
+                  <div className="gcal-detail-attendees-label">Attendees</div>
                   {selectedEvent.attendees.map((a, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '12px' }}>
-                      <span style={{ color: 'var(--text-1)' }}>{a.name || a.email}</span>
-                      <span style={{ color: 'var(--text-3)' }}>{a.status === 'accepted' ? 'Yes' : a.status === 'declined' ? 'No' : a.status === 'tentative' ? 'Maybe' : '?'}</span>
+                    <div key={i} className="gcal-detail-attendee-row">
+                      <span className="gcal-detail-attendee-name">{a.name || a.email}</span>
+                      <span className="gcal-detail-attendee-status">{a.status === 'accepted' ? 'Yes' : a.status === 'declined' ? 'No' : a.status === 'tentative' ? 'Maybe' : '?'}</span>
                     </div>
                   ))}
                 </div>
@@ -1877,21 +1875,21 @@ const AllTheMail = () => {
   );
 
   if (isAuthed === false) return (
-    <div className={`app-container${introActive ? ' intro' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <button className="toolbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ position: 'absolute', top: 16, right: 16 }}>
+    <div className={`app-container login-screen${introActive ? ' intro' : ''}`}>
+      <button className="toolbar-btn login-theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
         {theme === 'dark' ? <Sun size={16} strokeWidth={1.5} /> : <Moon size={16} strokeWidth={1.5} />}
       </button>
-      <div style={{ textAlign: 'center', maxWidth: '420px', padding: '48px' }}>
-        {authError && <div style={{ background: 'rgba(255,59,59,0.12)', border: '1px solid rgba(255,59,59,0.22)', color: 'var(--text-0)', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '13px' }}>{authError}</div>}
+      <div className="login-card">
+        {authError && <div className="login-error">{authError}</div>}
         <div style={{ fontSize: 'clamp(36px,5vw,52px)', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 0.95, marginBottom: '24px' }}>
           Everything.<br /><span style={{ color: 'var(--accent)' }}>Unified.</span>
         </div>
-        <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text-1)', marginBottom: '8px' }}>Mail, docs, and calendars from one deliberate interface.</div>
-        <div style={{ fontSize: '13px', color: 'var(--text-2)', marginBottom: '32px' }}>Encrypted tokens. No passwords stored. Disconnect anytime.</div>
-        <button className="btn btn-primary" onClick={handleGoogleLogin} style={{ width: '100%', fontSize: '14px', padding: '14px', borderRadius: '10px', fontWeight: 600 }}>
+        <div className="login-heading">Mail, docs, and calendars from one deliberate interface.</div>
+        <div className="login-subheading">Encrypted tokens. No passwords stored. Disconnect anytime.</div>
+        <button className="btn btn-primary" onClick={handleGoogleLogin} style={{ width: '100%' }}>
           <Mail size={18} /> Sign in with Google
         </button>
-        <div style={{ fontSize: '12px', color: 'var(--text-3)', marginTop: '16px' }}>You will be asked to grant Gmail, Drive, and Calendar permissions</div>
+        <div className="login-subheading" style={{ marginTop: '16px', marginBottom: 0 }}>You will be asked to grant Gmail, Drive, and Calendar permissions</div>
       </div>
     </div>
   );

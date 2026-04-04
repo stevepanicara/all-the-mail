@@ -26,7 +26,7 @@ const ComposeModal = ({
     <div className="modal-overlay" onMouseDown={closeCompose}>
       <div className="modal" onMouseDown={e => e.stopPropagation()}>
         <div className="modal-header">
-          <div style={{ fontSize: '16px', fontWeight: 600 }}>
+          <div className="modal-header-title">
             {composeMode === 'compose' ? 'New message' : composeMode === 'reply' ? 'Reply' : composeMode === 'replyAll' ? 'Reply all' : 'Forward'}
           </div>
           <button className="btn-ghost btn-icon" onClick={closeCompose} title="Close"><X size={16} /></button>
@@ -101,8 +101,7 @@ const ComposeModal = ({
           <button className="btn-ghost" onClick={closeCompose} disabled={composeSending}>Cancel</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ position: 'relative' }}>
-              <button className="btn-ghost" onClick={() => setSendLaterOpen(o => !o)} disabled={composeSending}
-                style={{ fontSize: '13px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button className="btn-ghost" onClick={() => setSendLaterOpen(o => !o)} disabled={composeSending}>
                 <Clock size={14} /> Send Later
               </button>
               {sendLaterOpen && (
@@ -121,7 +120,7 @@ const ComposeModal = ({
                 </div>
               )}
             </div>
-            <button className="btn btn-primary" onClick={sendCompose} disabled={composeSending} style={{ fontSize: '13px', padding: '10px 20px' }}>
+            <button className="btn btn-primary" onClick={sendCompose} disabled={composeSending}>
               {composeSending ? 'Sending...' : 'Send'}
             </button>
           </div>
