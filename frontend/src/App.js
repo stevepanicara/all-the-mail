@@ -948,6 +948,7 @@ const AllTheMail = () => {
       if (e.key === '/' && !e.metaKey) { e.preventDefault(); searchInputRef.current?.focus(); }
     };
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
+  // eslint-disable-next-line no-use-before-define, react-hooks/exhaustive-deps
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, archiveEmail, trashEmail, openCompose]);
 
   const goBackToList = useCallback(()=>{setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setFullPageReaderOpen(false);setReaderCompact(false);}, []);
