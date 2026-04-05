@@ -2684,6 +2684,106 @@ select:focus-visible {
 }
 
 /* ==========================================================
+   MOBILE RESPONSIVE
+========================================================== */
+@media (max-width: 768px) {
+  .top-bar {
+    padding: 0 12px;
+    gap: 0;
+  }
+
+  .top-bar-logo {
+    height: 20px;
+    margin-right: 12px;
+  }
+
+  .module-tab {
+    padding: 0 10px;
+    font-size: var(--text-xs);
+    gap: 4px;
+  }
+
+  .account-pill {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .account-pill-label {
+    max-width: 60px;
+  }
+
+  /* Touch-friendly hit targets */
+  .reader-toolbar-btn,
+  .toolbar-btn,
+  .btn-ghost,
+  .btn-icon {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .email-item {
+    min-height: 56px !important;
+  }
+
+  .category-btn {
+    min-height: 44px;
+  }
+
+  /* Stack everything view on mobile */
+  .ev-column {
+    min-height: 300px;
+  }
+
+  /* Calendar adjustments */
+  .gcal-toolbar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .gcal-toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  .gcal-title {
+    font-size: var(--text-md);
+  }
+
+  /* Slide-over full width on mobile */
+  .slide-over-panel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .gcal-detail {
+    width: 100%;
+  }
+
+  /* Modal full width */
+  .modal {
+    max-width: 100%;
+    margin: 0 12px;
+  }
+
+  /* Toast positioning */
+  .toast,
+  .toast-success {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+}
+
+/* Swipe hint for mobile email rows */
+@media (pointer: coarse) {
+  .email-item {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* ==========================================================
    REDUCED MOTION
 ========================================================== */
 @media (prefers-reduced-motion: reduce) {
@@ -3022,6 +3122,91 @@ select:focus-visible {
 
 .toast-success .toast-x:hover {
   opacity: 1;
+}
+
+.toast-undo {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: inherit;
+  padding: 4px 12px;
+  border-radius: var(--r-xs);
+  transition: background var(--t-micro) var(--ease);
+}
+
+.toast-undo:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ==========================================================
+   ONBOARDING
+========================================================== */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  animation: overlayIn var(--t-micro) var(--ease) both;
+}
+
+.onboarding-card {
+  background: var(--bg-1);
+  border: 1px solid var(--line-0);
+  border-radius: var(--r-lg);
+  max-width: 440px;
+  width: 90%;
+  padding: var(--sp-7) var(--sp-6);
+  text-align: center;
+  box-shadow: var(--shadow-xl);
+  animation: modalIn 180ms var(--ease) both;
+}
+
+.onboarding-icon {
+  display: block;
+  margin: 0 auto var(--sp-5);
+  color: var(--accent);
+}
+
+.onboarding-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-0);
+  margin: 0 0 var(--sp-2);
+  letter-spacing: -0.02em;
+}
+
+.onboarding-body {
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  margin: 0 0 var(--sp-6);
+  line-height: 1.5;
+}
+
+.onboarding-steps {
+  display: flex;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-5);
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-0);
+  transition: background var(--t-micro) var(--ease);
+}
+
+.onboarding-dot.active {
+  background: var(--accent);
 }
 
 @keyframes toastIn {

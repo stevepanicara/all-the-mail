@@ -125,7 +125,9 @@ const AllTheMail = () => {
   const [scheduledSends, setScheduledSends] = useState(() => JSON.parse(localStorage.getItem('atm_scheduled_sends') || '[]'));
 
   const [error, setError] = useState(null);
-  const [successToast, setSuccessToast] = useState(null);
+  const [successToast, setSuccessToast] = useState(null); // { message, undoFn? }
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('atm_onboarded'));
+  const [onboardingStep, setOnboardingStep] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
 
@@ -179,10 +181,17 @@ const AllTheMail = () => {
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('atm-theme', theme); }, [theme]);
   const toggleTheme = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'), []);
 
+  const undoTimerRef = useRef(null);
   useEffect(() => {
     if (!successToast) return;
-    const t = setTimeout(() => setSuccessToast(null), 3000);
-    return () => clearTimeout(t);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const delay = successToast.undoFn ? 5000 : 3000;
+    undoTimerRef.current = setTimeout(() => {
+      // If there's a pending action, execute it now
+      if (successToast.executeFn) successToast.executeFn();
+      setSuccessToast(null);
+    }, delay);
+    return () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); };
   }, [successToast]);
 
   useEffect(() => {
@@ -965,21 +974,34 @@ const AllTheMail = () => {
     setEmails(p=>{const c={...p};const cats=c[aid]||{};const u={};for(const k of Object.keys(cats)){u[k]=(cats[k]||[]).filter(e=>!ids.includes(e.id));}c[aid]=u;return c;});
   }, []);
 
-  const trashEmail = useCallback(async (email) => {
+  const trashEmail = useCallback((email) => {
     if(!email?.id||!email?.accountId) return;
-    try{const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/trash`,{method:'POST',credentials:'include'});
-    if(r.ok){removeEmailIds(email.accountId,[email.id]);if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}setSuccessToast('Email deleted');}
-    else{const d=await r.json().catch(()=>({}));setError(d?.error||'Failed to delete message');}}
-    catch(err){setError(String(err?.message||err));}
-  }, [selectedEmail, removeEmailIds]);
+    // Optimistically remove from UI
+    const snapshot = { ...emails };
+    removeEmailIds(email.accountId,[email.id]);
+    if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}
+    const executeFn = async () => {
+      try{const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/trash`,{method:'POST',credentials:'include'});
+      if(!r.ok){setEmails(snapshot);setError('Failed to delete');}}
+      catch(err){setEmails(snapshot);setError('Failed to delete');}
+    };
+    const undoFn = () => { setEmails(snapshot); setSuccessToast(null); };
+    setSuccessToast({ message: 'Email deleted', undoFn, executeFn });
+  }, [selectedEmail, removeEmailIds, emails]);
 
-  const archiveEmail = useCallback(async (email) => {
+  const archiveEmail = useCallback((email) => {
     if(!email?.id||!email?.accountId) return;
-    try{const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/archive`,{method:'POST',credentials:'include'});
-    if(r.ok){removeEmailIds(email.accountId,[email.id]);if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}setSuccessToast('Email archived');}
-    else{const d=await r.json().catch(()=>({}));setError(d?.error||'Failed to archive message');}}
-    catch(err){setError(String(err?.message||err));}
-  }, [selectedEmail, removeEmailIds]);
+    const snapshot = { ...emails };
+    removeEmailIds(email.accountId,[email.id]);
+    if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}
+    const executeFn = async () => {
+      try{const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/archive`,{method:'POST',credentials:'include'});
+      if(!r.ok){setEmails(snapshot);setError('Failed to archive');}}
+      catch(err){setEmails(snapshot);setError('Failed to archive');}
+    };
+    const undoFn = () => { setEmails(snapshot); setSuccessToast(null); };
+    setSuccessToast({ message: 'Email archived', undoFn, executeFn });
+  }, [selectedEmail, removeEmailIds, emails]);
 
   const batchAction = useCallback(async (action) => {
     if(selectedIds.size===0) return; setBatchWorking(true); setError(null);
@@ -1040,7 +1062,7 @@ const AllTheMail = () => {
     const key = `${email.accountId || ''}_${email.id}`;
     setSnoozedEmails(prev => ({ ...prev, [key]: { emailId: email.id, accountId: email.accountId, until: until.toISOString() } }));
     setSnoozeDropdownEmailId(null);
-    setSuccessToast(`Snoozed until ${new Date(until).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`);
+    setSuccessToast({ message: `Snoozed until ${new Date(until).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}` });
     // Clear selected email if it was snoozed
     if (selectedEmail?.id === email.id) {
       setSelectedEmail(null); setSelectedThread(null); setSelectedThreadActiveMessageId(null);
@@ -1117,7 +1139,7 @@ const AllTheMail = () => {
       let r;
       if(composeAttachments.length>0){const fd=new FormData();fd.append('to',composeTo.trim());fd.append('subject',composeSubject.trim());fd.append('body',bodyWithSig);if(composeCc.trim())fd.append('cc',composeCc.trim());if(composeBcc.trim())fd.append('bcc',composeBcc.trim());if(composeOriginalEmail?.threadId)fd.append('threadId',composeOriginalEmail.threadId);if(composeDraftId)fd.append('draftId',composeDraftId);composeAttachments.forEach(f=>fd.append('attachments',f));r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',body:fd});}
       else{r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:composeMode,to:composeTo.trim(),cc:composeCc.trim(),bcc:composeBcc.trim(),subject:composeSubject.trim(),body:bodyWithSig,originalEmailId:composeOriginalEmail?.id||null,threadId:composeOriginalEmail?.threadId||null,draftId:composeDraftId||null,includeSignature:true})});}
-      if(r.ok){await loadEmailsForAccount(fid,activeCategory);await loadEmailsForAccount(fid,'drafts');if(activeView==='everything')connectedAccounts.forEach(a=>{if(a.id!==fid)loadEmailsForAccount(a.id,activeCategory);});setComposeOpen(false);setComposeOriginalEmail(null);setComposeAttachments([]);setComposeDraftId(null);setSuccessToast('Message sent');}
+      if(r.ok){await loadEmailsForAccount(fid,activeCategory);await loadEmailsForAccount(fid,'drafts');if(activeView==='everything')connectedAccounts.forEach(a=>{if(a.id!==fid)loadEmailsForAccount(a.id,activeCategory);});setComposeOpen(false);setComposeOriginalEmail(null);setComposeAttachments([]);setComposeDraftId(null);setSuccessToast({ message: 'Message sent' });}
       else{const d=await r.json().catch(()=>({}));setComposeError(d?.error||'Send failed. If permissions changed, reconnect the account.');}
     } catch(err){setComposeError(String(err?.message||err));} finally{setComposeSending(false);}
   }, [composeFromAccountId,composeMode,composeTo,composeCc,composeBcc,composeSubject,composeBody,composeOriginalEmail,composeAttachments,composeDraftId,loadEmailsForAccount,activeCategory,activeView,connectedAccounts,includeAtmSignature]);
@@ -2166,8 +2188,42 @@ const AllTheMail = () => {
       )}
       {successToast && (
         <div className="toast-success">
-          <span>{successToast}</span>
-          <button onClick={() => setSuccessToast(null)} className="toast-x" title="Dismiss"><X size={14} /></button>
+          <span>{successToast.message || successToast}</span>
+          {successToast.undoFn && (
+            <button onClick={() => { successToast.undoFn(); if(undoTimerRef.current) clearTimeout(undoTimerRef.current); }} className="toast-undo">Undo</button>
+          )}
+          <button onClick={() => { if(successToast.executeFn) successToast.executeFn(); setSuccessToast(null); if(undoTimerRef.current) clearTimeout(undoTimerRef.current); }} className="toast-x" title="Dismiss"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* Onboarding */}
+      {showOnboarding && isAuthed && connectedAccounts.length > 0 && (
+        <div className="onboarding-overlay">
+          <div className="onboarding-card">
+            {onboardingStep === 0 && (<>
+              <LayoutGrid size={40} strokeWidth={1.5} className="onboarding-icon" />
+              <h2 className="onboarding-title">Welcome to All The Mail</h2>
+              <p className="onboarding-body">Your accounts are connected. The Everything View shows mail, docs, and calendar from all accounts in one place — with color-coded source chips so you always know which account each item belongs to.</p>
+            </>)}
+            {onboardingStep === 1 && (<>
+              <Users size={40} strokeWidth={1.5} className="onboarding-icon" />
+              <h2 className="onboarding-title">Add more accounts</h2>
+              <p className="onboarding-body">Click the + button in the account rail to connect additional Gmail accounts. Each gets its own color gradient for instant recognition across all views.</p>
+            </>)}
+            {onboardingStep === 2 && (<>
+              <Mail size={40} strokeWidth={1.5} className="onboarding-icon" />
+              <h2 className="onboarding-title">You're all set</h2>
+              <p className="onboarding-body">Use keyboard shortcuts for speed: <strong>e</strong> archive, <strong>r</strong> reply, <strong>c</strong> compose, <strong>/</strong> search. Switch between Mail, Docs, and Cals in the top bar.</p>
+            </>)}
+            <div className="onboarding-steps">
+              {[0,1,2].map(i => <span key={i} className={`onboarding-dot${onboardingStep === i ? ' active' : ''}`} />)}
+            </div>
+            {onboardingStep < 2 ? (
+              <button className="btn btn-primary" onClick={() => setOnboardingStep(s => s + 1)} style={{ width: '100%' }}>Next</button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => { setShowOnboarding(false); localStorage.setItem('atm_onboarded', 'true'); }} style={{ width: '100%' }}>Get started</button>
+            )}
+          </div>
         </div>
       )}
     </div>
