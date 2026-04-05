@@ -125,6 +125,7 @@ const AllTheMail = () => {
   const [scheduledSends, setScheduledSends] = useState(() => JSON.parse(localStorage.getItem('atm_scheduled_sends') || '[]'));
 
   const [error, setError] = useState(null);
+  const [successToast, setSuccessToast] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
 
@@ -177,6 +178,12 @@ const AllTheMail = () => {
   useEffect(() => { localStorage.setItem('atm_signature', includeAtmSignature); }, [includeAtmSignature]);
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('atm-theme', theme); }, [theme]);
   const toggleTheme = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'), []);
+
+  useEffect(() => {
+    if (!successToast) return;
+    const t = setTimeout(() => setSuccessToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [successToast]);
 
   useEffect(() => {
     const url = new URL(window.location);
@@ -934,9 +941,14 @@ const AllTheMail = () => {
           requestAnimationFrame(()=>{const row=document.querySelector(`.email-item:nth-child(${ni+1})`);if(row)row.scrollIntoView({behavior:'smooth',block:'nearest'});});
         }
       }
+      if (e.key === 'e' && selectedEmail) { e.preventDefault(); archiveEmail(selectedEmail); }
+      if (e.key === '#' && selectedEmail) { e.preventDefault(); trashEmail(selectedEmail); }
+      if (e.key === 'r' && selectedEmail) { e.preventDefault(); openCompose('reply', selectedEmail); }
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openCompose('compose'); }
+      if (e.key === '/' && !e.metaKey) { e.preventDefault(); searchInputRef.current?.focus(); }
     };
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
-  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext]);
+  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, archiveEmail, trashEmail, openCompose]);
 
   const goBackToList = useCallback(()=>{setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setFullPageReaderOpen(false);setReaderCompact(false);}, []);
 
@@ -955,7 +967,7 @@ const AllTheMail = () => {
   const trashEmail = useCallback(async (email) => {
     if(!email?.id||!email?.accountId) return;
     try{const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/trash`,{method:'POST',credentials:'include'});
-    if(r.ok){removeEmailIds(email.accountId,[email.id]);if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}}
+    if(r.ok){removeEmailIds(email.accountId,[email.id]);if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}setSuccessToast('Email deleted');}
     else{const d=await r.json().catch(()=>({}));setError(d?.error||'Failed to delete message');}}
     catch(err){setError(String(err?.message||err));}
   }, [selectedEmail, removeEmailIds]);
@@ -963,7 +975,7 @@ const AllTheMail = () => {
   const archiveEmail = useCallback(async (email) => {
     if(!email?.id||!email?.accountId) return;
     try{const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/archive`,{method:'POST',credentials:'include'});
-    if(r.ok){removeEmailIds(email.accountId,[email.id]);if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}}
+    if(r.ok){removeEmailIds(email.accountId,[email.id]);if(selectedEmail?.id===email.id){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}setSuccessToast('Email archived');}
     else{const d=await r.json().catch(()=>({}));setError(d?.error||'Failed to archive message');}}
     catch(err){setError(String(err?.message||err));}
   }, [selectedEmail, removeEmailIds]);
@@ -1027,6 +1039,7 @@ const AllTheMail = () => {
     const key = `${email.accountId || ''}_${email.id}`;
     setSnoozedEmails(prev => ({ ...prev, [key]: { emailId: email.id, accountId: email.accountId, until: until.toISOString() } }));
     setSnoozeDropdownEmailId(null);
+    setSuccessToast(`Snoozed until ${new Date(until).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`);
     // Clear selected email if it was snoozed
     if (selectedEmail?.id === email.id) {
       setSelectedEmail(null); setSelectedThread(null); setSelectedThreadActiveMessageId(null);
@@ -1103,7 +1116,7 @@ const AllTheMail = () => {
       let r;
       if(composeAttachments.length>0){const fd=new FormData();fd.append('to',composeTo.trim());fd.append('subject',composeSubject.trim());fd.append('body',bodyWithSig);if(composeCc.trim())fd.append('cc',composeCc.trim());if(composeBcc.trim())fd.append('bcc',composeBcc.trim());if(composeOriginalEmail?.threadId)fd.append('threadId',composeOriginalEmail.threadId);if(composeDraftId)fd.append('draftId',composeDraftId);composeAttachments.forEach(f=>fd.append('attachments',f));r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',body:fd});}
       else{r=await fetch(`${API_BASE}/emails/${fid}/send`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:composeMode,to:composeTo.trim(),cc:composeCc.trim(),bcc:composeBcc.trim(),subject:composeSubject.trim(),body:bodyWithSig,originalEmailId:composeOriginalEmail?.id||null,threadId:composeOriginalEmail?.threadId||null,draftId:composeDraftId||null,includeSignature:true})});}
-      if(r.ok){await loadEmailsForAccount(fid,activeCategory);await loadEmailsForAccount(fid,'drafts');if(activeView==='everything')connectedAccounts.forEach(a=>{if(a.id!==fid)loadEmailsForAccount(a.id,activeCategory);});setComposeOpen(false);setComposeOriginalEmail(null);setComposeAttachments([]);setComposeDraftId(null);}
+      if(r.ok){await loadEmailsForAccount(fid,activeCategory);await loadEmailsForAccount(fid,'drafts');if(activeView==='everything')connectedAccounts.forEach(a=>{if(a.id!==fid)loadEmailsForAccount(a.id,activeCategory);});setComposeOpen(false);setComposeOriginalEmail(null);setComposeAttachments([]);setComposeDraftId(null);setSuccessToast('Message sent');}
       else{const d=await r.json().catch(()=>({}));setComposeError(d?.error||'Send failed. If permissions changed, reconnect the account.');}
     } catch(err){setComposeError(String(err?.message||err));} finally{setComposeSending(false);}
   }, [composeFromAccountId,composeMode,composeTo,composeCc,composeBcc,composeSubject,composeBody,composeOriginalEmail,composeAttachments,composeDraftId,loadEmailsForAccount,activeCategory,activeView,connectedAccounts,includeAtmSignature]);
@@ -1206,9 +1219,9 @@ const AllTheMail = () => {
                     const active = selectedThreadActiveMessageId === m.id;
                     return (
                       <button key={m.id} onClick={() => onSelectThreadMessage(m)}
-                        style={{ textAlign: 'left', padding: '8px 12px', border: 'none', borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent', background: active ? 'var(--accent-weak)' : 'transparent', cursor: 'pointer', borderRadius: 0, color: 'inherit', fontFamily: 'inherit', width: '100%', transition: 'background 150ms ease' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: 2 }}>{stripName(m.from || '')}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-2)' }}>{m.snippet || ''}</div>
+                        className={`conversation-msg-btn${active ? ' active' : ''}`}>
+                        <div className="conversation-msg-btn-sender">{stripName(m.from || '')}</div>
+                        <div className="conversation-msg-btn-snippet">{m.snippet || ''}</div>
                       </button>
                     );
                   })}
@@ -1240,12 +1253,12 @@ const AllTheMail = () => {
             )}
           </div>
           {emailAttachments[email.id]?.length > 0 && (
-            <div style={{ marginTop: '24px', padding: '14px', border: '1px solid var(--line)', background: 'var(--bg-1)', borderRadius: '8px' }}>
-              <div style={{ marginBottom: '10px', fontSize: '12px', color: 'var(--text-2)' }}>
+            <div className="attachment-section">
+              <div className="attachment-header">
                 <Paperclip size={13} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
                 {emailAttachments[email.id].length} attachment{emailAttachments[email.id].length !== 1 ? 's' : ''}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="attachment-list">
                 {emailAttachments[email.id].map((att, idx) => (
                   <button key={idx} className="btn-ghost" onClick={() => downloadAttachment(email.accountId, email.id, att.attachmentId, att.filename, att.mimeType)}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', textAlign: 'left' }}>
@@ -2149,6 +2162,12 @@ const AllTheMail = () => {
 
       {error && (
         <div className="toast"><span>{error}</span><button onClick={() => setError(null)} className="toast-x" title="Dismiss"><X size={14} /></button></div>
+      )}
+      {successToast && (
+        <div className="toast-success">
+          <span>{successToast}</span>
+          <button onClick={() => setSuccessToast(null)} className="toast-x" title="Dismiss"><X size={14} /></button>
+        </div>
       )}
     </div>
   );

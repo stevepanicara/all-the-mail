@@ -2906,6 +2906,130 @@ select:focus-visible {
 }
 
 /* ==========================================================
+   UTILITY CLASSES
+========================================================== */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.gap-sm { gap: var(--sp-2); }
+.gap-md { gap: var(--sp-3); }
+.gap-lg { gap: var(--sp-4); }
+
+/* Conversation thread message button */
+.conversation-msg-btn {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 0;
+  color: inherit;
+  font-family: inherit;
+  width: 100%;
+  transition: background var(--t-micro) var(--ease);
+}
+
+.conversation-msg-btn:hover {
+  background: var(--hover-bg);
+}
+
+.conversation-msg-btn.active {
+  border-left-color: var(--accent);
+  background: var(--accent-weak);
+}
+
+.conversation-msg-btn-sender {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.conversation-msg-btn-snippet {
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+
+/* Attachment container */
+.attachment-section {
+  margin-top: var(--sp-5);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  border-radius: var(--r-sm);
+}
+
+.attachment-header {
+  margin-bottom: var(--sp-2);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+/* Section header (category title in email list) */
+.section-header {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+/* Success toast */
+.toast-success {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #1E8E3E;
+  color: white;
+  padding: 12px 20px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: var(--z-toast);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  animation: toastIn var(--t-standard) var(--ease) both;
+  pointer-events: auto;
+}
+
+.toast-success .toast-x {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.toast-success .toast-x:hover {
+  opacity: 1;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================
    EMPTY STATES (consolidated)
 ========================================================== */
 .empty-state-icon {
