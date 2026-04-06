@@ -177,12 +177,14 @@ router.get('/google/callback', async (req, res) => {
 
     const jwtToken = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 
+    const isProduction = process.env.FRONTEND_URL?.includes('allthemail.io');
     res.cookie('auth_token', jwtToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: true,
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
+      domain: isProduction ? '.allthemail.io' : undefined,
     });
 
     res.redirect(`${FRONTEND_URL}/app?auth=success`);
@@ -193,7 +195,14 @@ router.get('/google/callback', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('auth_token');
+  const isProduction = process.env.FRONTEND_URL?.includes('allthemail.io');
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: true,
+    sameSite: isProduction ? 'none' : 'lax',
+    path: '/',
+    domain: isProduction ? '.allthemail.io' : undefined,
+  });
   res.json({ success: true });
 });
 
