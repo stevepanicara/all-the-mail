@@ -2160,6 +2160,16 @@ const AllTheMail = () => {
                   </div>
                   {editUrl && (<button className="btn-ghost btn-edit-doc" onClick={() => window.open(editUrl, '_blank', 'noopener,noreferrer')} style={{ marginBottom: '24px', fontSize: '13px', gap: '6px' }}><ExternalLink size={14} strokeWidth={1.5} /> Edit in {editorLabel}</button>)}
                   {docPreviewLoading && (<div className="doc-preview-skeleton">{Array.from({ length: 5 }).map((_, i) => (<div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 4 ? '60%' : '100%' }} />))}</div>)}
+                  {!docPreviewLoading && docPreview?.type === 'embed' && (
+                    <div className="doc-preview-embed">
+                      <iframe
+                        src={docPreview.embedUrl}
+                        title={docPreview.name || 'Document preview'}
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
                   {!docPreviewLoading && docPreview?.type === 'html' && (<div className="doc-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeDocHtml(docPreview.content) }} />)}
                   {!docPreviewLoading && docPreview?.type === 'thumbnail' && (<div className="doc-preview-content"><img src={docPreview.url} alt={docPreview.name || slideOverDoc.title} style={{ maxWidth: '100%', borderRadius: '6px' }} /></div>)}
                   {!docPreviewLoading && docPreview?.type === 'none' && (<p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>Preview not available for this file type</p>)}

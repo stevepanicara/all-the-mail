@@ -134,29 +134,38 @@ router.get('/:accountId/:fileId/preview', authenticateToken, async (req, res) =>
 
     const { data: file } = await drive.files.get({
       fileId,
-      fields: 'mimeType,name,thumbnailLink',
+      fields: 'mimeType,name,thumbnailLink,webViewLink,hasThumbnail',
     });
 
     const mimeType = file.mimeType;
+    // Upgrade thumbnail URL from default size (~200px) to a larger version
+    const thumbHi = file.thumbnailLink ? file.thumbnailLink.replace(/=s\d+/, '=s1600') : null;
+    // Drive's official embed URL — renders the full doc visually with pagination
+    const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
 
-    if (mimeType === 'application/vnd.google-apps.document') {
-      const { data: html } = await drive.files.export({ fileId, mimeType: 'text/html' });
-      return res.json({ type: 'html', content: html, name: file.name });
+    // Native Google Workspace files (Docs, Sheets, Slides) — use Drive embed iframe
+    if (mimeType?.startsWith('application/vnd.google-apps.')) {
+      return res.json({
+        type: 'embed',
+        embedUrl,
+        thumbnail: thumbHi,
+        name: file.name,
+      });
     }
 
-    if (mimeType === 'application/vnd.google-apps.spreadsheet') {
-      const { data: html } = await drive.files.export({ fileId, mimeType: 'text/html' });
-      return res.json({ type: 'html', content: html, name: file.name });
+    // PDFs, images, and other binary files — Drive's embed iframe handles these too
+    if (mimeType === 'application/pdf' || mimeType?.startsWith('image/')) {
+      return res.json({
+        type: 'embed',
+        embedUrl,
+        thumbnail: thumbHi,
+        name: file.name,
+      });
     }
 
-    if (mimeType === 'application/vnd.google-apps.presentation') {
-      if (file.thumbnailLink) {
-        return res.json({ type: 'thumbnail', url: file.thumbnailLink, name: file.name });
-      }
-    }
-
-    if (file.thumbnailLink) {
-      return res.json({ type: 'thumbnail', url: file.thumbnailLink, name: file.name });
+    // Fallback: if there's a thumbnail, return it as a high-res image
+    if (thumbHi) {
+      return res.json({ type: 'thumbnail', url: thumbHi, name: file.name });
     }
 
     return res.json({ type: 'none', name: file.name });

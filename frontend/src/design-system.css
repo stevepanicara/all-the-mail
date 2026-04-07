@@ -2552,6 +2552,27 @@ select:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Embedded Drive iframe preview */
+.doc-preview-embed {
+  position: relative;
+  width: 100%;
+  margin-bottom: var(--sp-5);
+  background: var(--bg-3);
+  border: 1px solid var(--line-0);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  aspect-ratio: 8.5 / 11;
+  max-height: 70vh;
+}
+
+.doc-preview-embed iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #fff;
+}
+
 .doc-preview-content {
   margin-bottom: 20px;
   padding: 20px;
