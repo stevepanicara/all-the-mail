@@ -16,11 +16,21 @@ const ComposeModal = ({
   connectedAccounts,
   closeCompose, sendCompose,
   scheduleSend,
+  saveDraft,
   includeSignature, setIncludeSignature,
 }) => {
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
+  const [confirmingEmptySubject, setConfirmingEmptySubject] = useState(false);
 
   if (!composeOpen) return null;
+
+  const handleSendClick = () => {
+    if (!composeSubject.trim()) {
+      setConfirmingEmptySubject(true);
+      return;
+    }
+    sendCompose();
+  };
 
   return (
     <div className="modal-overlay" onMouseDown={closeCompose}>
@@ -85,7 +95,27 @@ const ComposeModal = ({
               )}
             </div>
           </div>
-          {composeError && <div className="modal-error">{composeError}</div>}
+          {composeError && (
+            <div className="compose-error-actionable">
+              <div className="compose-error-message">
+                <span className="compose-error-icon">⚠</span>
+                <span>{composeError}</span>
+              </div>
+              <div className="compose-error-actions">
+                <button className="btn-ghost" onClick={sendCompose}>Retry</button>
+                <button className="btn-ghost" onClick={() => { if (saveDraft) { saveDraft(); } else { /* TODO: wire saveDraft */ } }}>Save as draft</button>
+              </div>
+            </div>
+          )}
+          {confirmingEmptySubject && (
+            <div className="compose-warning">
+              <span>Send without a subject?</span>
+              <div className="compose-warning-actions">
+                <button className="btn-ghost" onClick={() => setConfirmingEmptySubject(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={() => { setConfirmingEmptySubject(false); sendCompose(); }}>Send anyway</button>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
             <div className="modal-hint" style={{ margin: 0 }}>If send fails, you may need to reconnect the account with updated permissions.</div>
             {setIncludeSignature && (
@@ -120,7 +150,7 @@ const ComposeModal = ({
                 </div>
               )}
             </div>
-            <button className="btn btn-primary" onClick={sendCompose} disabled={composeSending}>
+            <button className="btn btn-primary" onClick={handleSendClick} disabled={composeSending}>
               {composeSending ? 'Sending...' : 'Send'}
             </button>
           </div>

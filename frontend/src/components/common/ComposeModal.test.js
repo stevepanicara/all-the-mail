@@ -114,7 +114,7 @@ describe('ComposeModal', () => {
   });
 
   it('calls sendCompose when Send button is clicked', () => {
-    renderModal();
+    renderModal({ composeSubject: 'Test subject' });
     fireEvent.click(screen.getByText('Send'));
     expect(defaultProps.sendCompose).toHaveBeenCalled();
   });

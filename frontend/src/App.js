@@ -64,7 +64,7 @@ const AllTheMail = () => {
   const [evMailFilter, setEvMailFilter] = useState('all');
   const [evDocsFilter, setEvDocsFilter] = useState('recent');
   const [evCalsFilter, setEvCalsFilter] = useState('upcoming');
-  const [evMobileTab, setEvMobileTab] = useState('mail');
+  const [evMobileTab, setEvMobileTab] = useState('all');
   const swipeRef = useRef({ startX: 0, startY: 0, currentX: 0, emailId: null });
 
   const [connectedAccounts, setConnectedAccounts] = useState([]);
@@ -126,17 +126,23 @@ const AllTheMail = () => {
   // Scheduled sends state
   const [scheduledSends, setScheduledSends] = useState(() => JSON.parse(localStorage.getItem('atm_scheduled_sends') || '[]'));
 
+  // Send delay (unsend) state
+  const [sendDelaySeconds, setSendDelaySeconds] = useState(() => parseInt(localStorage.getItem('atm_send_delay') || '5', 10));
+  const [pendingSend, setPendingSend] = useState(null); // { secondsLeft, previewSubject, interval }
+
+  // Saved searches state
+  const [savedSearches, setSavedSearches] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('atm_saved_searches') || '[]'); }
+    catch { return []; }
+  });
+
   const [error, setError] = useState(null);
   const [successToast, setSuccessToast] = useState(null); // { message, undoFn? }
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('atm_onboarded'));
   const [onboardingStep, setOnboardingStep] = useState(0);
-  // eslint-disable-next-line no-unused-vars
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // eslint-disable-next-line no-unused-vars
   const [paletteQuery, setPaletteQuery] = useState('');
-  // eslint-disable-next-line no-unused-vars
   const [paletteIndex, setPaletteIndex] = useState(0);
-  // eslint-disable-next-line no-unused-vars
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
@@ -167,6 +173,7 @@ const AllTheMail = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [avatarDropdownOpen, setAvatarDropdownOpen] = useState(false);
   const [removingAccountId, setRemovingAccountId] = useState(null);
+  const [emailLoadError, setEmailLoadError] = useState(null);
   const [billingPlan, setBillingPlan] = useState('free');
   const [billingLoading, setBillingLoading] = useState(false);
   const avatarDropdownRef = useRef(null);
@@ -188,6 +195,8 @@ const AllTheMail = () => {
   useEffect(() => { localStorage.setItem('atm_conversation', conversationView); }, [conversationView]);
   useEffect(() => { localStorage.setItem('atm_calview', calsViewMode); }, [calsViewMode]);
   useEffect(() => { localStorage.setItem('atm_signature', includeAtmSignature); }, [includeAtmSignature]);
+  useEffect(() => { localStorage.setItem('atm_send_delay', String(sendDelaySeconds)); }, [sendDelaySeconds]);
+  useEffect(() => { localStorage.setItem('atm_saved_searches', JSON.stringify(savedSearches)); }, [savedSearches]);
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('atm-theme', theme); }, [theme]);
   const toggleTheme = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'), []);
 
@@ -582,6 +591,14 @@ const AllTheMail = () => {
     return pool.filter(e => e.day === 'Today' || e.day === 'Tomorrow');
   }, [evCalsFilter, allEvents, activeView]);
 
+  const mobileUnifiedFeed = useMemo(() => {
+    const items = [];
+    evFilteredEmails.slice(0, 50).forEach(e => items.push({ type: 'email', data: e, time: new Date(e.date).getTime() }));
+    evFilteredDocs.slice(0, 30).forEach(d => items.push({ type: 'doc', data: d, time: new Date(d.lastEdited || d.date).getTime() }));
+    filteredAllEvents.slice(0, 30).forEach(ev => items.push({ type: 'event', data: ev, time: new Date(ev.startISO || 0).getTime() }));
+    return items.sort((a, b) => b.time - a.time);
+  }, [evFilteredEmails, evFilteredDocs, filteredAllEvents]);
+
   const hasDocsError = Object.values(docsErrors).some(Boolean);
   const hasEventsError = Object.values(eventsErrors).some(Boolean);
   const anyHasDocs = connectedAccounts.some(a => a.granted_scopes?.includes('docs'));
@@ -604,12 +621,15 @@ const AllTheMail = () => {
           const d = await r.json();
           setEmails(p=>({...p,[accountId]:{...(p[accountId]||{}),[cat]:d.emails||[]}}));
           setLastSyncTime(new Date());
+          setEmailLoadError(null);
         } else if (r.status===401) {
           setIsAuthed(false); setConnectedAccounts([]); setEmails({}); setSelectedEmail(null);
           setSelectedThread(null); setSelectedThreadActiveMessageId(null); setEmailBodies({}); setEmailHeaders({});
           setEditMode(false); setSelectedIds(new Set()); return;
+        } else {
+          setEmailLoadError({ accountId, category: cat });
         }
-      } catch(err) { console.error('Error loading emails:', err); }
+      } catch(err) { console.error('Error loading emails:', err); setEmailLoadError({ accountId, category: cat }); }
     }
     setIsLoadingEmails(false);
   }, []);
@@ -1183,6 +1203,33 @@ const AllTheMail = () => {
     } catch(err){setComposeError(String(err?.message||err));} finally{setComposeSending(false);}
   }, [composeFromAccountId,composeMode,composeTo,composeCc,composeBcc,composeSubject,composeBody,composeOriginalEmail,composeAttachments,composeDraftId,loadEmailsForAccount,activeCategory,activeView,connectedAccounts,includeAtmSignature]);
 
+  const sendComposeWithDelay = useCallback(() => {
+    if (sendDelaySeconds === 0) {
+      sendCompose();
+      return;
+    }
+    const previewSubject = composeSubject.trim() || '(no subject)';
+    setComposeOpen(false);
+    let secondsLeft = sendDelaySeconds;
+    const interval = setInterval(() => {
+      secondsLeft -= 1;
+      if (secondsLeft <= 0) {
+        clearInterval(interval);
+        setPendingSend(null);
+        sendCompose();
+      } else {
+        setPendingSend(prev => prev ? { ...prev, secondsLeft } : { secondsLeft, previewSubject, interval });
+      }
+    }, 1000);
+    setPendingSend({ secondsLeft, previewSubject, interval });
+  }, [sendDelaySeconds, sendCompose, composeSubject]);
+
+  const cancelPendingSend = useCallback(() => {
+    if (pendingSend?.interval) clearInterval(pendingSend.interval);
+    setPendingSend(null);
+    setComposeOpen(true);
+  }, [pendingSend]);
+
   const onSelectEmail = useCallback((email) => {
     setSelectedEmail(email);setShowMetadata(false);setReaderCompact(false);loadEmailDetails(email);loadThread(email);setSelectedThreadActiveMessageId(email.id);
     if(splitMode==='none') setFullPageReaderOpen(true);
@@ -1364,8 +1411,32 @@ const AllTheMail = () => {
           </div>
         )}
         <div style={{ padding: activeView === 'everything' ? '12px 20px 8px' : '0 20px 8px' }}>
-          <div className="search-pill"><Search size={14} /><input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search across all accounts..." /></div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="search-pill" style={{ flex: 1, minWidth: 0 }}><Search size={14} /><input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search across all accounts..." /></div>
+            {searchQuery.trim() && !savedSearches.includes(searchQuery.trim()) && (
+              <button className="btn-ghost" onClick={() => setSavedSearches(prev => [searchQuery.trim(), ...prev].slice(0, 10))}
+                style={{ padding: '4px 10px', fontSize: 11, marginLeft: 8 }}
+                title="Save this search">Save</button>
+            )}
+          </div>
         </div>
+        {savedSearches.length > 0 && !searchQuery && (
+          <div className="saved-searches">
+            <div className="saved-searches-label">Saved searches</div>
+            <div className="saved-searches-list">
+              {savedSearches.map(q => (
+                <div key={q} className="saved-search-chip">
+                  <button onClick={() => setSearchQuery(q)} className="saved-search-chip-btn">
+                    <Search size={11} strokeWidth={1.5} /> {q}
+                  </button>
+                  <button onClick={() => setSavedSearches(prev => prev.filter(s => s !== q))} className="saved-search-chip-x" title="Remove">
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ padding: '4px 20px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => { if (selectedCount === filteredEmails.length && filteredEmails.length > 0) clearSelection(); else selectAllVisible(); }}
@@ -1394,10 +1465,19 @@ const AllTheMail = () => {
           </div>
         ))
       ) : filteredEmails.length === 0 ? (
-        <div style={{ padding: '64px 24px', textAlign: 'center' }}>
-          <Mail size={32} style={{ margin: '0 auto 12px', opacity: 0.05, display: 'block' }} />
-          <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>{searchQuery ? 'No messages match your search' : `No messages in ${activeCategory}`}</div>
-        </div>
+        emailLoadError && (activeView === 'everything' || emailLoadError.accountId === activeView) && (activeCategory ? emailLoadError.category === activeCategory : true) ? (
+          <div className="empty-state load-error" style={{ padding: '64px 24px', textAlign: 'center' }}>
+            <div className="empty-state-icon" style={{ fontSize: 28, opacity: 0.6, color: 'var(--danger)' }}>⚠</div>
+            <div className="empty-state-title">Couldn't load messages</div>
+            <div className="empty-state-subtitle" style={{ marginBottom: 16 }}>Check your connection and try again</div>
+            <button className="btn-ghost" onClick={() => { setEmailLoadError(null); if (activeView === 'everything') connectedAccounts.forEach(a => loadEmailsForAccount(a.id, activeCategory)); else loadEmailsForAccount(activeView, activeCategory); }}>Retry</button>
+          </div>
+        ) : (
+          <div style={{ padding: '64px 24px', textAlign: 'center' }}>
+            <Mail size={32} style={{ margin: '0 auto 12px', opacity: 0.05, display: 'block' }} />
+            <div style={{ color: 'var(--text-2)', fontSize: '13px' }}>{searchQuery ? 'No messages match your search' : `No messages in ${activeCategory}`}</div>
+          </div>
+        )
       ) : (
         filteredEmails.map((email, idx) => {
           const isActive = selectedEmail?.id === email.id;
@@ -1423,8 +1503,8 @@ const AllTheMail = () => {
                 if (swipeRef.current.emailId !== email.id) return;
                 const delta = swipeRef.current.currentX - swipeRef.current.startX;
                 swipeRef.current = { startX: 0, startY: 0, currentX: 0, emailId: null };
-                if (delta < -100) { archiveEmail(email); }
-                else if (delta > 100) { trashEmail(email); }
+                if (delta < -100) { try { navigator.vibrate?.(10); } catch (_) {} archiveEmail(email); }
+                else if (delta > 100) { try { navigator.vibrate?.(10); } catch (_) {} trashEmail(email); }
               }}
               style={{ position: 'relative', padding: '0 16px', minHeight: `${rowHeight}px`, ...cs }}>
               {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
@@ -1471,11 +1551,12 @@ const AllTheMail = () => {
   const renderEverything = () => (
     <div className="ev-everything-wrap" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div className="ev-mobile-tabs">
+        <button className={`ev-filter-btn${evMobileTab === 'all' ? ' active' : ''}`} onClick={() => setEvMobileTab('all')}>All</button>
         <button className={`ev-filter-btn${evMobileTab==='mail'?' active':''}`} onClick={()=>setEvMobileTab('mail')}>Mail</button>
         <button className={`ev-filter-btn${evMobileTab==='docs'?' active':''}`} onClick={()=>setEvMobileTab('docs')}>Docs</button>
         <button className={`ev-filter-btn${evMobileTab==='cals'?' active':''}`} onClick={()=>setEvMobileTab('cals')}>Cals</button>
       </div>
-    <PanelGroup orientation="horizontal" id="atm-everything-layout">
+    <PanelGroup orientation="horizontal" id="atm-everything-layout" className={`ev-desktop-only${evMobileTab === 'all' ? ' ev-hide-on-mobile' : ''}`}>
       <Panel defaultSize="40%" minSize="30%" id="ev-mail">
         <div className={`ev-column${evMobileTab === 'mail' ? ' ev-mobile-active' : ''}`}>
           <div className="ev-col-header">
@@ -1607,6 +1688,66 @@ const AllTheMail = () => {
         </div>
       </Panel>
     </PanelGroup>
+    <div className={`ev-mobile-unified-wrap${evMobileTab === 'all' ? ' active' : ''}`}>
+      <div className="ev-col-header">
+        <span className="ev-col-title">Everything</span>
+      </div>
+      <div className="ev-col-body">
+        {mobileUnifiedFeed.map((item, i) => {
+          if (item.type === 'email') {
+            const email = item.data;
+            const accountIndex = connectedAccounts.findIndex(a => a.id === email.accountId);
+            const grad = accountIndex !== -1 ? getAccountGradient(accountIndex) : null;
+            return (
+              <div key={`em-${email.id}-${i}`} className="ev-feed-item ev-feed-email" onClick={() => openSlideOverEmail(email)}>
+                <div className="ev-feed-icon"><Mail size={14} strokeWidth={1.5} /></div>
+                <div className="ev-feed-content">
+                  <div className="ev-feed-line1">
+                    <span className="ev-feed-title">{stripName(email.from || '')}</span>
+                    {grad && <span className="ev-feed-source-dot" style={{ background: grad.gradient }} />}
+                  </div>
+                  <div className="ev-feed-line2">{email.subject || '(no subject)'}</div>
+                </div>
+                <span className="ev-feed-time">{formatTime(email.date)}</span>
+              </div>
+            );
+          }
+          if (item.type === 'doc') {
+            const doc = item.data;
+            return (
+              <div key={`dc-${doc.id}-${i}`} className="ev-feed-item ev-feed-doc" onClick={() => openSlideOverDoc(doc)}>
+                <div className="ev-feed-icon"><FileText size={14} strokeWidth={1.5} /></div>
+                <div className="ev-feed-content">
+                  <div className="ev-feed-line1">
+                    <span className="ev-feed-title">{doc.title}</span>
+                  </div>
+                  <div className="ev-feed-line2">{doc.owner} · {formatRelativeEdit(doc.lastEdited)}</div>
+                </div>
+                <span className="ev-feed-time">{new Date(doc.date || doc.lastEdited).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+              </div>
+            );
+          }
+          const ev = item.data;
+          return (
+            <div key={`cv-${ev.id}-${i}`} className="ev-feed-item ev-feed-event" onClick={() => { setSelectedEvent(ev); openEventEdit(ev); }}>
+              <div className="ev-feed-icon"><Calendar size={14} strokeWidth={1.5} /></div>
+              <div className="ev-feed-content">
+                <div className="ev-feed-line1">
+                  <span className="ev-feed-title">{ev.title}</span>
+                </div>
+                <div className="ev-feed-line2">{ev.day} · {ev.time}{ev.meta ? ` · ${ev.meta}` : ''}</div>
+              </div>
+            </div>
+          );
+        })}
+        {mobileUnifiedFeed.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-state-title">Nothing to show</div>
+            <div className="empty-state-subtitle">Connect an account to see your activity</div>
+          </div>
+        )}
+      </div>
+    </div>
     </div>
   );
 
@@ -1989,7 +2130,10 @@ const AllTheMail = () => {
   return (
     <div className={`app-container${introActive ? ' intro' : ''}`}>
       {/* Top bar */}
-      <div className="top-bar">
+      <div className="top-bar" onDoubleClick={() => {
+        const target = document.querySelector('.email-list, .ev-col-body, .gcal-body, .ev-mobile-unified-wrap.active');
+        if (target) target.scrollTo({ top: 0, behavior: 'smooth' });
+      }}>
         <img src="/logo-horizontal.svg" alt="All the mail" className="top-bar-logo" />
         <div className="module-tabs">
           <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')}><LayoutGrid size={15} strokeWidth={1.5} /> Everything</button>
@@ -2104,6 +2248,19 @@ const AllTheMail = () => {
                   )}
                 </div>
                 <div className="avatar-dropdown-divider" />
+                <div style={{ padding: '12px 16px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-3)', marginBottom: 6 }}>Undo send</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[0, 5, 10, 30].map(s => (
+                      <button key={s} onClick={() => setSendDelaySeconds(s)}
+                        className={`ev-filter-btn${sendDelaySeconds === s ? ' active' : ''}`}
+                        style={{ padding: '4px 10px', fontSize: 11 }}>
+                        {s === 0 ? 'Off' : `${s}s`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="avatar-dropdown-divider" />
                 <button className="avatar-dropdown-signout" onClick={() => { setAvatarDropdownOpen(false); handleLogout(); }}><LogOut size={14} strokeWidth={1.5} /> Sign out</button>
               </div>
             )}
@@ -2137,8 +2294,9 @@ const AllTheMail = () => {
         composeShowCcBcc={composeShowCcBcc} setComposeShowCcBcc={setComposeShowCcBcc}
         composeAttachments={composeAttachments} handleFileSelect={handleFileSelect} removeAttachment={removeAttachment}
         connectedAccounts={connectedAccounts}
-        closeCompose={closeCompose} sendCompose={sendCompose}
+        closeCompose={closeCompose} sendCompose={sendComposeWithDelay}
         scheduleSend={scheduleSend}
+        saveDraft={saveDraft}
         includeSignature={includeAtmSignature} setIncludeSignature={setIncludeAtmSignature}
       />
 
@@ -2253,6 +2411,15 @@ const AllTheMail = () => {
       {error && (
         <div className="toast"><span>{error}</span><button onClick={() => setError(null)} className="toast-x" title="Dismiss"><X size={14} /></button></div>
       )}
+      {pendingSend && (
+        <div className="toast-pending">
+          <div className="toast-pending-content">
+            <div className="toast-pending-spinner" />
+            <span>Sending in <strong>{pendingSend.secondsLeft}s</strong> · {pendingSend.previewSubject}</span>
+          </div>
+          <button onClick={cancelPendingSend} className="toast-undo">Undo</button>
+        </div>
+      )}
       {successToast && (
         <div className="toast-success">
           <span>{successToast.message || successToast}</span>
@@ -2340,7 +2507,10 @@ const AllTheMail = () => {
               />
               <div className="command-palette-list">
                 {filtered.length === 0 ? (
-                  <div className="command-palette-item" style={{ color: 'var(--text-3)', cursor: 'default' }}>No commands found</div>
+                  <div className="command-palette-empty">
+                    <div className="command-palette-empty-title">No commands match "{paletteQuery}"</div>
+                    <div className="command-palette-empty-hint">Press <kbd>?</kbd> to see all keyboard shortcuts</div>
+                  </div>
                 ) : filtered.map((cmd, idx) => (
                   <div
                     key={cmd.id}
