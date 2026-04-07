@@ -64,6 +64,8 @@ const AllTheMail = () => {
   const [evMailFilter, setEvMailFilter] = useState('all');
   const [evDocsFilter, setEvDocsFilter] = useState('recent');
   const [evCalsFilter, setEvCalsFilter] = useState('upcoming');
+  const [evMobileTab, setEvMobileTab] = useState('mail');
+  const swipeRef = useRef({ startX: 0, startY: 0, currentX: 0, emailId: null });
 
   const [connectedAccounts, setConnectedAccounts] = useState([]);
   const [activeView, setActiveView] = useState(() => {
@@ -128,6 +130,14 @@ const AllTheMail = () => {
   const [successToast, setSuccessToast] = useState(null); // { message, undoFn? }
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('atm_onboarded'));
   const [onboardingStep, setOnboardingStep] = useState(0);
+  // eslint-disable-next-line no-unused-vars
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [paletteQuery, setPaletteQuery] = useState('');
+  // eslint-disable-next-line no-unused-vars
+  const [paletteIndex, setPaletteIndex] = useState(0);
+  // eslint-disable-next-line no-unused-vars
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
 
@@ -928,12 +938,32 @@ const AllTheMail = () => {
 
   useEffect(() => {
     const onKey = (e) => {
+      // Cmd+K / Ctrl+K — open command palette (works from anywhere, including inputs)
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen(p => !p);
+        setPaletteQuery('');
+        setPaletteIndex(0);
+        return;
+      }
       if(composeOpen) return;
       const tag=(document.activeElement?.tagName||'').toLowerCase();
       if(tag==='input'||tag==='textarea'||tag==='select'||document.activeElement?.getAttribute?.('contenteditable')==='true') return;
+      // Cmd+A / Ctrl+A — select all visible emails when in mail view
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A') && activeModule === 'mail') {
+        const sa = shortcutsRef.current.selectAllVisible;
+        if (sa) {
+          e.preventDefault();
+          setEditMode(true);
+          sa();
+          return;
+        }
+      }
+      if(e.key==='Escape'&&shortcutsOpen){e.preventDefault();setShortcutsOpen(false);return;}
       if(e.key==='Escape'&&splitMode==='none'&&fullPageReaderOpen){e.preventDefault();setFullPageReaderOpen(false);return;}
       if(e.key==='Enter'&&splitMode==='none'&&selectedEmail&&!fullPageReaderOpen){e.preventDefault();setFullPageReaderOpen(true);return;}
       if(e.metaKey||e.ctrlKey||e.altKey) return;
+      if(e.key==='?'){e.preventDefault();setShortcutsOpen(true);return;}
       const readerOpen = selectedEmail && (splitMode!=='none' || fullPageReaderOpen);
       if(readerOpen){
         if(e.key==='ArrowLeft'){e.preventDefault();navigatePrev();return;}
@@ -962,7 +992,7 @@ const AllTheMail = () => {
       if (e.key === '/' && !e.metaKey) { e.preventDefault(); searchInputRef.current?.focus(); }
     };
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
-  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext]);
+  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, activeModule, shortcutsOpen]);
 
   const goBackToList = useCallback(()=>{setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setFullPageReaderOpen(false);setReaderCompact(false);}, []);
 
@@ -1039,8 +1069,8 @@ const AllTheMail = () => {
 
   // Sync the keyboard shortcut callbacks ref now that they're defined
   useEffect(() => {
-    shortcutsRef.current = { archiveEmail, trashEmail, openCompose };
-  }, [archiveEmail, trashEmail, openCompose]);
+    shortcutsRef.current = { archiveEmail, trashEmail, openCompose, selectAllVisible };
+  }, [archiveEmail, trashEmail, openCompose, selectAllVisible]);
 
   // Persist snoozed emails to localStorage
   useEffect(() => { localStorage.setItem('atm_snoozed', JSON.stringify(snoozedEmails)); }, [snoozedEmails]);
@@ -1387,6 +1417,15 @@ const AllTheMail = () => {
           return (
             <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
+              onTouchStart={(e) => { const t = e.touches[0]; swipeRef.current = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, emailId: email.id }; }}
+              onTouchMove={(e) => { if (swipeRef.current.emailId === email.id) { swipeRef.current.currentX = e.touches[0].clientX; } }}
+              onTouchEnd={() => {
+                if (swipeRef.current.emailId !== email.id) return;
+                const delta = swipeRef.current.currentX - swipeRef.current.startX;
+                swipeRef.current = { startX: 0, startY: 0, currentX: 0, emailId: null };
+                if (delta < -100) { archiveEmail(email); }
+                else if (delta > 100) { trashEmail(email); }
+              }}
               style={{ position: 'relative', padding: '0 16px', minHeight: `${rowHeight}px`, ...cs }}>
               {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
               {useStackedRows ? (
@@ -1395,7 +1434,7 @@ const AllTheMail = () => {
                   <div className="email-row-stacked-content">
                     <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
                       {senderLabel}
-                      {threadBadge && <span className="thread-count-badge">{email.threadCount}</span>}
+                      {threadBadge && <span className={`thread-count-badge${!email.isRead ? ' thread-count-badge-unread' : ''}`}>{email.threadCount}</span>}
                     </span>
                     <span className="row-subject" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
                   </div>
@@ -1412,7 +1451,7 @@ const AllTheMail = () => {
                   </div>
                   <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
                     {senderLabel}
-                    {threadBadge && <span className="thread-count-badge">{email.threadCount}</span>}
+                    {threadBadge && <span className={`thread-count-badge${!email.isRead ? ' thread-count-badge-unread' : ''}`}>{email.threadCount}</span>}
                   </span>
                   <span className="row-subject">
                     <span className="row-subject-title" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
@@ -1430,9 +1469,15 @@ const AllTheMail = () => {
 
   // ==================== RENDER: EVERYTHING DASHBOARD ====================
   const renderEverything = () => (
+    <div className="ev-everything-wrap" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div className="ev-mobile-tabs">
+        <button className={`ev-filter-btn${evMobileTab==='mail'?' active':''}`} onClick={()=>setEvMobileTab('mail')}>Mail</button>
+        <button className={`ev-filter-btn${evMobileTab==='docs'?' active':''}`} onClick={()=>setEvMobileTab('docs')}>Docs</button>
+        <button className={`ev-filter-btn${evMobileTab==='cals'?' active':''}`} onClick={()=>setEvMobileTab('cals')}>Cals</button>
+      </div>
     <PanelGroup orientation="horizontal" id="atm-everything-layout">
       <Panel defaultSize="40%" minSize="30%" id="ev-mail">
-        <div className="ev-column">
+        <div className={`ev-column${evMobileTab === 'mail' ? ' ev-mobile-active' : ''}`}>
           <div className="ev-col-header">
             <span className="ev-col-title">Mail</span>
             <div className="ev-col-filters">
@@ -1473,7 +1518,7 @@ const AllTheMail = () => {
       </Panel>
       <PanelResizeHandle className="ev-column-divider ev-column-divider--mail-docs" />
       <Panel defaultSize="30%" minSize="22%" id="ev-docs">
-        <div className="ev-column">
+        <div className={`ev-column${evMobileTab === 'docs' ? ' ev-mobile-active' : ''}`}>
           <div className="ev-col-header">
             <span className="ev-col-title">Docs</span>
             <div className="ev-col-filters">
@@ -1516,7 +1561,7 @@ const AllTheMail = () => {
       </Panel>
       <PanelResizeHandle className="ev-column-divider ev-column-divider--docs-cals" />
       <Panel defaultSize="30%" minSize="22%" id="ev-cals">
-        <div className="ev-column">
+        <div className={`ev-column${evMobileTab === 'cals' ? ' ev-mobile-active' : ''}`}>
           <div className="ev-col-header">
             <span className="ev-col-title">Cals</span>
             <div className="ev-col-filters">
@@ -1562,6 +1607,7 @@ const AllTheMail = () => {
         </div>
       </Panel>
     </PanelGroup>
+    </div>
   );
 
   // ==================== RENDER: DOCS MODULE ====================
@@ -1921,13 +1967,14 @@ const AllTheMail = () => {
 
   if (isAuthed === false) return (
     <div className={`app-container login-screen${introActive ? ' intro' : ''}`}>
-      <button className="toolbar-btn login-theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-        {theme === 'dark' ? <Sun size={16} strokeWidth={1.5} /> : <Moon size={16} strokeWidth={1.5} />}
+      <button className="toolbar-btn login-theme-toggle theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+        <span className={`theme-icon${theme === 'dark' ? ' theme-icon-active' : ''}`}><Sun size={16} strokeWidth={1.5} /></span>
+        <span className={`theme-icon${theme === 'light' ? ' theme-icon-active' : ''}`}><Moon size={16} strokeWidth={1.5} /></span>
       </button>
       <div className="login-card">
         {authError && <div className="login-error">{authError}</div>}
         <div style={{ fontSize: 'clamp(36px,5vw,52px)', fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 0.95, marginBottom: '24px' }}>
-          Everything.<br /><span style={{ color: 'var(--accent)' }}>Unified.</span>
+          Email.<br /><span style={{ color: 'var(--accent)' }}>Unified.</span>
         </div>
         <div className="login-heading">Mail, docs, and calendars from one deliberate interface.</div>
         <div className="login-subheading">Encrypted tokens. No passwords stored. Disconnect anytime.</div>
@@ -1965,7 +2012,7 @@ const AllTheMail = () => {
                 </button>
               );
             })}
-            <button className="account-pill add-pill" onClick={handleAddAccount} title="Add account"><Plus size={14} strokeWidth={1.5} /></button>
+            <button className="account-pill add-pill" onClick={handleAddAccount} title="Add account"><Plus size={13} strokeWidth={1.5} /><span className="add-pill-label">Add</span></button>
           </div>
         </div>
         <div className="top-bar-controls">
@@ -1999,8 +2046,9 @@ const AllTheMail = () => {
               </button>
             </>
           )}
-          <button className="toolbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ marginLeft: '4px' }}>
-            {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
+          <button className="toolbar-btn theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ marginLeft: '4px' }}>
+            <span className={`theme-icon${theme === 'dark' ? ' theme-icon-active' : ''}`}><Sun size={15} strokeWidth={1.5} /></span>
+            <span className={`theme-icon${theme === 'light' ? ' theme-icon-active' : ''}`}><Moon size={15} strokeWidth={1.5} /></span>
           </button>
           <div style={{ position: 'relative', marginLeft: '4px' }}>
             <button ref={avatarButtonRef} className="avatar-btn" onClick={() => { setAvatarDropdownOpen(o => !o); setRemovingAccountId(null); }} title="Account menu">
@@ -2242,6 +2290,104 @@ const AllTheMail = () => {
             ) : (
               <button className="btn btn-primary" onClick={() => { setShowOnboarding(false); localStorage.setItem('atm_onboarded', 'true'); }} style={{ width: '100%' }}>Get started</button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Command Palette (Cmd+K) */}
+      {paletteOpen && (() => {
+        const allCommands = [
+          { id: 'compose', label: 'Compose new message', hint: 'C', action: () => openCompose('compose') },
+          { id: 'search', label: 'Search emails', hint: '/', action: () => { setTimeout(() => searchInputRef.current?.focus(), 0); } },
+          { id: 'goto-everything', label: 'Go to Everything View', action: () => setActiveModule('everything') },
+          { id: 'goto-mail', label: 'Go to Mail', action: () => setActiveModule('mail') },
+          { id: 'goto-docs', label: 'Go to Docs', action: () => setActiveModule('docs') },
+          { id: 'goto-cals', label: 'Go to Calendar', action: () => setActiveModule('cals') },
+          { id: 'toggle-theme', label: 'Toggle theme', action: () => toggleTheme() },
+          { id: 'toggle-conversation', label: 'Toggle conversation view', action: () => setConversationView(v => !v) },
+          { id: 'add-account', label: 'Add account', action: () => handleAddAccount() },
+          ...(selectedEmail ? [
+            { id: 'archive', label: 'Archive selected email', hint: 'E', action: () => archiveEmail(selectedEmail) },
+            { id: 'delete', label: 'Delete selected email', hint: '#', action: () => trashEmail(selectedEmail) },
+            { id: 'reply', label: 'Reply to selected email', hint: 'R', action: () => openCompose('reply', selectedEmail) },
+          ] : []),
+          { id: 'shortcuts', label: 'Show keyboard shortcuts', hint: '?', action: () => setShortcutsOpen(true) },
+        ];
+        const q = paletteQuery.trim().toLowerCase();
+        const filtered = q ? allCommands.filter(c => c.label.toLowerCase().includes(q)) : allCommands;
+        const safeIndex = filtered.length === 0 ? 0 : Math.min(paletteIndex, filtered.length - 1);
+        const closePalette = () => { setPaletteOpen(false); setPaletteQuery(''); setPaletteIndex(0); };
+        const runCommand = (cmd) => {
+          closePalette();
+          if (cmd && cmd.action) cmd.action();
+        };
+        const onPaletteKey = (e) => {
+          if (e.key === 'Escape') { e.preventDefault(); closePalette(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault(); setPaletteIndex(i => Math.min(i + 1, filtered.length - 1)); return; }
+          if (e.key === 'ArrowUp') { e.preventDefault(); setPaletteIndex(i => Math.max(i - 1, 0)); return; }
+          if (e.key === 'Enter') { e.preventDefault(); runCommand(filtered[safeIndex]); return; }
+        };
+        return (
+          <div className="command-palette-overlay" onClick={closePalette}>
+            <div className="command-palette" onClick={e => e.stopPropagation()}>
+              <input
+                autoFocus
+                className="command-palette-input"
+                placeholder="Type a command…"
+                value={paletteQuery}
+                onChange={e => { setPaletteQuery(e.target.value); setPaletteIndex(0); }}
+                onKeyDown={onPaletteKey}
+              />
+              <div className="command-palette-list">
+                {filtered.length === 0 ? (
+                  <div className="command-palette-item" style={{ color: 'var(--text-3)', cursor: 'default' }}>No commands found</div>
+                ) : filtered.map((cmd, idx) => (
+                  <div
+                    key={cmd.id}
+                    className={`command-palette-item${idx === safeIndex ? ' active' : ''}`}
+                    onMouseEnter={() => setPaletteIndex(idx)}
+                    onClick={() => runCommand(cmd)}
+                  >
+                    <span>{cmd.label}</span>
+                    {cmd.hint && <span className="command-palette-item-hint">{cmd.hint}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Keyboard shortcuts cheatsheet */}
+      {shortcutsOpen && (
+        <div className="modal-overlay" onClick={() => setShortcutsOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <span className="modal-header-title">Keyboard shortcuts</span>
+              <button className="btn-icon" onClick={() => setShortcutsOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="shortcuts-list">
+                {[
+                  { key: '⌘K / Ctrl K', desc: 'Open command palette' },
+                  { key: 'C', desc: 'Compose new message' },
+                  { key: 'R', desc: 'Reply to selected email' },
+                  { key: 'E', desc: 'Archive selected email' },
+                  { key: '#', desc: 'Delete selected email' },
+                  { key: '/', desc: 'Focus search' },
+                  { key: '↑ ↓', desc: 'Navigate emails' },
+                  { key: '← →', desc: 'Previous / next email' },
+                  { key: 'Enter', desc: 'Open selected email' },
+                  { key: 'Esc', desc: 'Close panel' },
+                  { key: '?', desc: 'Show this menu' },
+                ].map(s => (
+                  <div key={s.key} className="shortcut-row">
+                    <span className="shortcut-desc">{s.desc}</span>
+                    <kbd className="shortcut-key">{s.key}</kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -6,24 +6,6 @@ const API_BASE =
   process.env.REACT_APP_API_URL ||
   'http://localhost:3000';
 
-const PRINCIPLES = [
-  {
-    num: '01',
-    title: 'Everything View',
-    body: 'All inboxes. One scroll.',
-  },
-  {
-    num: '02',
-    title: 'Source Clarity',
-    body: 'Account identity at a glance.',
-  },
-  {
-    num: '03',
-    title: 'Secure by Design',
-    body: 'OAuth + encrypted tokens.',
-  },
-];
-
 const FAQ_ITEMS = [
   {
     q: 'Do you store my emails?',
@@ -188,8 +170,8 @@ function Landing() {
             <button className="l-nav-link" onClick={() => scrollTo('pricing')} type="button">
               Pricing
             </button>
-            <button className="l-nav-link" onClick={() => scrollTo('principles')} type="button">
-              Security
+            <button className="l-nav-link" onClick={() => scrollTo('howitworks')} type="button">
+              How it works
             </button>
             <button className="l-nav-link l-nav-signin" onClick={handleSignIn} type="button">
               Sign in
@@ -204,6 +186,7 @@ function Landing() {
           <div className="l-hero-inner">
             <div className="l-hero-grid">
               <div className="l-hero-copy">
+                <div className="l-hero-eyebrow"><span className="l-hero-eyebrow-bar" />A NEW EMAIL TOOL</div>
                 <h1 className="l-h1">
                   Email. <span className="l-h1-accent">Unified.</span>
                 </h1>
@@ -258,19 +241,109 @@ function Landing() {
         </section>
 
 
-        {/* -------- PRINCIPLES (Editorial) -------- */}
-        <section className="l-section" id="principles">
+        {/* -------- HOW IT WORKS (Three product mockups) -------- */}
+        <section className="l-section" id="howitworks">
           <div className="l-container">
-            <div className="l-principles">
-              {PRINCIPLES.map((p) => (
-                <div className="principle" key={p.num}>
-                  <span className="principle-num">{p.num}</span>
-                  <div className="principle-text">
-                    <h3 className="principle-title">{p.title}</h3>
-                    <p className="principle-body">{p.body}</p>
+            <h2 className="l-section-title">HOW IT WORKS</h2>
+            <div className="l-howitworks">
+              {/* Mockup 1 — Unified inbox */}
+              <figure className="hiw-card">
+                <div className="hiw-mock">
+                  <div className="hiw-mock-header">
+                    <span>Inbox</span>
+                    <span className="hiw-mock-chip">All accounts</span>
+                  </div>
+                  <div className="hiw-mock-body">
+                    {[
+                      { i: 'S', name: 'Sarah Chen', subj: 'Q1 roadmap finalized', src: 'Work', g: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)', color: '#1A73E8', unread: true },
+                      { i: 'D', name: 'Delta Airlines', subj: 'Flight confirmation', src: 'Personal', g: 'linear-gradient(135deg,#00E5FF,#00FF94)', color: '#D93025', unread: false },
+                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice approved', src: 'Studio', g: 'linear-gradient(135deg,#FFD84D,#FF8C2B)', color: '#188038', unread: true },
+                      { i: 'G', name: 'GitHub', subj: 'PR #142 merged', src: 'Work', g: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)', color: '#A142F4', unread: false },
+                    ].map((m, i) => (
+                      <div key={i} className={`hiw-row${m.unread ? ' unread' : ''}`}>
+                        <span className="hiw-avatar" style={{ background: m.color }}>{m.i}</span>
+                        <div className="hiw-row-content">
+                          <div className="hiw-row-line1">
+                            <span className="hiw-sender">{m.name}</span>
+                            <span className="hiw-source-chip">
+                              <span className="hiw-source-dot" style={{ background: m.g }} />
+                              {m.src}
+                            </span>
+                          </div>
+                          <div className="hiw-subject">{m.subj}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+                <figcaption className="hiw-caption">One inbox, every account.</figcaption>
+              </figure>
+
+              {/* Mockup 2 — Source chip close-up */}
+              <figure className="hiw-card">
+                <div className="hiw-mock hiw-mock--zoom">
+                  <div className="hiw-zoom-stage">
+                    <div className="hiw-zoom-row">
+                      <span className="hiw-avatar hiw-avatar--lg" style={{ background: '#1A73E8' }}>S</span>
+                      <div className="hiw-row-content">
+                        <div className="hiw-zoom-name">Sarah Chen</div>
+                        <div className="hiw-zoom-subject">Q1 roadmap finalized</div>
+                      </div>
+                    </div>
+                    <div className="hiw-zoom-chip-wrap">
+                      <span className="hiw-source-chip hiw-source-chip--lg">
+                        <span className="hiw-source-dot hiw-source-dot--lg" style={{ background: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)' }} />
+                        Work
+                      </span>
+                      <svg className="hiw-callout-line" width="100" height="40" viewBox="0 0 100 40" fill="none">
+                        <path d="M2 38 L40 38 L60 8 L98 8" stroke="rgba(139,124,255,0.6)" strokeWidth="1" strokeDasharray="2 3" />
+                      </svg>
+                      <span className="hiw-callout-label">gradient identity</span>
+                    </div>
+                  </div>
+                </div>
+                <figcaption className="hiw-caption">See where it came from.</figcaption>
+              </figure>
+
+              {/* Mockup 3 — Cross-account search */}
+              <figure className="hiw-card">
+                <div className="hiw-mock">
+                  <div className="hiw-search-bar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span className="hiw-search-text">invoice<span className="hiw-search-caret" /></span>
+                    <span className="hiw-search-scope">all accounts</span>
+                  </div>
+                  <div className="hiw-mock-body">
+                    {[
+                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice #2041 approved', src: 'Studio', g: 'linear-gradient(135deg,#FFD84D,#FF8C2B)', color: '#188038' },
+                      { i: 'B', name: 'Billing@Stripe', subj: 'Your invoice is ready', src: 'Personal', g: 'linear-gradient(135deg,#00E5FF,#00FF94)', color: '#1A73E8' },
+                      { i: 'M', name: 'Maria Lopez', subj: 'Re: invoice question', src: 'Work', g: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)', color: '#D93025' },
+                      { i: 'F', name: 'Freshbooks', subj: 'Invoice draft saved', src: 'Studio', g: 'linear-gradient(135deg,#FFD84D,#FF8C2B)', color: '#A142F4' },
+                    ].map((m, i) => (
+                      <div key={i} className="hiw-row">
+                        <span className="hiw-avatar" style={{ background: m.color }}>{m.i}</span>
+                        <div className="hiw-row-content">
+                          <div className="hiw-row-line1">
+                            <span className="hiw-sender">{m.name}</span>
+                            <span className="hiw-source-chip">
+                              <span className="hiw-source-dot" style={{ background: m.g }} />
+                              {m.src}
+                            </span>
+                          </div>
+                          <div className="hiw-subject">
+                            {m.subj.split(/(invoice)/i).map((part, idx) =>
+                              part.toLowerCase() === 'invoice'
+                                ? <mark key={idx} className="hiw-mark">{part}</mark>
+                                : <span key={idx}>{part}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <figcaption className="hiw-caption">Search across everything.</figcaption>
+              </figure>
             </div>
           </div>
         </section>
@@ -279,6 +352,7 @@ function Landing() {
         <section className="l-section" id="compare">
           <div className="l-container">
             <h2 className="l-section-title">HOW WE COMPARE</h2>
+            <div className="l-compare-spec">CHECKED &#9656; SPECS</div>
             <div className="l-compare-wrap">
               <table className="l-compare-table">
                 <thead>
@@ -444,11 +518,17 @@ function Landing() {
 
       {/* -------- FOOTER -------- */}
       <footer className="l-footer">
-        <div className="l-container l-footer-inner">
-          <p>&copy; 2026 ALL THE MAIL</p>
-          <div className="l-footer-links">
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
+        <div className="l-container">
+          <div className="l-footer-mark">
+            <span className="l-footer-wordmark">ALL THE MAIL</span>
+            <span className="l-footer-tag">For people who run everything through Google.</span>
+          </div>
+          <div className="l-footer-inner">
+            <p>&copy; 2026 ALL THE MAIL</p>
+            <div className="l-footer-links">
+              <a href="/privacy">Privacy</a>
+              <a href="/terms">Terms</a>
+            </div>
           </div>
         </div>
       </footer>
