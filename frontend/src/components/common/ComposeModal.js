@@ -21,6 +21,13 @@ const ComposeModal = ({
 }) => {
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
   const [confirmingEmptySubject, setConfirmingEmptySubject] = useState(false);
+  const [toError, setToError] = useState(false);
+
+  const validateTo = (val) => {
+    const addresses = (val || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (addresses.length === 0) { setToError(false); return; }
+    setToError(addresses.some(a => !a.includes('@') || a.endsWith('@')));
+  };
 
   if (!composeOpen) return null;
 
@@ -50,7 +57,10 @@ const ComposeModal = ({
           </div>
           <div className="field-row">
             <label>To</label>
-            <input value={composeTo} onChange={e => setComposeTo(e.target.value)} placeholder="recipient@example.com" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+              <input value={composeTo} onChange={e => { setComposeTo(e.target.value); if (toError) validateTo(e.target.value); }} onBlur={() => validateTo(composeTo)} placeholder="recipient@example.com" />
+              {toError && <span style={{ color: 'var(--danger)', fontSize: '0.6875rem' }}>Check addresses — each needs an @ and domain</span>}
+            </div>
           </div>
           <div className="field-row-inline">
             <button className="btn-ghost" onClick={() => setComposeShowCcBcc(!composeShowCcBcc)} style={{ fontSize: '12px', padding: '5px 10px' }}>

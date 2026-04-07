@@ -1,10 +1,10 @@
 /* =====================================================
    ALL THE MAIL — Landing Page
    Infrastructure-first · restrained spectral identity
-   #000 bg · #8b7cff accent · 8pt spacing system
+   #0b0f14 bg · #8b7cff accent · 8pt spacing system
    ===================================================== */
 
-/* ---------- SPACING TOKENS (landing-scoped) ---------- */
+/* ---------- BASE ---------- */
 .l {
   --sp-1: 8px;
   --sp-2: 12px;
@@ -15,14 +15,10 @@
   --sp-7: 72px;
   --sp-8: 96px;
   --sp-9: 128px;
-}
-
-/* ---------- BASE ---------- */
-.l {
   min-height: 100vh;
   background:
     radial-gradient(900px circle at 20% 10%, rgba(108, 76, 255, 0.06), transparent 60%),
-    #000;
+    #0b0f14;
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -109,7 +105,7 @@
   overflow: hidden;
   background:
     radial-gradient(1200px circle at 50% 0%, rgba(139, 124, 255, 0.10), transparent 60%),
-    #000;
+    #0b0f14;
 }
 
 /* Black veil for text readability */

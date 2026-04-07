@@ -1360,7 +1360,7 @@ const AllTheMail = () => {
           )}
           <div className="email-body-wrapper">
             {isLoadingBody ? (
-              <div style={{ padding: '48px', textAlign: 'center', background: 'var(--email-bg)', color: 'var(--text-2)' }}>Loading message...</div>
+              <div style={{ padding: '80px 48px', textAlign: 'center', background: 'var(--email-bg)', color: 'var(--text-2)', fontSize: '0.9375rem', letterSpacing: '0.01em' }}>Loading message...</div>
             ) : (
               <iframe title="Email content" ref={iframeRef}
                 sandbox="allow-same-origin allow-popups"
@@ -1518,10 +1518,11 @@ const AllTheMail = () => {
             <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
               onMouseEnter={() => { loadEmailDetails(email); loadThread(email); }}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
-              onTouchStart={(e) => { const t = e.touches[0]; swipeRef.current = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, emailId: email.id }; }}
-              onTouchMove={(e) => { if (swipeRef.current.emailId === email.id) { swipeRef.current.currentX = e.touches[0].clientX; } }}
-              onTouchEnd={() => {
+              onTouchStart={(e) => { const t = e.touches[0]; swipeRef.current = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, emailId: email.id }; e.currentTarget.dataset.swipe = ''; }}
+              onTouchMove={(e) => { if (swipeRef.current.emailId === email.id) { swipeRef.current.currentX = e.touches[0].clientX; const d = e.touches[0].clientX - swipeRef.current.startX; if (d < -15) e.currentTarget.dataset.swipe = 'left'; else if (d > 15) e.currentTarget.dataset.swipe = 'right'; else e.currentTarget.dataset.swipe = ''; } }}
+              onTouchEnd={(e) => {
                 if (swipeRef.current.emailId !== email.id) return;
+                e.currentTarget.dataset.swipe = '';
                 const delta = swipeRef.current.currentX - swipeRef.current.startX;
                 swipeRef.current = { startX: 0, startY: 0, currentX: 0, emailId: null };
                 if (delta < -100) { try { navigator.vibrate?.(10); } catch (_) {} archiveEmail(email); }
