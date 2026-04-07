@@ -47,50 +47,107 @@ const FAQ_ITEMS = [
   },
 ];
 
-// Mock row gradient data for the landing page demo
-const MOCK_ACCOUNTS = [
-  { name: 'Work', g0: '#6C4CFF', g1: '#FF4C8B' },
-  { name: 'Personal', g0: '#00E5FF', g1: '#00FF94' },
-  { name: 'Freelance', g0: '#FFD84D', g1: '#FF8C2B' },
-];
+// Realistic in-product preview — built from the actual app's design tokens
+function AppPreview() {
+  const senderColors = ['#1A73E8','#D93025','#188038','#E37400','#A142F4','#1E8E3E','#F29900','#8430CE'];
+  const c = (i) => senderColors[i % senderColors.length];
 
-function getMockMid(acc) {
-  const h = (hex) => parseInt(hex.replace('#', ''), 16);
-  const r0 = (h(acc.g0) >> 16) & 0xff, g0 = (h(acc.g0) >> 8) & 0xff, b0 = h(acc.g0) & 0xff;
-  const r1 = (h(acc.g1) >> 16) & 0xff, g1 = (h(acc.g1) >> 8) & 0xff, b1 = h(acc.g1) & 0xff;
-  return { r: (r0+r1)>>1, g: (g0+g1)>>1, b: (b0+b1)>>1 };
-}
+  const mailItems = [
+    { initial: 'S', from: 'Sarah Chen', subject: 'Q1 roadmap finalized', time: '2m', unread: true, acct: 0 },
+    { initial: 'D', from: 'Delta Airlines', subject: 'Your flight confirmation', time: '18m', unread: false, acct: 1 },
+    { initial: 'A', from: 'Alex Rivera', subject: 'Invoice approved', time: '1h', unread: true, acct: 2 },
+    { initial: 'G', from: 'GitHub', subject: 'PR #142 merged', time: '2h', unread: false, acct: 0 },
+    { initial: 'N', from: 'Notion', subject: 'Workspace digest', time: '5h', unread: false, acct: 1 },
+  ];
 
-function MockChip({ account }) {
-  const mid = getMockMid(account);
+  const docItems = [
+    { name: 'Q1 Roadmap', edited: '2h ago', acct: 0 },
+    { name: 'Brand Guidelines.pdf', edited: 'Yesterday', acct: 2 },
+    { name: 'Invoice Template', edited: '3d ago', acct: 1 },
+  ];
+
+  const calItems = [
+    { time: '10:00', title: 'Standup', acct: 0 },
+    { time: '14:00', title: 'Client review', acct: 2 },
+    { time: '16:30', title: 'Design crit', acct: 0 },
+  ];
+
   return (
-    <span
-      className="mock-chip"
-      style={{
-        border: `1px solid rgba(${mid.r},${mid.g},${mid.b},0.45)`,
-        background: `rgba(${mid.r},${mid.g},${mid.b},0.10)`,
-      }}
-    >
-      <span className="mock-chip-dot" style={{ background: `linear-gradient(90deg, ${account.g0}, ${account.g1})` }} />
-      {account.name}
-    </span>
-  );
-}
-
-function MockRow({ account, sender, subject, time, unread }) {
-  return (
-    <div className={`mock-row ${unread ? 'mock-row-unread' : ''}`}>
-      {unread && (
-        <span style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 2,
-          borderRadius: '0 1px 1px 0',
-          background: `linear-gradient(180deg, ${account.g0}, ${account.g1})`,
-        }} />
-      )}
-      <MockChip account={account} />
-      <span className="mock-sender">{sender}</span>
-      <span className="mock-subj">{subject}</span>
-      <span className="mock-time">{time}</span>
+    <div className="app-preview">
+      <div className="app-preview-chrome">
+        <div className="app-preview-traffic">
+          <span /><span /><span />
+        </div>
+        <div className="app-preview-rail">
+          <div className="app-preview-pill app-preview-pill-active">All</div>
+          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'linear-gradient(135deg,#6C4CFF,#FF4C8B)'}} />Work</div>
+          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'linear-gradient(135deg,#00E5FF,#00FF94)'}} />Personal</div>
+          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'linear-gradient(135deg,#FFD84D,#FF8C2B)'}} />Studio</div>
+        </div>
+      </div>
+      <div className="app-preview-body">
+        {/* Mail column */}
+        <div className="app-preview-col">
+          <div className="app-preview-col-header">
+            <span>Mail</span>
+            <span className="app-preview-col-chip">All</span>
+          </div>
+          <div className="app-preview-col-body">
+            {mailItems.map((m, i) => (
+              <div key={i} className={`app-preview-row${m.unread ? ' unread' : ''}`}>
+                <span className="app-preview-avatar" style={{background: c(i)}}>{m.initial}</span>
+                <div className="app-preview-row-content">
+                  <div className="app-preview-row-line1">
+                    <span className="app-preview-sender">{m.from}</span>
+                    <span className="app-preview-time">{m.time}</span>
+                  </div>
+                  <div className="app-preview-subject">{m.subject}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Docs column */}
+        <div className="app-preview-col">
+          <div className="app-preview-col-header">
+            <span>Docs</span>
+            <span className="app-preview-col-chip">Recent</span>
+          </div>
+          <div className="app-preview-col-body">
+            {docItems.map((d, i) => (
+              <div key={i} className="app-preview-row">
+                <span className="app-preview-doc-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </span>
+                <div className="app-preview-row-content">
+                  <div className="app-preview-doc-name">{d.name}</div>
+                  <div className="app-preview-doc-meta">{d.edited}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Cals column */}
+        <div className="app-preview-col">
+          <div className="app-preview-col-header">
+            <span>Cals</span>
+            <span className="app-preview-col-chip">Today</span>
+          </div>
+          <div className="app-preview-col-body">
+            {calItems.map((e, i) => (
+              <div key={i} className="app-preview-row">
+                <span className="app-preview-cal-marker" />
+                <div className="app-preview-row-content">
+                  <div className="app-preview-row-line1">
+                    <span className="app-preview-cal-time">{e.time}</span>
+                  </div>
+                  <div className="app-preview-cal-title">{e.title}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -172,33 +229,9 @@ function Landing() {
                 </p>
               </div>
 
-              {/* Render column — shows hero render if available, falls back to mock */}
+              {/* App preview — built mockup matching the actual product */}
               <div className="l-hero-render-col">
-                <div className="l-render-wrap">
-                  <img
-                    src="/landing/Homepage_Image.png"
-                    alt="All The Mail unified inbox interface"
-                    width="800"
-                    height="520"
-                    loading="eager"
-                  />
-                </div>
-                {/* Fallback mock (hidden, kept for future use) */}
-                <div className="l-hero-mock-col" style={{ display: 'none', paddingTop: 0 }}>
-                  <div className="l-mock" role="img" aria-label="Unified inbox view showing multiple Gmail accounts">
-                    <div className="mock-toolbar">
-                      <div className="mock-dots">
-                        <span /><span /><span />
-                      </div>
-                      <span className="mock-title">ALL THE MAIL</span>
-                    </div>
-                    <MockRow account={MOCK_ACCOUNTS[0]} sender="Sarah Chen" subject="Q1 roadmap finalized" time="2m" unread />
-                    <MockRow account={MOCK_ACCOUNTS[1]} sender="Delta Airlines" subject="Your flight confirmation" time="18m" />
-                    <MockRow account={MOCK_ACCOUNTS[2]} sender="Alex Rivera" subject="Invoice approved — payment sent" time="1h" unread />
-                    <MockRow account={MOCK_ACCOUNTS[0]} sender="GitHub" subject="[all-the-mail] PR #142 merged" time="2h" />
-                    <MockRow account={MOCK_ACCOUNTS[1]} sender="Spotify" subject="Your 2026 listening report" time="5h" />
-                  </div>
-                </div>
+                <AppPreview />
               </div>
             </div>
           </div>
@@ -224,26 +257,6 @@ function Landing() {
           </div>
         </section>
 
-        {/* -------- PRODUCT FOCUS (Gallery) -------- */}
-        <section className="l-gallery">
-          <div className="l-gallery-inner">
-            <div className="l-mock l-mock-lg" role="img" aria-label="Unified inbox view showing multiple Gmail accounts">
-              <div className="mock-toolbar">
-                <div className="mock-dots">
-                  <span /><span /><span />
-                </div>
-                <span className="mock-title">ALL THE MAIL</span>
-              </div>
-              <MockRow account={MOCK_ACCOUNTS[0]} sender="Sarah Chen" subject="Q1 roadmap finalized" time="2m" unread />
-              <MockRow account={MOCK_ACCOUNTS[1]} sender="Delta Airlines" subject="Your flight confirmation — SEA to JFK" time="18m" />
-              <MockRow account={MOCK_ACCOUNTS[2]} sender="Alex Rivera" subject="Invoice approved — payment sent" time="1h" unread />
-              <MockRow account={MOCK_ACCOUNTS[0]} sender="GitHub" subject="[all-the-mail] PR #142 merged" time="2h" />
-              <MockRow account={MOCK_ACCOUNTS[1]} sender="Spotify" subject="Your 2026 listening report is here" time="5h" />
-              <MockRow account={MOCK_ACCOUNTS[2]} sender="Notion" subject="Weekly workspace digest" time="8h" />
-            </div>
-            <span className="l-gallery-label">EVERYTHING VIEW</span>
-          </div>
-        </section>
 
         {/* -------- PRINCIPLES (Editorial) -------- */}
         <section className="l-section" id="principles">
