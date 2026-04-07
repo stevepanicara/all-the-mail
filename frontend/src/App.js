@@ -922,6 +922,10 @@ const AllTheMail = () => {
     if(i<filteredEmails.length-1){const n=filteredEmails[i+1];setSelectedEmail(n);setShowMetadata(false);loadEmailDetails(n);loadThread(n);}
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread]);
 
+  // Ref holder for callbacks that are defined later in the component
+  // (avoids temporal dead zone issues in the keyboard handler useEffect)
+  const shortcutsRef = useRef({});
+
   useEffect(() => {
     const onKey = (e) => {
       if(composeOpen) return;
@@ -950,15 +954,15 @@ const AllTheMail = () => {
           requestAnimationFrame(()=>{const row=document.querySelector(`.email-item:nth-child(${ni+1})`);if(row)row.scrollIntoView({behavior:'smooth',block:'nearest'});});
         }
       }
-      if (e.key === 'e' && selectedEmail) { e.preventDefault(); archiveEmail(selectedEmail); }
-      if (e.key === '#' && selectedEmail) { e.preventDefault(); trashEmail(selectedEmail); }
-      if (e.key === 'r' && selectedEmail) { e.preventDefault(); openCompose('reply', selectedEmail); }
-      if (e.key === 'c' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openCompose('compose'); }
+      const s = shortcutsRef.current;
+      if (e.key === 'e' && selectedEmail && s.archiveEmail) { e.preventDefault(); s.archiveEmail(selectedEmail); }
+      if (e.key === '#' && selectedEmail && s.trashEmail) { e.preventDefault(); s.trashEmail(selectedEmail); }
+      if (e.key === 'r' && selectedEmail && s.openCompose) { e.preventDefault(); s.openCompose('reply', selectedEmail); }
+      if (e.key === 'c' && !e.metaKey && !e.ctrlKey && s.openCompose) { e.preventDefault(); s.openCompose('compose'); }
       if (e.key === '/' && !e.metaKey) { e.preventDefault(); searchInputRef.current?.focus(); }
     };
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
-  // eslint-disable-next-line no-use-before-define, react-hooks/exhaustive-deps
-  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, archiveEmail, trashEmail, openCompose]);
+  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext]);
 
   const goBackToList = useCallback(()=>{setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setFullPageReaderOpen(false);setReaderCompact(false);}, []);
 
@@ -1032,6 +1036,11 @@ const AllTheMail = () => {
   }, [composeFromAccountId,composeTo,composeCc,composeBcc,composeSubject,composeBody,composeOriginalEmail,composeDraftId]);
 
   useEffect(()=>{saveDraftRef.current=saveDraft;}, [saveDraft]);
+
+  // Sync the keyboard shortcut callbacks ref now that they're defined
+  useEffect(() => {
+    shortcutsRef.current = { archiveEmail, trashEmail, openCompose };
+  }, [archiveEmail, trashEmail, openCompose]);
 
   // Persist snoozed emails to localStorage
   useEffect(() => { localStorage.setItem('atm_snoozed', JSON.stringify(snoozedEmails)); }, [snoozedEmails]);
