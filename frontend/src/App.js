@@ -1496,6 +1496,7 @@ const AllTheMail = () => {
 
           return (
             <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
+              onMouseEnter={() => { loadEmailDetails(email); loadThread(email); }}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
               onTouchStart={(e) => { const t = e.touches[0]; swipeRef.current = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, emailId: email.id }; }}
               onTouchMove={(e) => { if (swipeRef.current.emailId === email.id) { swipeRef.current.currentX = e.touches[0].clientX; } }}
