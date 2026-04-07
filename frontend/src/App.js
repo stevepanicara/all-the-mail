@@ -1057,11 +1057,31 @@ const AllTheMail = () => {
     setSuccessToast({ message: 'Email archived', undoFn, executeFn });
   }, [selectedEmail, removeEmailIds, emails]);
 
-  const batchAction = useCallback(async (action) => {
-    if(selectedIds.size===0) return; setBatchWorking(true); setError(null);
-    try{const by=groupSelectedByAccount();for(const[aid,ids]of by.entries()){const r=await fetch(`${API_BASE}/emails/${aid}/batch`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,emailIds:ids})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d?.error||`Batch ${action} failed`);}removeEmailIds(aid,ids);if(selectedEmail&&ids.includes(selectedEmail.id)){setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setShowMetadata(false);setFullPageReaderOpen(false);}}clearSelection();setEditMode(false);}
-    catch(err){setError(String(err?.message||err));}finally{setBatchWorking(false);}
-  }, [selectedIds, groupSelectedByAccount, removeEmailIds, selectedEmail, clearSelection]);
+  const batchAction = useCallback((action) => {
+    if (selectedIds.size === 0) return;
+    const snapshot = { ...emails };
+    const byAccount = groupSelectedByAccount();
+    const affectedIds = new Set(selectedIds);
+    byAccount.forEach((ids, aid) => removeEmailIds(aid, ids));
+    if (selectedEmail && affectedIds.has(selectedEmail.id)) {
+      setSelectedEmail(null); setSelectedThread(null); setSelectedThreadActiveMessageId(null);
+      setShowMetadata(false); setFullPageReaderOpen(false);
+    }
+    clearSelection(); setEditMode(false);
+    const label = action === 'archive' ? `Archived ${affectedIds.size} message${affectedIds.size !== 1 ? 's' : ''}` : `Deleted ${affectedIds.size} message${affectedIds.size !== 1 ? 's' : ''}`;
+    const executeFn = async () => {
+      setBatchWorking(true);
+      try {
+        for (const [aid, ids] of byAccount.entries()) {
+          const r = await fetch(`${API_BASE}/emails/${aid}/batch`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, emailIds: ids }) });
+          if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d?.error || `Batch ${action} failed`); }
+        }
+      } catch (err) { setEmails(snapshot); setError(String(err?.message || err)); }
+      finally { setBatchWorking(false); }
+    };
+    const undoFn = () => { setEmails(snapshot); setSuccessToast(null); };
+    setSuccessToast({ message: label, undoFn, executeFn });
+  }, [selectedIds, emails, groupSelectedByAccount, removeEmailIds, selectedEmail, clearSelection]);
 
   const openCompose = useCallback(async (mode, email=null) => {
     setComposeError(null);setComposeMode(mode);setComposeOriginalEmail(email);setComposeShowCcBcc(false);
@@ -2458,6 +2478,7 @@ const AllTheMail = () => {
             ) : (
               <button className="btn btn-primary" onClick={() => { setShowOnboarding(false); localStorage.setItem('atm_onboarded', 'true'); }} style={{ width: '100%' }}>Get started</button>
             )}
+            <button className="btn-ghost" onClick={() => { setShowOnboarding(false); localStorage.setItem('atm_onboarded', 'true'); }} style={{ width: '100%', marginTop: 8, fontSize: 12, color: 'var(--text-3)' }}>Skip</button>
           </div>
         </div>
       )}

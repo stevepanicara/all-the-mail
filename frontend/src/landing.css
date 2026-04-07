@@ -4,8 +4,8 @@
    #000 bg · #8b7cff accent · 8pt spacing system
    ===================================================== */
 
-/* ---------- SPACING TOKENS ---------- */
-:root {
+/* ---------- SPACING TOKENS (landing-scoped) ---------- */
+.l {
   --sp-1: 8px;
   --sp-2: 12px;
   --sp-3: 16px;
@@ -21,14 +21,12 @@
 .l {
   min-height: 100vh;
   background:
-    radial-gradient(900px circle at 20% 10%, rgba(108, 76, 255, 0.07), transparent 60%),
-    radial-gradient(900px circle at 80% 20%, rgba(0, 229, 255, 0.06), transparent 60%),
+    radial-gradient(900px circle at 20% 10%, rgba(108, 76, 255, 0.06), transparent 60%),
     #000;
   color: #fff;
   display: flex;
   flex-direction: column;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -110,9 +108,7 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(1200px circle at 70% 25%, rgba(255, 76, 139, 0.20), transparent 55%),
-    radial-gradient(1100px circle at 25% 20%, rgba(0, 229, 255, 0.16), transparent 55%),
-    radial-gradient(900px circle at 60% 75%, rgba(255, 140, 43, 0.12), transparent 60%),
+    radial-gradient(1200px circle at 50% 0%, rgba(139, 124, 255, 0.10), transparent 60%),
     #000;
 }
 
