@@ -946,12 +946,14 @@ const AllTheMail = () => {
 
   const navigatePrev = useCallback(() => {
     if(!selectedEmail) return; const i=filteredEmails.findIndex(e=>e.id===selectedEmail.id);
-    if(i>0){const p=filteredEmails[i-1];setSelectedEmail(p);setShowMetadata(false);loadEmailDetails(p);loadThread(p);}
+    if(i>0){const p=filteredEmails[i-1];setSelectedEmail(p);setShowMetadata(false);loadEmailDetails(p);loadThread(p);
+    filteredEmails.slice(Math.max(0,i-5),i-1).forEach((e,j)=>setTimeout(()=>loadEmailDetails(e),(j+1)*100));}
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread]);
 
   const navigateNext = useCallback(() => {
     if(!selectedEmail) return; const i=filteredEmails.findIndex(e=>e.id===selectedEmail.id);
-    if(i<filteredEmails.length-1){const n=filteredEmails[i+1];setSelectedEmail(n);setShowMetadata(false);loadEmailDetails(n);loadThread(n);}
+    if(i<filteredEmails.length-1){const n=filteredEmails[i+1];setSelectedEmail(n);setShowMetadata(false);loadEmailDetails(n);loadThread(n);
+    filteredEmails.slice(i+2,i+6).forEach((e,j)=>setTimeout(()=>loadEmailDetails(e),(j+1)*100));}
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread]);
 
   // Ref holder for callbacks that are defined later in the component
@@ -1267,7 +1269,10 @@ const AllTheMail = () => {
   const onSelectEmail = useCallback((email) => {
     setSelectedEmail(email);setShowMetadata(false);setReaderCompact(false);loadEmailDetails(email);loadThread(email);setSelectedThreadActiveMessageId(email.id);
     if(splitMode==='none') setFullPageReaderOpen(true);
-  }, [loadEmailDetails, loadThread, splitMode]);
+    // Prefetch the next 4 emails so sequential reading never hits a cold load
+    const idx = filteredEmails.findIndex(e => e.id === email.id);
+    if (idx >= 0) filteredEmails.slice(idx + 1, idx + 5).forEach((e, i) => setTimeout(() => loadEmailDetails(e), (i + 1) * 100));
+  }, [loadEmailDetails, loadThread, splitMode, filteredEmails]);
 
   const onSelectThreadMessage = useCallback((msg) => {
     if(!selectedEmail?.accountId) return;
