@@ -846,15 +846,17 @@ const AllTheMail = () => {
     }
   }, [selectedEvent, eventEditFields, events, loadEventsForAccount]);
 
-  const loadDocPreview = useCallback(async (doc) => {
+  const loadDocPreview = useCallback(async (doc, opts = {}) => {
     if (!doc?.id || !doc?.accountId) return;
-    setDocPreviewLoading(true);
-    setDocPreview(null);
+    const silent = opts.silent === true;
+    if (!silent) { setDocPreviewLoading(true); setDocPreview(null); }
     try {
       const r = await fetch(`${API_BASE}/docs/${doc.accountId}/${doc.id}/preview`, { credentials: 'include' });
-      if (r.ok) { setDocPreview(await r.json()); } else { setDocPreview({ type: 'none' }); }
-    } catch { setDocPreview({ type: 'none' }); }
-    finally { setDocPreviewLoading(false); }
+      if (!silent) {
+        if (r.ok) { setDocPreview(await r.json()); } else { setDocPreview({ type: 'none' }); }
+      }
+    } catch { if (!silent) setDocPreview({ type: 'none' }); }
+    finally { if (!silent) setDocPreviewLoading(false); }
   }, []);
 
   const openSlideOverEmail = useCallback((email, index) => {
@@ -1112,6 +1114,18 @@ const AllTheMail = () => {
     shortcutsRef.current = { archiveEmail, trashEmail, openCompose, selectAllVisible };
   }, [archiveEmail, trashEmail, openCompose, selectAllVisible]);
 
+  // Prefetch the first 6 email bodies as soon as the list changes.
+  // Uses a ref so loadEmailDetails isn't a dependency (avoids re-trigger loop).
+  const _prefetchEmailRef = useRef(null);
+  useEffect(() => { _prefetchEmailRef.current = loadEmailDetails; }, [loadEmailDetails]);
+  useEffect(() => {
+    if (filteredEmails.length === 0) return;
+    const timers = filteredEmails.slice(0, 6).map((email, i) =>
+      setTimeout(() => _prefetchEmailRef.current?.(email), i * 120)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [filteredEmails]);
+
   // Persist snoozed emails to localStorage
   useEffect(() => { localStorage.setItem('atm_snoozed', JSON.stringify(snoozedEmails)); }, [snoozedEmails]);
 
@@ -1360,7 +1374,12 @@ const AllTheMail = () => {
           )}
           <div className="email-body-wrapper">
             {isLoadingBody ? (
-              <div style={{ padding: '80px 48px', textAlign: 'center', background: 'var(--email-bg)', color: 'var(--text-2)', fontSize: '0.9375rem', letterSpacing: '0.01em' }}>Loading message...</div>
+              <div style={{ padding: '32px', background: 'var(--email-bg)' }}>
+                {email.snippet
+                  ? <p style={{ color: 'rgba(0,0,0,0.45)', fontSize: '0.875rem', lineHeight: 1.7, margin: 0, fontStyle: 'italic' }}>{email.snippet}</p>
+                  : <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(0,0,0,0.35)', fontSize: '0.9375rem' }}>Loading…</div>
+                }
+              </div>
             ) : (
               <iframe title="Email content" ref={iframeRef}
                 sandbox="allow-same-origin allow-popups"
@@ -1647,7 +1666,7 @@ const AllTheMail = () => {
               const cs = isCascading && idx <= 23 ? { '--d': `${Math.min(idx + 8, 23) * 36}ms` } : {};
               const EvDocIcon = getDocIcon(doc.mimeType);
               return (
-                <div key={doc.id} className={`email-item${cc}`} onClick={() => openSlideOverDoc(doc, idx)} style={{ padding: '10px 16px', minHeight: '48px', cursor: 'pointer', ...cs }}>
+                <div key={doc.id} className={`email-item${cc}`} onMouseEnter={() => loadDocPreview(doc, { silent: true })} onClick={() => openSlideOverDoc(doc, idx)} style={{ padding: '10px 16px', minHeight: '48px', cursor: 'pointer', ...cs }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: '0 10px', alignItems: 'center' }}>
                     <div className="row-icon-slot" style={{ width: 24 }}><EvDocIcon size={14} strokeWidth={1.5} style={{ color: 'var(--text-2)' }} /></div>
                     <div style={{ minWidth: 0 }}>

@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 
 // Route modules
 import authRoutes from './routes/auth.js';
@@ -48,6 +49,8 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), billingR
 
 // Body parsing
 app.use(express.json());
+// Compress responses — email HTML bodies can be 50–200 KB uncompressed
+app.use(compression());
 app.use(cookieParser());
 
 // Rate limiting

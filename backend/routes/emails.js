@@ -12,6 +12,12 @@ const upload = multer({
 
 const router = Router();
 
+// In-memory cache for email bodies — keyed by `${accountId}:${messageId}`.
+// Emails are immutable once received, so a 30-minute TTL is safe.
+const _emailBodyCache = new Map();
+const EMAIL_BODY_CACHE_TTL_MS = 30 * 60 * 1000;
+const EMAIL_BODY_CACHE_MAX = 500;
+
 function getCategoryLabel(category) {
   const map = {
     primary: 'CATEGORY_PERSONAL',
@@ -234,6 +240,13 @@ router.get('/:accountId/:messageId', authenticateToken, async (req, res) => {
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
+    // Serve from cache if available
+    const _cacheKey = `${accountId}:${messageId}`;
+    const _cached = _emailBodyCache.get(_cacheKey);
+    if (_cached && _cached.expiresAt > Date.now()) {
+      return res.json(_cached.data);
+    }
+
     const client = await getOAuth2ClientForAccount(accountId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
@@ -247,18 +260,20 @@ router.get('/:accountId/:messageId', authenticateToken, async (req, res) => {
     const body = parseEmailBody(message.data.payload);
     const attachments = extractAttachmentMetadata(message.data.payload);
 
-    res.json({
-      body,
-      headers: {
-        from: headers.find(h => h.name === 'From')?.value,
-        to: headers.find(h => h.name === 'To')?.value,
-        cc: headers.find(h => h.name === 'Cc')?.value,
-        date: headers.find(h => h.name === 'Date')?.value,
-        subject: headers.find(h => h.name === 'Subject')?.value,
-        replyTo: headers.find(h => h.name === 'Reply-To')?.value
-      },
-      attachments
-    });
+    const fromHeader = headers.find(h => h.name === 'From')?.value;
+    const toHeader = headers.find(h => h.name === 'To')?.value;
+    const ccHeader = headers.find(h => h.name === 'Cc')?.value;
+    const dateHeader = headers.find(h => h.name === 'Date')?.value;
+    const subjectHeader = headers.find(h => h.name === 'Subject')?.value;
+    const replyToHeader = headers.find(h => h.name === 'Reply-To')?.value;
+
+    const _responseData = { body, headers: { from: fromHeader, to: toHeader, cc: ccHeader, date: dateHeader, subject: subjectHeader, replyTo: replyToHeader }, attachments };
+    // Store in cache (evict oldest entry if at capacity)
+    if (_emailBodyCache.size >= EMAIL_BODY_CACHE_MAX) {
+      _emailBodyCache.delete(_emailBodyCache.keys().next().value);
+    }
+    _emailBodyCache.set(_cacheKey, { data: _responseData, expiresAt: Date.now() + EMAIL_BODY_CACHE_TTL_MS });
+    return res.json(_responseData);
   } catch (error) {
     console.error('Get email detail error:', error);
     res.status(500).json({ error: 'Failed to get email details' });

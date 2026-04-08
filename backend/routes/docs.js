@@ -6,6 +6,11 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
+// In-memory cache for doc previews — 5-minute TTL (doc metadata can change).
+const _docPreviewCache = new Map();
+const DOC_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
+const DOC_PREVIEW_CACHE_MAX = 200;
+
 async function verifyAccountOwnership(accountId, userId) {
   const { data: account } = await supabase
     .from('gmail_accounts')
@@ -129,6 +134,13 @@ router.get('/:accountId/:fileId/preview', authenticateToken, async (req, res) =>
       return res.status(403).json({ error: 'missing_scope', service: 'docs' });
     }
 
+    // Serve from cache if available
+    const _previewCacheKey = `${accountId}:${fileId}`;
+    const _previewCached = _docPreviewCache.get(_previewCacheKey);
+    if (_previewCached && _previewCached.expiresAt > Date.now()) {
+      return res.json(_previewCached.data);
+    }
+
     const client = await getOAuth2ClientForAccount(accountId);
     const drive = google.drive({ version: 'v3', auth: client });
 
@@ -143,32 +155,26 @@ router.get('/:accountId/:fileId/preview', authenticateToken, async (req, res) =>
     // Drive's official embed URL — renders the full doc visually with pagination
     const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
 
+    let previewResponse;
+
     // Native Google Workspace files (Docs, Sheets, Slides) — use Drive embed iframe
     if (mimeType?.startsWith('application/vnd.google-apps.')) {
-      return res.json({
-        type: 'embed',
-        embedUrl,
-        thumbnail: thumbHi,
-        name: file.name,
-      });
-    }
-
+      previewResponse = { type: 'embed', embedUrl, thumbnail: thumbHi, name: file.name };
     // PDFs, images, and other binary files — Drive's embed iframe handles these too
-    if (mimeType === 'application/pdf' || mimeType?.startsWith('image/')) {
-      return res.json({
-        type: 'embed',
-        embedUrl,
-        thumbnail: thumbHi,
-        name: file.name,
-      });
-    }
-
+    } else if (mimeType === 'application/pdf' || mimeType?.startsWith('image/')) {
+      previewResponse = { type: 'embed', embedUrl, thumbnail: thumbHi, name: file.name };
     // Fallback: if there's a thumbnail, return it as a high-res image
-    if (thumbHi) {
-      return res.json({ type: 'thumbnail', url: thumbHi, name: file.name });
+    } else if (thumbHi) {
+      previewResponse = { type: 'thumbnail', url: thumbHi, name: file.name };
+    } else {
+      previewResponse = { type: 'none', name: file.name };
     }
 
-    return res.json({ type: 'none', name: file.name });
+    if (_docPreviewCache.size >= DOC_PREVIEW_CACHE_MAX) {
+      _docPreviewCache.delete(_docPreviewCache.keys().next().value);
+    }
+    _docPreviewCache.set(_previewCacheKey, { data: previewResponse, expiresAt: Date.now() + DOC_PREVIEW_CACHE_TTL_MS });
+    return res.json(previewResponse);
   } catch (err) {
     console.error('Doc preview error:', err?.message || err);
     if (err?.code === 403 || err?.response?.status === 403) {

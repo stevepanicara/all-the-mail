@@ -61,7 +61,21 @@ function decryptToken(encrypted) {
   return JSON.parse(decrypted);
 }
 
+// In-memory OAuth2 client cache — eliminates a Supabase roundtrip on every request.
+// TTL: 50 min (tokens expire at 60 min; refresh extends automatically via the 'tokens' event).
+const _clientCache = new Map(); // accountId → { client, expiresAt }
+const CLIENT_CACHE_TTL_MS = 50 * 60 * 1000;
+
+function invalidateClientCache(accountId) {
+  _clientCache.delete(accountId);
+}
+
 async function getOAuth2ClientForAccount(accountId) {
+  const cached = _clientCache.get(accountId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.client;
+  }
+
   const { data: account, error } = await supabase
     .from('gmail_accounts')
     .select('*')
@@ -84,13 +98,15 @@ async function getOAuth2ClientForAccount(accountId) {
     }
     tokens.access_token = newTokens.access_token;
     tokens.expiry_date = newTokens.expiry_date;
-
+    // Extend cache TTL on refresh
+    _clientCache.set(accountId, { client, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
     await supabase
       .from('gmail_accounts')
       .update({ encrypted_tokens: encryptToken(tokens) })
       .eq('id', accountId);
   });
 
+  _clientCache.set(accountId, { client, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
   return client;
 }
 
@@ -104,4 +120,5 @@ export {
   encryptToken,
   decryptToken,
   getOAuth2ClientForAccount,
+  invalidateClientCache,
 };
