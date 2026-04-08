@@ -1490,12 +1490,10 @@ const AllTheMail = () => {
             </button>
             {selectedCount > 0 && <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{selectedCount} selected</span>}
           </div>
-          {selectedCount > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} title="Archive selected" style={{ padding: '4px 10px', fontSize: 11 }}><Archive size={13} /> Archive</button>
-              <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} title="Delete selected" style={{ padding: '4px 10px', fontSize: 11 }}><Trash2 size={13} /> Delete</button>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, visibility: selectedCount > 0 ? 'visible' : 'hidden' }}>
+            <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} title="Archive selected" style={{ padding: '4px 10px', fontSize: 11 }}><Archive size={13} /> Archive</button>
+            <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} title="Delete selected" style={{ padding: '4px 10px', fontSize: 11 }}><Trash2 size={13} /> Delete</button>
+          </div>
         </div>
       </div>
       {isLoadingEmails && filteredEmails.length === 0 ? (
@@ -1569,7 +1567,7 @@ const AllTheMail = () => {
               ) : (
                 <div className="email-row-grid">
                   <button className={`email-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => { e.stopPropagation(); toggleSelectId(email.id); }} title={isSelected ? 'Deselect' : 'Select'}>
-                    {isSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+                    <span className="checkbox-box" />
                   </button>
                   <div className="sender-avatar-wrap">
                     <SenderAvatar from={email.from || ''} size={32} />

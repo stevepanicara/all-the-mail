@@ -1057,22 +1057,30 @@ body {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  color: var(--text-2);
-  opacity: 0.30;
-  transition: opacity var(--t-micro) var(--ease);
 }
 
-.email-checkbox.checked {
+.checkbox-box {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  border: 1.5px solid var(--text-3);
+  background: transparent;
+  transition: background var(--t-micro) var(--ease), border-color var(--t-micro) var(--ease);
+  opacity: 0.35;
+}
+
+.email-item:hover .checkbox-box {
+  opacity: 0.7;
+}
+
+.email-checkbox.checked .checkbox-box {
+  background: var(--accent);
+  border-color: var(--accent);
   opacity: 1;
-  color: var(--accent);
 }
 
-.email-item:hover .email-checkbox {
-  opacity: 0.65;
-}
-
-.email-item:hover .email-checkbox.checked,
-.email-checkbox.checked {
+.email-item:hover .email-checkbox.checked .checkbox-box {
   opacity: 1;
 }
 
