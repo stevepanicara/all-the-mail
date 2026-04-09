@@ -2400,8 +2400,19 @@ const AllTheMail = () => {
                     </div>
                   ) : (
                     <div className="email-body-wrapper" style={{ borderRadius: '8px', overflow: 'hidden' }}>
-                      <iframe title="Email preview" srcDoc={buildEmailSrcDoc(body)} style={{ width: '100%', border: 'none', minHeight: '300px', background: 'var(--email-bg)' }} sandbox="allow-same-origin allow-popups"
-                        onLoad={e => { try { const h = e.target.contentDocument?.body?.scrollHeight; if (h) e.target.style.height = h + 'px'; } catch {} }} />
+                      <iframe title="Email preview" srcDoc={buildEmailSrcDoc(body)}
+                        scrolling="no"
+                        sandbox="allow-same-origin allow-popups"
+                        style={{ width: '100%', border: 'none', display: 'block', background: 'var(--email-bg)', minHeight: '120px' }}
+                        onLoad={e => {
+                          const iframe = e.target;
+                          if (!iframe?.contentDocument?.body) return;
+                          const resize = () => { try { const h = iframe.contentDocument.body.scrollHeight; if (h > 0) iframe.style.height = h + 'px'; } catch(_) {} };
+                          resize();
+                          [100, 400, 1000, 2000].forEach(ms => setTimeout(resize, ms));
+                          try { Array.from(iframe.contentDocument.images || []).forEach(img => { if (!img.complete) img.addEventListener('load', resize); }); } catch(_) {}
+                          try { const ro = new ResizeObserver(resize); ro.observe(iframe.contentDocument.body); } catch(_) {}
+                        }} />
                     </div>
                   )}
                 </div>
