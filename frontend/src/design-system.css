@@ -347,8 +347,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
 }
 
-/* Light mode logo — invert white logo to dark */
-[data-theme="light"] .top-bar-logo,
+/* Light mode loading logo */
 [data-theme="light"] .app-loading-logo {
   filter: invert(1) hue-rotate(180deg);
 }
@@ -517,14 +516,39 @@ body {
   background: transparent;
 }
 
-.top-bar-logo {
-  height: 24px;
-  width: auto;
-  margin-right: 24px;
-  opacity: 0.92;
+/* ==========================================================
+   TOP BAR WORDMARK — ALL THE [MODULE]
+========================================================== */
+.top-bar-wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-right: 20px;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
-/* Module tabs: Mail / Docs / Cals */
+.wordmark-static {
+  color: var(--text-3);
+}
+
+.wordmark-module {
+  color: var(--text-0);
+  display: inline-block;
+  animation: wordIn 160ms var(--ease) both;
+}
+
+@keyframes wordIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Module tabs: icon-only switcher */
 .module-tabs {
   display: flex;
   align-items: stretch;
@@ -534,18 +558,14 @@ body {
 
 .module-tab {
   cursor: pointer;
-  padding: 0 16px;
+  padding: 0 11px;
   border: none;
   background: transparent;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   position: relative;
-  font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-2);
-  letter-spacing: 0;
+  color: var(--text-3);
   transition: color var(--t-micro) var(--ease);
 }
 
@@ -554,15 +574,15 @@ body {
 }
 
 .module-tab.active {
-  color: var(--text-0);
+  color: var(--accent);
 }
 
 .module-tab.active::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 16px;
-  right: 16px;
+  left: 8px;
+  right: 8px;
   height: 2px;
   background: var(--accent);
   border-radius: 1px;

@@ -2178,12 +2178,14 @@ const AllTheMail = () => {
         const target = document.querySelector('.email-list, .ev-col-body, .gcal-body, .ev-mobile-unified-wrap.active');
         if (target) target.scrollTo({ top: 0, behavior: 'smooth' });
       }}>
-        <img src="/logo-horizontal.svg" alt="All the mail" className="top-bar-logo" />
+        <div className="top-bar-wordmark" aria-live="polite" aria-atomic="true">
+          <span className="wordmark-static">ALL THE </span><span className="wordmark-module" key={activeModule}>{{ everything: 'EVERYTHING', mail: 'MAIL', docs: 'DOCS', cals: 'CALS' }[activeModule]}</span>
+        </div>
         <nav className="module-tabs" role="navigation" aria-label="Main navigation">
-          <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')} aria-current={activeModule==='everything' ? 'page' : undefined}><LayoutGrid size={15} strokeWidth={1.5} /> Everything</button>
-          <button className={`module-tab${activeModule==='mail'?' active':''}`} onClick={()=>setActiveModule('mail')} aria-current={activeModule==='mail' ? 'page' : undefined}><Mail size={15} strokeWidth={1.5} /> Mail</button>
-          <button className={`module-tab${activeModule==='docs'?' active':''}`} onClick={()=>setActiveModule('docs')} aria-current={activeModule==='docs' ? 'page' : undefined}><FileText size={15} strokeWidth={1.5} /> Docs</button>
-          <button className={`module-tab${activeModule==='cals'?' active':''}`} onClick={()=>setActiveModule('cals')} aria-current={activeModule==='cals' ? 'page' : undefined}><Calendar size={15} strokeWidth={1.5} /> Cals</button>
+          <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')} aria-current={activeModule==='everything' ? 'page' : undefined} aria-label="Everything"><LayoutGrid size={15} strokeWidth={1.5} /></button>
+          <button className={`module-tab${activeModule==='mail'?' active':''}`} onClick={()=>setActiveModule('mail')} aria-current={activeModule==='mail' ? 'page' : undefined} aria-label="Mail"><Mail size={15} strokeWidth={1.5} /></button>
+          <button className={`module-tab${activeModule==='docs'?' active':''}`} onClick={()=>setActiveModule('docs')} aria-current={activeModule==='docs' ? 'page' : undefined} aria-label="Docs"><FileText size={15} strokeWidth={1.5} /></button>
+          <button className={`module-tab${activeModule==='cals'?' active':''}`} onClick={()=>setActiveModule('cals')} aria-current={activeModule==='cals' ? 'page' : undefined} aria-label="Calendar"><Calendar size={15} strokeWidth={1.5} /></button>
         </nav>
         <div className="module-divider" />
         <div className={`account-rail${fadeLeft ? ' fade-left' : ''}${fadeRight ? ' fade-right' : ''}`}>
