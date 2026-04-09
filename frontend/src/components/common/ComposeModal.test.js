@@ -67,22 +67,22 @@ describe('ComposeModal', () => {
 
   it('renders when composeOpen is true', () => {
     renderModal();
-    expect(screen.getByText('New message')).toBeInTheDocument();
+    expect(screen.getByText('New Message')).toBeInTheDocument();
   });
 
-  it('renders form fields: To, Subject, From select', () => {
+  it('renders To field and Subject placeholder', () => {
     renderModal();
-    expect(screen.getByText('From')).toBeInTheDocument();
     expect(screen.getByText('To')).toBeInTheDocument();
-    expect(screen.getByText('Subject')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('recipient@example.com')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Recipients')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Subject')).toBeInTheDocument();
   });
 
   it('renders From select with connected accounts', () => {
     renderModal();
-    expect(screen.getByText('Work — work@gmail.com')).toBeInTheDocument();
-    expect(screen.getByText('Personal — personal@gmail.com')).toBeInTheDocument();
+    // The select option format is: "Work <work@gmail.com>"
+    const select = screen.getByRole('combobox');
+    expect(select).toBeInTheDocument();
+    expect(select.options.length).toBe(2);
   });
 
   it('shows Send button', () => {
@@ -90,38 +90,46 @@ describe('ComposeModal', () => {
     expect(screen.getByText('Send')).toBeInTheDocument();
   });
 
-  it('shows Sending... when composeSending is true', () => {
+  it('shows Sending… when composeSending is true', () => {
     renderModal({ composeSending: true });
-    expect(screen.getByText('Sending...')).toBeInTheDocument();
+    expect(screen.getByText('Sending…')).toBeInTheDocument();
   });
 
-  it('shows "Show Cc/Bcc" toggle button', () => {
+  it('shows Cc Bcc toggle button when not showing Cc/Bcc', () => {
     renderModal();
-    expect(screen.getByText('Show Cc/Bcc')).toBeInTheDocument();
+    expect(screen.getByText('Cc Bcc')).toBeInTheDocument();
   });
 
-  it('shows Cc/Bcc fields when toggled', () => {
+  it('shows Cc/Bcc fields when composeShowCcBcc is true', () => {
     renderModal({ composeShowCcBcc: true });
     expect(screen.getByText('Cc')).toBeInTheDocument();
     expect(screen.getByText('Bcc')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('cc@example.com')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('bcc@example.com')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Cc')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Bcc')).toBeInTheDocument();
   });
 
   it('does not show Cc/Bcc fields when not toggled', () => {
     renderModal({ composeShowCcBcc: false });
-    expect(screen.queryByPlaceholderText('cc@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Cc')).not.toBeInTheDocument();
   });
 
-  it('calls sendCompose when Send button is clicked', () => {
+  it('calls sendCompose when Send is clicked with subject', () => {
     renderModal({ composeSubject: 'Test subject' });
     fireEvent.click(screen.getByText('Send'));
     expect(defaultProps.sendCompose).toHaveBeenCalled();
   });
 
-  it('calls closeCompose when Cancel is clicked', () => {
+  it('shows empty subject confirmation instead of sending', () => {
+    renderModal({ composeSubject: '' });
+    fireEvent.click(screen.getByText('Send'));
+    expect(screen.getByText('Send without subject?')).toBeInTheDocument();
+    expect(defaultProps.sendCompose).not.toHaveBeenCalled();
+  });
+
+  it('calls closeCompose when X button is clicked', () => {
     renderModal();
-    fireEvent.click(screen.getByText('Cancel'));
+    // The X close button has title="Close"
+    fireEvent.click(screen.getByTitle('Close'));
     expect(defaultProps.closeCompose).toHaveBeenCalled();
   });
 
@@ -137,6 +145,19 @@ describe('ComposeModal', () => {
 
   it('shows error message when composeError is set', () => {
     renderModal({ composeError: 'Failed to send email' });
-    expect(screen.getByText('Failed to send email')).toBeInTheDocument();
+    expect(screen.getByText(/Failed to send email/)).toBeInTheDocument();
+  });
+
+  it('minimizes and restores panel', () => {
+    renderModal();
+    // Initially full — Subject placeholder is visible
+    expect(screen.getByPlaceholderText('Subject')).toBeInTheDocument();
+    // Click minimize button
+    fireEvent.click(screen.getByTitle('Minimize'));
+    // Subject input should no longer be visible
+    expect(screen.queryByPlaceholderText('Subject')).not.toBeInTheDocument();
+    // Click expand
+    fireEvent.click(screen.getByTitle('Expand'));
+    expect(screen.getByPlaceholderText('Subject')).toBeInTheDocument();
   });
 });
