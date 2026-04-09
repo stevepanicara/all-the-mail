@@ -298,7 +298,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, #8b7cff, #4DE6FF);
+  background: #8b7cff;
 }
 
 .app-preview-avatar {
@@ -528,7 +528,7 @@
 }
 
 .l-mock {
-  background: #0a0a0a;
+  background: #0f141b;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   overflow: hidden;
@@ -818,7 +818,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, #8b7cff, #4DE6FF);
+  background: #8b7cff;
 }
 
 .hiw-avatar {

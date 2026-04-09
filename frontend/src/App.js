@@ -1307,27 +1307,27 @@ const AllTheMail = () => {
       <div className="reader-root" key={email.id} onScroll={handleReaderScroll} ref={readerScrollRef}>
         <div className="reader-toolbar">
           <div className="reader-toolbar-left">
-            {isFullPage && (<button className="reader-toolbar-btn" onClick={goBackToList} title="Back to inbox"><ArrowLeft size={16} strokeWidth={1.5} /></button>)}
-            <button className="reader-toolbar-btn" onClick={() => archiveEmail(email)} title="Archive"><Archive size={16} strokeWidth={1.5} /></button>
-            <button className="reader-toolbar-btn danger" onClick={() => trashEmail(email)} title="Delete"><Trash2 size={16} strokeWidth={1.5} /></button>
+            {isFullPage && (<button className="reader-toolbar-btn" onClick={goBackToList} title="Back to inbox" aria-label="Back to inbox"><ArrowLeft size={16} strokeWidth={1.5} /></button>)}
+            <button className="reader-toolbar-btn" onClick={() => archiveEmail(email)} title="Archive" aria-label="Archive email"><Archive size={16} strokeWidth={1.5} /></button>
+            <button className="reader-toolbar-btn danger" onClick={() => trashEmail(email)} title="Delete" aria-label="Delete email"><Trash2 size={16} strokeWidth={1.5} /></button>
             <div style={{ position: 'relative' }}>
-              <button className="reader-toolbar-btn" onClick={() => setSnoozeDropdownEmailId(prev => prev === email.id ? null : email.id)} title="Snooze"><Clock size={16} strokeWidth={1.5} /></button>
+              <button className="reader-toolbar-btn" onClick={() => setSnoozeDropdownEmailId(prev => prev === email.id ? null : email.id)} title="Snooze" aria-label="Snooze email" aria-expanded={snoozeDropdownEmailId === email.id} aria-haspopup="true"><Clock size={16} strokeWidth={1.5} /></button>
               {snoozeDropdownEmailId === email.id && (
-                <div onMouseDown={e => e.stopPropagation()} className="dropdown-menu">
+                <div onMouseDown={e => e.stopPropagation()} className="dropdown-menu" role="menu">
                   {getSnoozeOptions().map(opt => (
-                    <button key={opt.label} className="dropdown-item" onClick={() => snoozeEmail(email, opt.time)}>
+                    <button key={opt.label} className="dropdown-item" role="menuitem" onClick={() => snoozeEmail(email, opt.time)}>
                       {opt.label}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button className="reader-toolbar-btn" title="More"><MoreHorizontal size={16} strokeWidth={1.5} /></button>
+            <button className="reader-toolbar-btn" title="More actions" aria-label="More actions" aria-haspopup="true"><MoreHorizontal size={16} strokeWidth={1.5} /></button>
           </div>
           <div className="reader-toolbar-right">
-            <button className="reader-toolbar-btn" onClick={navigatePrev} disabled={emailIdx <= 0} title="Previous"><ChevronLeft size={16} strokeWidth={1.5} /></button>
-            <span className="reader-toolbar-count">{emailIdx >= 0 ? emailIdx + 1 : '–'} of {emailCount}</span>
-            <button className="reader-toolbar-btn" onClick={navigateNext} disabled={emailIdx >= emailCount - 1} title="Next"><ChevronRight size={16} strokeWidth={1.5} /></button>
+            <button className="reader-toolbar-btn" onClick={navigatePrev} disabled={emailIdx <= 0} title="Previous email" aria-label="Previous email"><ChevronLeft size={16} strokeWidth={1.5} /></button>
+            <span className="reader-toolbar-count" aria-live="polite" aria-atomic="true">{emailIdx >= 0 ? emailIdx + 1 : '–'} of {emailCount}</span>
+            <button className="reader-toolbar-btn" onClick={navigateNext} disabled={emailIdx >= emailCount - 1} title="Next email" aria-label="Next email"><ChevronRight size={16} strokeWidth={1.5} /></button>
           </div>
         </div>
         <div className={`reader-content${readerCompact ? ' reader--compact' : ''}`}>
@@ -1354,9 +1354,9 @@ const AllTheMail = () => {
             </button>
           </div>
           <div className="reader-actions-row">
-            <button className="reader-action-icon" onClick={() => openCompose('reply', email)} title="Reply"><Reply size={16} strokeWidth={1.5} /></button>
-            <button className="reader-action-icon" onClick={() => openCompose('replyAll', email)} title="Reply all"><Users size={16} strokeWidth={1.5} /></button>
-            <button className="reader-action-icon" onClick={() => openCompose('forward', email)} title="Forward"><Forward size={16} strokeWidth={1.5} /></button>
+            <button className="reader-action-icon" onClick={() => openCompose('reply', email)} title="Reply" aria-label="Reply"><Reply size={16} strokeWidth={1.5} /></button>
+            <button className="reader-action-icon" onClick={() => openCompose('replyAll', email)} title="Reply all" aria-label="Reply all"><Users size={16} strokeWidth={1.5} /></button>
+            <button className="reader-action-icon" onClick={() => openCompose('forward', email)} title="Forward" aria-label="Forward"><Forward size={16} strokeWidth={1.5} /></button>
           </div>
           {email.threadId && selectedThread?.messages?.length > 1 && (
             <div style={{ border: '1px solid var(--line)', background: 'var(--bg-1)', padding: 12, marginBottom: 24, borderRadius: '8px' }}>
@@ -2174,17 +2174,17 @@ const AllTheMail = () => {
   return (
     <div className={`app-container${introActive ? ' intro' : ''}`}>
       {/* Top bar */}
-      <div className="top-bar" onDoubleClick={() => {
+      <header className="top-bar" onDoubleClick={() => {
         const target = document.querySelector('.email-list, .ev-col-body, .gcal-body, .ev-mobile-unified-wrap.active');
         if (target) target.scrollTo({ top: 0, behavior: 'smooth' });
       }}>
         <img src="/logo-horizontal.svg" alt="All the mail" className="top-bar-logo" />
-        <div className="module-tabs">
-          <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')}><LayoutGrid size={15} strokeWidth={1.5} /> Everything</button>
-          <button className={`module-tab${activeModule==='mail'?' active':''}`} onClick={()=>setActiveModule('mail')}><Mail size={15} strokeWidth={1.5} /> Mail</button>
-          <button className={`module-tab${activeModule==='docs'?' active':''}`} onClick={()=>setActiveModule('docs')}><FileText size={15} strokeWidth={1.5} /> Docs</button>
-          <button className={`module-tab${activeModule==='cals'?' active':''}`} onClick={()=>setActiveModule('cals')}><Calendar size={15} strokeWidth={1.5} /> Cals</button>
-        </div>
+        <nav className="module-tabs" role="navigation" aria-label="Main navigation">
+          <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')} aria-current={activeModule==='everything' ? 'page' : undefined}><LayoutGrid size={15} strokeWidth={1.5} /> Everything</button>
+          <button className={`module-tab${activeModule==='mail'?' active':''}`} onClick={()=>setActiveModule('mail')} aria-current={activeModule==='mail' ? 'page' : undefined}><Mail size={15} strokeWidth={1.5} /> Mail</button>
+          <button className={`module-tab${activeModule==='docs'?' active':''}`} onClick={()=>setActiveModule('docs')} aria-current={activeModule==='docs' ? 'page' : undefined}><FileText size={15} strokeWidth={1.5} /> Docs</button>
+          <button className={`module-tab${activeModule==='cals'?' active':''}`} onClick={()=>setActiveModule('cals')} aria-current={activeModule==='cals' ? 'page' : undefined}><Calendar size={15} strokeWidth={1.5} /> Cals</button>
+        </nav>
         <div className="module-divider" />
         <div className={`account-rail${fadeLeft ? ' fade-left' : ''}${fadeRight ? ' fade-right' : ''}`}>
           <div className="account-rail-scroll" ref={railScrollRef} onScroll={updateRailFades}>
@@ -2217,29 +2217,29 @@ const AllTheMail = () => {
           )}
           {activeModule === 'mail' && (
             <>
-              <button className="toolbar-btn" onClick={() => { if (activeView === 'everything') connectedAccounts.forEach(a => loadEmailsForAccount(a.id, activeCategory)); else loadEmailsForAccount(activeView, activeCategory); refreshEmails(); }} title="Refresh">
+              <button className="toolbar-btn" onClick={() => { if (activeView === 'everything') connectedAccounts.forEach(a => loadEmailsForAccount(a.id, activeCategory)); else loadEmailsForAccount(activeView, activeCategory); refreshEmails(); }} title="Refresh" aria-label="Refresh email">
                 <RefreshCw size={15} strokeWidth={1.5} className={(isLoadingEmails || isCheckingMail) ? 'animate-spin' : ''} />
               </button>
               <div className="module-divider" />
-              <button className={`toolbar-btn${splitMode==='none'?' toolbar-active':''}`} onClick={()=>{setSplitMode('none');setFullPageReaderOpen(false);}} title="No split"><SplitNoneIcon /></button>
-              <button className={`toolbar-btn${splitMode==='vertical'?' toolbar-active':''}`} onClick={()=>{setSplitMode('vertical');setFullPageReaderOpen(false);}} title="Vertical split"><SplitVerticalIcon /></button>
-              <button className={`toolbar-btn${splitMode==='horizontal'?' toolbar-active':''}`} onClick={()=>{setSplitMode('horizontal');setFullPageReaderOpen(false);}} title="Horizontal split"><SplitHorizontalIcon /></button>
+              <button className={`toolbar-btn${splitMode==='none'?' toolbar-active':''}`} onClick={()=>{setSplitMode('none');setFullPageReaderOpen(false);}} title="No split" aria-label="No split" aria-pressed={splitMode==='none'}><SplitNoneIcon /></button>
+              <button className={`toolbar-btn${splitMode==='vertical'?' toolbar-active':''}`} onClick={()=>{setSplitMode('vertical');setFullPageReaderOpen(false);}} title="Vertical split" aria-label="Vertical split" aria-pressed={splitMode==='vertical'}><SplitVerticalIcon /></button>
+              <button className={`toolbar-btn${splitMode==='horizontal'?' toolbar-active':''}`} onClick={()=>{setSplitMode('horizontal');setFullPageReaderOpen(false);}} title="Horizontal split" aria-label="Horizontal split" aria-pressed={splitMode==='horizontal'}><SplitHorizontalIcon /></button>
               <div className="module-divider" />
-              <button className="toolbar-btn" onClick={cycleDensity} title={`Density: ${densityMode}`}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+              <button className="toolbar-btn" onClick={cycleDensity} title={`Density: ${densityMode}`} aria-label={`Email density: ${densityMode}`}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
               </button>
               <div className="module-divider" />
-              <button className={`toolbar-btn${conversationView?' toolbar-active':''}`} onClick={()=>setConversationView(v=>!v)} title={conversationView ? 'Conversation view on' : 'Conversation view off'}>
+              <button className={`toolbar-btn${conversationView?' toolbar-active':''}`} onClick={()=>setConversationView(v=>!v)} title={conversationView ? 'Conversation view on' : 'Conversation view off'} aria-label={conversationView ? 'Conversation view on' : 'Conversation view off'} aria-pressed={conversationView}>
                 <MessagesSquare size={15} strokeWidth={1.5} />
               </button>
             </>
           )}
-          <button className="toolbar-btn theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ marginLeft: '4px' }}>
-            <span className={`theme-icon${theme === 'dark' ? ' theme-icon-active' : ''}`}><Sun size={15} strokeWidth={1.5} /></span>
-            <span className={`theme-icon${theme === 'light' ? ' theme-icon-active' : ''}`}><Moon size={15} strokeWidth={1.5} /></span>
+          <button className="toolbar-btn theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ marginLeft: '4px' }}>
+            <span className={`theme-icon${theme === 'dark' ? ' theme-icon-active' : ''}`} aria-hidden="true"><Sun size={15} strokeWidth={1.5} /></span>
+            <span className={`theme-icon${theme === 'light' ? ' theme-icon-active' : ''}`} aria-hidden="true"><Moon size={15} strokeWidth={1.5} /></span>
           </button>
           <div style={{ position: 'relative', marginLeft: '4px' }}>
-            <button ref={avatarButtonRef} className="avatar-btn" onClick={() => { setAvatarDropdownOpen(o => !o); setRemovingAccountId(null); }} title="Account menu">
+            <button ref={avatarButtonRef} className="avatar-btn" onClick={() => { setAvatarDropdownOpen(o => !o); setRemovingAccountId(null); }} title="Account menu" aria-label="Account menu" aria-expanded={avatarDropdownOpen} aria-haspopup="true">
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: connectedAccounts.length > 0 ? getAccountGradient(0).gradient : 'var(--bg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
                 {(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
               </div>
@@ -2310,10 +2310,10 @@ const AllTheMail = () => {
             )}
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main content */}
-      <div className="main-content">
+      <main className="main-content" role="main">
         <ErrorBoundary>
           {activeModule === 'everything' && renderEverything()}
           {activeModule === 'cals' && renderCalsModule()}
@@ -2324,7 +2324,7 @@ const AllTheMail = () => {
             </PanelGroup>
           )}
         </ErrorBoundary>
-      </div>
+      </main>
 
       {/* Compose modal */}
       <ComposeModal

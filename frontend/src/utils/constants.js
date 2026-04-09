@@ -1,14 +1,14 @@
 export const API_BASE = process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 export const GRADIENT_PRESETS = [
-  { key: 'purple-red',    g0: '#6C4CFF', g1: '#FF4C8B' },
-  { key: 'cyan-green',    g0: '#00E5FF', g1: '#00FF94' },
+  { key: 'violet-rose',   g0: '#7C6BF0', g1: '#E05A9A' },
+  { key: 'amber-red',     g0: '#F59E0B', g1: '#EF4444' },
   { key: 'yellow-orange', g0: '#FFD84D', g1: '#FF8C2B' },
   { key: 'orange-red',    g0: '#FF8C42', g1: '#FF3B3B' },
-  { key: 'violet-cyan',   g0: '#7A5CFF', g1: '#4DE6FF' },
-  { key: 'pink-orange',   g0: '#FF4FB6', g1: '#FFB24D' },
-  { key: 'green-yellow',  g0: '#00FF94', g1: '#FFD84D' },
-  { key: 'blue-purple',   g0: '#3B82F6', g1: '#A855F7' },
+  { key: 'rose-amber',    g0: '#FB7185', g1: '#FBBF24' },
+  { key: 'sage-teal',     g0: '#6EE7B7', g1: '#0D9488' },
+  { key: 'slate-indigo',  g0: '#94A3B8', g1: '#6366F1' },
+  { key: 'terracotta',    g0: '#C2614F', g1: '#E8956D' },
 ];
 
 export const DENSITY_HEIGHTS = { default: 56, comfortable: 64, compact: 46 };
