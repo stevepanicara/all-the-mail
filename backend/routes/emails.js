@@ -232,6 +232,63 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
   }
 });
 
+// Batch fetch email bodies — up to 25 in parallel, serves cache first
+router.post('/:accountId/batch-bodies', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { messageIds } = req.body;
+    if (!Array.isArray(messageIds) || messageIds.length === 0) return res.json({ bodies: {} });
+
+    const account = await verifyAccountOwnership(accountId, req.userId);
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    const results = {};
+    const uncachedIds = [];
+
+    for (const msgId of messageIds.slice(0, 25)) {
+      const key = `${accountId}:${msgId}`;
+      const cached = _emailBodyCache.get(key);
+      if (cached && cached.expiresAt > Date.now()) {
+        results[msgId] = cached.data;
+      } else {
+        uncachedIds.push(msgId);
+      }
+    }
+
+    if (uncachedIds.length > 0) {
+      const client = await getOAuth2ClientForAccount(accountId);
+      const gmail = google.gmail({ version: 'v1', auth: client });
+
+      await Promise.all(uncachedIds.map(async (msgId) => {
+        try {
+          const msg = await gmail.users.messages.get({ userId: 'me', id: msgId, format: 'full' });
+          const hdrs = msg.data.payload.headers;
+          const data = {
+            body: parseEmailBody(msg.data.payload),
+            headers: {
+              from: hdrs.find(h => h.name === 'From')?.value,
+              to: hdrs.find(h => h.name === 'To')?.value,
+              cc: hdrs.find(h => h.name === 'Cc')?.value,
+              date: hdrs.find(h => h.name === 'Date')?.value,
+              subject: hdrs.find(h => h.name === 'Subject')?.value,
+              replyTo: hdrs.find(h => h.name === 'Reply-To')?.value,
+            },
+            attachments: extractAttachmentMetadata(msg.data.payload),
+          };
+          if (_emailBodyCache.size >= EMAIL_BODY_CACHE_MAX) _emailBodyCache.delete(_emailBodyCache.keys().next().value);
+          _emailBodyCache.set(`${accountId}:${msgId}`, { data, expiresAt: Date.now() + EMAIL_BODY_CACHE_TTL_MS });
+          results[msgId] = data;
+        } catch (_) { /* skip individual failures */ }
+      }));
+    }
+
+    return res.json({ bodies: results });
+  } catch (err) {
+    console.error('Batch email bodies error:', err);
+    res.status(500).json({ error: 'Failed to batch fetch' });
+  }
+});
+
 // Get email detail
 router.get('/:accountId/:messageId', authenticateToken, async (req, res) => {
   try {

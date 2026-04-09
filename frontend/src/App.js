@@ -69,6 +69,9 @@ const AllTheMail = () => {
   const [evCalsFilter, setEvCalsFilter] = useState('upcoming');
   const [evMobileTab, setEvMobileTab] = useState('all');
   const swipeRef = useRef({ startX: 0, startY: 0, currentX: 0, emailId: null });
+  // Refs that always hold the latest cached bodies/headers — avoids stale closures
+  const emailBodiesRef = useRef({});
+  const emailHeadersRef = useRef({});
 
   const [connectedAccounts, setConnectedAccounts] = useState([]);
   const [activeView, setActiveView] = useState(() => {
@@ -87,6 +90,9 @@ const AllTheMail = () => {
 
   const [emailBodies, setEmailBodies] = useState({});
   const [emailHeaders, setEmailHeaders] = useState({});
+  // Keep refs in sync so callbacks always see the latest cached values
+  useEffect(() => { emailBodiesRef.current = emailBodies; }, [emailBodies]);
+  useEffect(() => { emailHeadersRef.current = emailHeaders; }, [emailHeaders]);
   const [emailAttachments, setEmailAttachments] = useState({});
 
   const [isLoadingEmails, setIsLoadingEmails] = useState(false);
@@ -732,7 +738,7 @@ const AllTheMail = () => {
 
   const loadEmailDetails = useCallback(async (email) => {
     if(!email?.id) return; const eid=email.id;
-    if(emailBodies[eid]&&emailHeaders[eid]) return;
+    if(emailBodiesRef.current[eid]&&emailHeadersRef.current[eid]) return;
     setIsLoadingBody(true);
     try {
       const aid=email.accountId||connectedAccounts[0]?.id; if(!aid) return;
@@ -749,7 +755,7 @@ const AllTheMail = () => {
       } else if(r.status===401){setIsAuthed(false);setConnectedAccounts([]);setEmails({});setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setEmailBodies({});setEmailHeaders({});setEditMode(false);setSelectedIds(new Set());return;}
     } catch(err){console.error('Error loading email body:',err);}
     finally{setIsLoadingBody(false);}
-  }, [emailBodies, emailHeaders, connectedAccounts]);
+  }, [connectedAccounts]);
 
   const downloadAttachment = useCallback(async (accountId, messageId, attachmentId, filename, mimeType) => {
     try {
@@ -1129,16 +1135,49 @@ const AllTheMail = () => {
     shortcutsRef.current = { archiveEmail, trashEmail, openCompose, selectAllVisible };
   }, [archiveEmail, trashEmail, openCompose, selectAllVisible]);
 
-  // Prefetch the first 6 email bodies as soon as the list changes.
-  // Uses a ref so loadEmailDetails isn't a dependency (avoids re-trigger loop).
-  const _prefetchEmailRef = useRef(null);
-  useEffect(() => { _prefetchEmailRef.current = loadEmailDetails; }, [loadEmailDetails]);
+  // Batch-prefetch the visible inbox — one HTTP request warms up to 25 emails in parallel.
+  // Fires 400ms after the list settles so it doesn't race the initial render.
   useEffect(() => {
     if (filteredEmails.length === 0) return;
-    const timers = filteredEmails.slice(0, 6).map((email, i) =>
-      setTimeout(() => _prefetchEmailRef.current?.(email), i * 120)
-    );
-    return () => timers.forEach(clearTimeout);
+
+    // Group uncached emails by account
+    const byAccount = {};
+    filteredEmails.slice(0, 25).forEach(email => {
+      if (emailBodiesRef.current[email.id] && emailHeadersRef.current[email.id]) return;
+      const aid = email.accountId;
+      if (!aid) return;
+      if (!byAccount[aid]) byAccount[aid] = [];
+      byAccount[aid].push(email.id);
+    });
+
+    if (Object.keys(byAccount).length === 0) return;
+
+    const timer = setTimeout(() => {
+      Object.entries(byAccount).forEach(([accountId, ids]) => {
+        fetch(`${API_BASE}/emails/${accountId}/batch-bodies`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageIds: ids }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (!d?.bodies) return;
+            const bodyMap = {}, headerMap = {}, attachMap = {};
+            Object.entries(d.bodies).forEach(([id, data]) => {
+              bodyMap[id] = data.body;
+              headerMap[id] = data.headers;
+              attachMap[id] = data.attachments || [];
+            });
+            setEmailBodies(p => ({ ...p, ...bodyMap }));
+            setEmailHeaders(p => ({ ...p, ...headerMap }));
+            setEmailAttachments(p => ({ ...p, ...attachMap }));
+          })
+          .catch(() => {});
+      });
+    }, 400);
+
+    return () => clearTimeout(timer);
   }, [filteredEmails]);
 
   // Persist snoozed emails to localStorage
