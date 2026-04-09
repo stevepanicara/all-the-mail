@@ -18,6 +18,11 @@ const _emailBodyCache = new Map();
 const EMAIL_BODY_CACHE_TTL_MS = 30 * 60 * 1000;
 const EMAIL_BODY_CACHE_MAX = 500;
 
+// Cache account ownership checks — eliminates a Supabase roundtrip on every
+// cached-email request, making repeated loads near-instant.
+const _accountOwnerCache = new Map(); // `${accountId}:${userId}` → { account, expiresAt }
+const ACCOUNT_OWNER_CACHE_TTL_MS = 5 * 60 * 1000;
+
 function getCategoryLabel(category) {
   const map = {
     primary: 'CATEGORY_PERSONAL',
@@ -146,13 +151,20 @@ function buildMimeEmail(to, subject, htmlBody, options = {}) {
 }
 
 async function verifyAccountOwnership(accountId, userId) {
+  const key = `${accountId}:${userId}`;
+  const hit = _accountOwnerCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.account;
+
   const { data: account } = await supabase
     .from('gmail_accounts')
     .select('id, user_id, gmail_email, account_name, granted_scopes')
     .eq('id', accountId)
     .eq('user_id', userId)
     .single();
-  return account;
+
+  // Cache even null results so we don't hammer Supabase on bad requests
+  _accountOwnerCache.set(key, { account: account || null, expiresAt: Date.now() + ACCOUNT_OWNER_CACHE_TTL_MS });
+  return account || null;
 }
 
 // Concurrency-limited Promise.all to avoid Gmail API rate limits
@@ -245,7 +257,7 @@ router.post('/:accountId/batch-bodies', authenticateToken, async (req, res) => {
     const results = {};
     const uncachedIds = [];
 
-    for (const msgId of messageIds.slice(0, 25)) {
+    for (const msgId of messageIds.slice(0, 50)) {
       const key = `${accountId}:${msgId}`;
       const cached = _emailBodyCache.get(key);
       if (cached && cached.expiresAt > Date.now()) {

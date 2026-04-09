@@ -542,6 +542,14 @@ body {
 .main-content {
   display: flex;
   height: calc(100vh - 52px);
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Any direct child of main-content (PanelGroup, everything wrap, cals) fills the full width */
+.main-content > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .sidebar-panel,
@@ -592,9 +600,26 @@ body {
   animation: wordIn 160ms var(--ease) both;
 }
 
+/* Lock top-bar wordmark width to widest word (EVERYTHING) so layout never shifts */
+.top-bar-wordmark .wordmark-module {
+  min-width: 6.6em;
+}
+
 @keyframes wordIn {
   from { opacity: 0; transform: translateY(3px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Gate loading animation: enter → hold → exit, one full cycle per word */
+@keyframes gateWordCycle {
+  0%   { opacity: 0; transform: translateY(10px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  72%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+.app-gate .wordmark-module {
+  animation: gateWordCycle 1400ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Module tabs: icon-only switcher */
@@ -1143,7 +1168,7 @@ body {
    EVERYTHING VIEW CONTAINER
 ========================================================== */
 .ev-container {
-  max-width: 1100px;
+  width: 100%;
   margin: 0 auto;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--r-lg);

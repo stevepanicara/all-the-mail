@@ -35,6 +35,8 @@ const AllTheMail = () => {
   const [appReady, setAppReady] = useState(false);
   const [gateVisible, setGateVisible] = useState(true);
   const gateTimerRef = React.useRef(null);
+  const GATE_WORDS = ['MAIL', 'DOCS', 'CALS'];
+  const [gateWordIdx, setGateWordIdx] = useState(0);
   const [cascadeKey, setCascadeKey] = useState(0);
   const [theme, setTheme] = useState(() => localStorage.getItem('atm-theme') || 'dark');
 
@@ -241,6 +243,13 @@ const AllTheMail = () => {
     }
     return () => { if (gateTimerRef.current) clearTimeout(gateTimerRef.current); };
   }, [appReady, gateVisible]);
+
+  // Gate word cycling: MAIL → DOCS → CALS → MAIL → … while loading
+  useEffect(() => {
+    if (!gateVisible || appReady) return;
+    const id = setInterval(() => setGateWordIdx(i => (i + 1) % GATE_WORDS.length), 1400);
+    return () => clearInterval(id);
+  }, [gateVisible, appReady]);
 
   useEffect(() => {
     const el = listContainerRef.current; if (!el) return;
@@ -1135,14 +1144,14 @@ const AllTheMail = () => {
     shortcutsRef.current = { archiveEmail, trashEmail, openCompose, selectAllVisible };
   }, [archiveEmail, trashEmail, openCompose, selectAllVisible]);
 
-  // Batch-prefetch the visible inbox — one HTTP request warms up to 25 emails in parallel.
-  // Fires 400ms after the list settles so it doesn't race the initial render.
+  // Batch-prefetch the visible inbox — one HTTP request warms up to 50 emails in parallel.
+  // Fires 100ms after the list settles so it doesn't race the initial render.
   useEffect(() => {
     if (filteredEmails.length === 0) return;
 
     // Group uncached emails by account
     const byAccount = {};
-    filteredEmails.slice(0, 25).forEach(email => {
+    filteredEmails.slice(0, 50).forEach(email => {
       if (emailBodiesRef.current[email.id] && emailHeadersRef.current[email.id]) return;
       const aid = email.accountId;
       if (!aid) return;
@@ -1154,11 +1163,14 @@ const AllTheMail = () => {
 
     const timer = setTimeout(() => {
       Object.entries(byAccount).forEach(([accountId, ids]) => {
-        fetch(`${API_BASE}/emails/${accountId}/batch-bodies`, {
+        // Send in chunks of 25 (backend limit) if more than 25 per account
+        const chunks = [];
+        for (let i = 0; i < ids.length; i += 25) chunks.push(ids.slice(i, i + 25));
+        chunks.forEach(chunk => fetch(`${API_BASE}/emails/${accountId}/batch-bodies`, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageIds: ids }),
+          body: JSON.stringify({ messageIds: chunk }),
         })
           .then(r => r.ok ? r.json() : null)
           .then(d => {
@@ -1173,9 +1185,9 @@ const AllTheMail = () => {
             setEmailHeaders(p => ({ ...p, ...headerMap }));
             setEmailAttachments(p => ({ ...p, ...attachMap }));
           })
-          .catch(() => {});
+          .catch(() => {}));
       });
-    }, 400);
+    }, 100);
 
     return () => clearTimeout(timer);
   }, [filteredEmails]);
@@ -1321,9 +1333,9 @@ const AllTheMail = () => {
   const onSelectEmail = useCallback((email) => {
     setSelectedEmail(email);setShowMetadata(false);setReaderCompact(false);loadEmailDetails(email);loadThread(email);setSelectedThreadActiveMessageId(email.id);
     if(splitMode==='none') setFullPageReaderOpen(true);
-    // Prefetch the next 4 emails so sequential reading never hits a cold load
+    // Prefetch the next 10 emails so sequential reading never hits a cold load
     const idx = filteredEmails.findIndex(e => e.id === email.id);
-    if (idx >= 0) filteredEmails.slice(idx + 1, idx + 5).forEach((e, i) => setTimeout(() => loadEmailDetails(e), (i + 1) * 100));
+    if (idx >= 0) filteredEmails.slice(idx + 1, idx + 11).forEach((e, i) => setTimeout(() => loadEmailDetails(e), (i + 1) * 80));
   }, [loadEmailDetails, loadThread, splitMode, filteredEmails]);
 
   const onSelectThreadMessage = useCallback((msg) => {
@@ -2198,7 +2210,8 @@ const AllTheMail = () => {
   if (isAuthed === null) return (
     <div className="app-gate">
       <div className="app-gate-wordmark">
-        <span className="wordmark-static">ALL THE</span><span className="wordmark-module">MAIL</span>
+        <span className="wordmark-static">ALL THE</span>
+        <span className="wordmark-module" key={GATE_WORDS[gateWordIdx]}>{GATE_WORDS[gateWordIdx]}</span>
       </div>
       <div className="app-loading-bar" />
     </div>
@@ -2678,7 +2691,8 @@ const AllTheMail = () => {
       {gateVisible && (
         <div className={`app-gate${appReady ? ' app-gate--out' : ''}`} aria-hidden="true">
           <div className="app-gate-wordmark">
-            <span className="wordmark-static">ALL THE</span><span className="wordmark-module">MAIL</span>
+            <span className="wordmark-static">ALL THE</span>
+            <span className="wordmark-module" key={GATE_WORDS[gateWordIdx]}>{GATE_WORDS[gateWordIdx]}</span>
           </div>
           <div className="app-loading-bar" />
         </div>
