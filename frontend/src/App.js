@@ -32,6 +32,9 @@ const AllTheMail = () => {
   const [isAuthed, setIsAuthed] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [introActive, setIntroActive] = useState(true);
+  const [appReady, setAppReady] = useState(false);
+  const [gateVisible, setGateVisible] = useState(true);
+  const gateTimerRef = React.useRef(null);
   const [cascadeKey, setCascadeKey] = useState(0);
   const [theme, setTheme] = useState(() => localStorage.getItem('atm-theme') || 'dark');
 
@@ -224,6 +227,14 @@ const AllTheMail = () => {
       if (!connectedAccounts.some(a => a.id === activeView)) setActiveView('everything');
     }
   }, [connectedAccounts, activeView]);
+
+  // Gate fade-out: once data is ready, animate out then unmount
+  useEffect(() => {
+    if (appReady && gateVisible) {
+      gateTimerRef.current = setTimeout(() => setGateVisible(false), 480);
+    }
+    return () => { if (gateTimerRef.current) clearTimeout(gateTimerRef.current); };
+  }, [appReady, gateVisible]);
 
   useEffect(() => {
     const el = listContainerRef.current; if (!el) return;
@@ -683,11 +694,13 @@ const AllTheMail = () => {
         const calsAccs = accs.filter(a => a.granted_scopes?.includes('cals'));
         const docPromises = docsAccs.map(a => loadDocsForAccount(a.id));
         const eventPromises = calsAccs.map(a => loadEventsForAccount(a.id));
-        accs.forEach(a => { loadEmailsForAccount(a.id); });
+        const emailPromises = accs.map(a => loadEmailsForAccount(a.id));
         Promise.all(docPromises).then(() => setIsLoadingDocs(false));
         Promise.all(eventPromises).then(() => setIsLoadingEvents(false));
         if (docsAccs.length === 0) setIsLoadingDocs(false);
         if (calsAccs.length === 0) setIsLoadingEvents(false);
+        // Reveal the UI once the first email batch lands (or immediately if no accounts)
+        Promise.all(accs.length > 0 ? emailPromises : []).then(() => setAppReady(true)).catch(() => setAppReady(true));
         loadUserProfile();
         loadBillingStatus();
       } else if (r.status===401) {
@@ -2144,8 +2157,10 @@ const AllTheMail = () => {
   // ==================== MAIN RENDER ====================
 
   if (isAuthed === null) return (
-    <div className="app-loading">
-      <img src="/logo-horizontal.svg" alt="All the mail" className="app-loading-logo" />
+    <div className="app-gate">
+      <div className="app-gate-wordmark">
+        <span className="wordmark-static">ALL THE </span><span className="wordmark-module">MAIL</span>
+      </div>
       <div className="app-loading-bar" />
     </div>
   );
@@ -2606,6 +2621,16 @@ const AllTheMail = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Loading gate — covers the app until first data batch is ready */}
+      {gateVisible && (
+        <div className={`app-gate${appReady ? ' app-gate--out' : ''}`} aria-hidden="true">
+          <div className="app-gate-wordmark">
+            <span className="wordmark-static">ALL THE </span><span className="wordmark-module">MAIL</span>
+          </div>
+          <div className="app-loading-bar" />
         </div>
       )}
     </div>

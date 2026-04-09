@@ -397,7 +397,51 @@ body {
   scrollbar-color: rgba(139, 124, 255, 0.10) transparent;
 }
 
-/* ---------- BRANDED LOADING STATE ---------- */
+/* ==========================================================
+   APP GATE — full-screen loading overlay
+   Shown while auth check runs and while first data batch loads.
+   Fades out once emails are ready, revealing a fully-populated UI.
+========================================================== */
+.app-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background:
+    radial-gradient(1200px circle at 20% 0%, rgba(139, 124, 255, 0.07), transparent 60%),
+    var(--bg-0);
+  /* Ensure gate matches app background even before tokens are applied */
+  background-color: #0b0f14;
+}
+
+.app-gate--out {
+  animation: gateOut 420ms var(--ease) forwards;
+}
+
+@keyframes gateOut {
+  to { opacity: 0; }
+}
+
+.app-gate-wordmark {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+[data-theme="light"] .app-gate {
+  background-color: #ffffff;
+  background:
+    radial-gradient(1200px circle at 20% 0%, rgba(124, 107, 240, 0.04), transparent 60%),
+    #ffffff;
+}
+
+/* ---------- BRANDED LOADING STATE (legacy auth-check screen) ---------- */
 .app-loading {
   display: flex;
   flex-direction: column;
