@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
-import { oauth2Client, ALL_SCOPES } from '../lib/google.js';
+import { oauth2Client, ALL_SCOPES, getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 function signState(userId) {
@@ -17,7 +18,7 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { data: accounts, error } = await supabase
       .from('gmail_accounts')
-      .select('id, gmail_email, account_name, created_at, granted_scopes')
+      .select('id, gmail_email, account_name, picture, created_at, granted_scopes')
       .eq('user_id', req.userId);
 
     if (error) throw error;
@@ -75,6 +76,31 @@ router.delete('/:accountId', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Delete account error:', err);
     res.status(500).json({ error: 'Failed to remove account' });
+  }
+});
+
+// Get labels for an account
+router.get('/:accountId/labels', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const { data: account } = await supabase
+      .from('gmail_accounts')
+      .select('id')
+      .eq('id', accountId)
+      .eq('user_id', req.userId)
+      .single();
+
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    const client = await getOAuth2ClientForAccount(accountId);
+    const gmail = google.gmail({ version: 'v1', auth: client });
+
+    const { data } = await gmail.users.labels.list({ userId: 'me' });
+    res.json({ labels: data.labels || [] });
+  } catch (err) {
+    console.error('Get labels error:', err);
+    res.status(500).json({ error: 'Failed to get labels' });
   }
 });
 

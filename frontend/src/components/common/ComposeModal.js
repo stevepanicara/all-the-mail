@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
-import { X, Paperclip, Clock } from 'lucide-react';
+import React, { useState, useRef, useCallback } from 'react';
+import { X, Minus, Maximize2, Paperclip, ChevronDown } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
+/**
+ * Docked compose panel — Phase 7.
+ * Renders as a floating panel docked bottom-right (not a modal overlay).
+ * States: 'full' | 'minimized'
+ */
 const ComposeModal = ({
   composeOpen, composeMode, composeSending, composeError,
   composeFromAccountId, setComposeFromAccountId,
@@ -19,15 +24,17 @@ const ComposeModal = ({
   saveDraft,
   includeSignature, setIncludeSignature,
 }) => {
+  const [panelState, setPanelState] = useState('full'); // 'full' | 'minimized'
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
   const [confirmingEmptySubject, setConfirmingEmptySubject] = useState(false);
   const [toError, setToError] = useState(false);
+  const fileInputRef = useRef(null);
 
-  const validateTo = (val) => {
+  const validateTo = useCallback((val) => {
     const addresses = (val || '').split(',').map(s => s.trim()).filter(Boolean);
     if (addresses.length === 0) { setToError(false); return; }
     setToError(addresses.some(a => !a.includes('@') || a.endsWith('@')));
-  };
+  }, []);
 
   if (!composeOpen) return null;
 
@@ -39,133 +46,158 @@ const ComposeModal = ({
     sendCompose();
   };
 
+  const title = composeMode === 'compose' ? 'New Message'
+    : composeMode === 'reply' ? 'Reply'
+    : composeMode === 'replyAll' ? 'Reply All'
+    : 'Forward';
+
+  const isMinimized = panelState === 'minimized';
+
   return (
-    <div className="modal-overlay" onMouseDown={closeCompose}>
-      <div className="modal" onMouseDown={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-header-title">
-            {composeMode === 'compose' ? 'New message' : composeMode === 'reply' ? 'Reply' : composeMode === 'replyAll' ? 'Reply all' : 'Forward'}
-          </div>
-          <button className="btn-ghost btn-icon" onClick={closeCompose} title="Close"><X size={16} /></button>
+    <div className="docked-compose" data-state={panelState}>
+      {/* Header — always visible */}
+      <div className="docked-compose-header" onClick={() => isMinimized && setPanelState('full')}>
+        <span className="docked-compose-title">{title}</span>
+        <div className="docked-compose-controls" onClick={e => e.stopPropagation()}>
+          <button
+            className="docked-compose-ctrl"
+            title={isMinimized ? 'Expand' : 'Minimize'}
+            onClick={() => setPanelState(isMinimized ? 'full' : 'minimized')}
+          >
+            {isMinimized ? <Maximize2 size={13} strokeWidth={1.5} /> : <Minus size={13} strokeWidth={1.5} />}
+          </button>
+          <button className="docked-compose-ctrl" title="Close" onClick={closeCompose}>
+            <X size={13} strokeWidth={1.5} />
+          </button>
         </div>
-        <div className="modal-body">
-          <div className="field-row">
-            <label>From</label>
-            <select value={composeFromAccountId} onChange={e => setComposeFromAccountId(e.target.value)}>
-              {connectedAccounts.map(a => <option key={a.id} value={a.id}>{a.account_name} — {a.gmail_email}</option>)}
+      </div>
+
+      {/* Body — hidden when minimized */}
+      {!isMinimized && (
+        <div className="docked-compose-body">
+          {/* From selector */}
+          <div className="docked-field-row">
+            <select
+              className="docked-from-select"
+              value={composeFromAccountId}
+              onChange={e => setComposeFromAccountId(e.target.value)}
+            >
+              {connectedAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.account_name || a.gmail_email} &lt;{a.gmail_email}&gt;</option>
+              ))}
             </select>
           </div>
-          <div className="field-row">
-            <label>To</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-              <input value={composeTo} onChange={e => { setComposeTo(e.target.value); if (toError) validateTo(e.target.value); }} onBlur={() => validateTo(composeTo)} placeholder="recipient@example.com" />
-              {toError && <span style={{ color: 'var(--danger)', fontSize: '0.6875rem' }}>Check addresses — each needs an @ and domain</span>}
+
+          {/* To */}
+          <div className="docked-field-row">
+            <span className="docked-field-label">To</span>
+            <div style={{ flex: 1 }}>
+              <input
+                className="docked-field-input"
+                value={composeTo}
+                onChange={e => { setComposeTo(e.target.value); if (toError) validateTo(e.target.value); }}
+                onBlur={() => validateTo(composeTo)}
+                placeholder="Recipients"
+              />
+              {toError && <span style={{ color: 'var(--danger)', fontSize: '11px' }}>Check email addresses</span>}
             </div>
+            {!composeShowCcBcc && (
+              <button className="docked-cc-toggle" onClick={() => setComposeShowCcBcc(true)}>Cc Bcc</button>
+            )}
           </div>
-          <div className="field-row-inline">
-            <button className="btn-ghost" onClick={() => setComposeShowCcBcc(!composeShowCcBcc)} style={{ fontSize: '12px', padding: '5px 10px' }}>
-              {composeShowCcBcc ? 'Hide Cc/Bcc' : 'Show Cc/Bcc'}
-            </button>
-          </div>
+
+          {/* Cc / Bcc */}
           {composeShowCcBcc && (
             <>
-              <div className="field-row"><label>Cc</label><input value={composeCc} onChange={e => setComposeCc(e.target.value)} placeholder="cc@example.com" /></div>
-              <div className="field-row"><label>Bcc</label><input value={composeBcc} onChange={e => setComposeBcc(e.target.value)} placeholder="bcc@example.com" /></div>
+              <div className="docked-field-row">
+                <span className="docked-field-label">Cc</span>
+                <input className="docked-field-input" value={composeCc} onChange={e => setComposeCc(e.target.value)} placeholder="Cc" />
+              </div>
+              <div className="docked-field-row">
+                <span className="docked-field-label">Bcc</span>
+                <input className="docked-field-input" value={composeBcc} onChange={e => setComposeBcc(e.target.value)} placeholder="Bcc" />
+              </div>
             </>
           )}
-          <div className="field-row">
-            <label>Subject</label>
-            <input value={composeSubject} onChange={e => setComposeSubject(e.target.value)} placeholder="Subject" />
+
+          {/* Subject */}
+          <div className="docked-field-row">
+            <input
+              className="docked-field-input docked-subject-input"
+              value={composeSubject}
+              onChange={e => setComposeSubject(e.target.value)}
+              placeholder="Subject"
+            />
           </div>
-          <div className="field-row">
-            <label>Message</label>
-            <ReactQuill theme="snow" value={composeBody} onChange={setComposeBody} placeholder="Write your message..."
-              modules={{ toolbar: [['bold','italic','underline','strike'],['link'],[{'list':'ordered'},{'list':'bullet'}],['clean']] }}
-              style={{ height: '200px', marginBottom: '60px' }} />
+
+          {/* Body */}
+          <div className="docked-compose-editor">
+            <ReactQuill
+              theme="snow"
+              value={composeBody}
+              onChange={setComposeBody}
+              placeholder="Write your message…"
+              modules={{ toolbar: [['bold','italic','underline'],['link'],[{'list':'bullet'}],['clean']] }}
+            />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
-            <div />
-            <div>
-              <input type="file" multiple onChange={handleFileSelect} style={{ display: 'none' }} id="file-input" />
-              <button type="button" className="btn-ghost" onClick={() => document.getElementById('file-input').click()} style={{ width: '100%', justifyContent: 'center' }}>
-                <Paperclip size={14} /> Add attachments
-              </button>
-              {composeAttachments.length > 0 && (
-                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {composeAttachments.map((file, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', background: 'var(--bg-1)', border: '1px solid var(--line)', borderRadius: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Paperclip size={13} /><span style={{ fontSize: '13px' }}>{file.name}</span>
-                        <span style={{ fontSize: '11px', opacity: 0.5 }}>({(file.size / 1024).toFixed(1)} KB)</span>
-                      </div>
-                      <button type="button" className="btn-ghost btn-icon" onClick={() => removeAttachment(idx)} title="Remove"><X size={13} /></button>
-                    </div>
-                  ))}
+
+          {/* Attachments */}
+          {composeAttachments.length > 0 && (
+            <div className="docked-attachments">
+              {composeAttachments.map((file, idx) => (
+                <div key={idx} className="docked-attachment-chip">
+                  <Paperclip size={11} strokeWidth={1.5} />
+                  <span>{file.name}</span>
+                  <button onClick={() => removeAttachment(idx)}><X size={11} /></button>
                 </div>
-              )}
+              ))}
             </div>
-          </div>
+          )}
+
+          {/* Errors / warnings */}
           {composeError && (
-            <div className="compose-error-actionable">
-              <div className="compose-error-message">
-                <span className="compose-error-icon">⚠</span>
-                <span>{composeError}</span>
-              </div>
-              <div className="compose-error-actions">
-                <button className="btn-ghost" onClick={sendCompose}>Retry</button>
-                <button className="btn-ghost" onClick={() => { if (saveDraft) { saveDraft(); } else { /* TODO: wire saveDraft */ } }}>Save as draft</button>
-              </div>
+            <div className="docked-error">
+              <span>⚠ {composeError}</span>
+              <button className="btn-ghost" style={{ fontSize: 11 }} onClick={sendCompose}>Retry</button>
             </div>
           )}
           {confirmingEmptySubject && (
-            <div className="compose-warning">
-              <span>Send without a subject?</span>
-              <div className="compose-warning-actions">
-                <button className="btn-ghost" onClick={() => setConfirmingEmptySubject(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={() => { setConfirmingEmptySubject(false); sendCompose(); }}>Send anyway</button>
-              </div>
+            <div className="docked-error">
+              <span>Send without subject?</span>
+              <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setConfirmingEmptySubject(false)}>Cancel</button>
+              <button className="btn btn-primary" style={{ fontSize: 11 }} onClick={() => { setConfirmingEmptySubject(false); sendCompose(); }}>Send</button>
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-            <div className="modal-hint" style={{ margin: 0 }}>If send fails, you may need to reconnect the account with updated permissions.</div>
-            {setIncludeSignature && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                <input type="checkbox" checked={includeSignature} onChange={e => setIncludeSignature(e.target.checked)}
-                  style={{ accentColor: 'var(--accent)', width: 14, height: 14 }} />
-                Sent via All The Mail
-              </label>
-            )}
-          </div>
-        </div>
-        <div className="modal-actions">
-          <button className="btn-ghost" onClick={closeCompose} disabled={composeSending}>Cancel</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ position: 'relative' }}>
-              <button className="btn-ghost" onClick={() => setSendLaterOpen(o => !o)} disabled={composeSending}>
-                <Clock size={14} /> Send Later
+
+          {/* Footer toolbar */}
+          <div className="docked-compose-footer">
+            <div className="docked-footer-left">
+              <button className="btn btn-primary docked-send-btn" onClick={handleSendClick} disabled={composeSending}>
+                {composeSending ? 'Sending…' : 'Send'}
+              </button>
+              <button className="docked-send-later" onClick={() => setSendLaterOpen(o => !o)} disabled={composeSending} title="Schedule send">
+                <ChevronDown size={13} strokeWidth={1.5} />
               </button>
               {sendLaterOpen && (
-                <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: '4px', background: 'var(--bg-1)', border: '1px solid var(--line-0)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', zIndex: 100, padding: '12px', minWidth: '220px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-2)', marginBottom: '8px' }}>Schedule send</div>
+                <div className="docked-send-later-popup">
+                  <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 6 }}>Schedule send</div>
                   <input type="datetime-local"
-                    style={{ width: '100%', padding: '8px 10px', fontSize: '13px', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: '6px', outline: 'none' }}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: 12, background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 6 }}
                     min={new Date().toISOString().slice(0, 16)}
-                    onChange={e => {
-                      if (e.target.value && scheduleSend) {
-                        scheduleSend(new Date(e.target.value));
-                        setSendLaterOpen(false);
-                      }
-                    }}
+                    onChange={e => { if (e.target.value && scheduleSend) { scheduleSend(new Date(e.target.value)); setSendLaterOpen(false); } }}
                   />
                 </div>
               )}
             </div>
-            <button className="btn btn-primary" onClick={handleSendClick} disabled={composeSending}>
-              {composeSending ? 'Sending...' : 'Send'}
-            </button>
+            <div className="docked-footer-right">
+              <input type="file" multiple onChange={handleFileSelect} ref={fileInputRef} style={{ display: 'none' }} />
+              <button className="docked-toolbar-btn" onClick={() => fileInputRef.current?.click()} title="Attach files">
+                <Paperclip size={15} strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

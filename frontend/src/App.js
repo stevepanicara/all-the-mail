@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Mail, RefreshCw, Users, Search, Plus, LogOut, X,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Forward, Reply, Archive, Trash2, CheckSquare, Square, MinusSquare,
+  Forward, Reply, Archive, Trash2, CheckSquare, MinusSquare,
   Paperclip, Download, ArrowLeft, FileText, Calendar, Star, Clock,
   Share2, MoreHorizontal, LayoutGrid, ExternalLink, MapPin, Sun, Moon, MessagesSquare,
-  Send,
+  Send, MailOpen, BellOff,
 } from 'lucide-react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import 'react-quill/dist/quill.snow.css';
@@ -22,7 +22,7 @@ import Sidebar from './components/common/Sidebar';
 import ComposeModal from './components/common/ComposeModal';
 import EventEditModal from './components/common/EventEditModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import SenderAvatar from './components/common/SenderAvatar';
+import Avatar from './components/Avatar';
 
 import './design-system.css';
 
@@ -88,7 +88,7 @@ const AllTheMail = () => {
   const [events, setEvents] = useState({});
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [selectedThread, setSelectedThread] = useState(null);
-  const [selectedThreadActiveMessageId, setSelectedThreadActiveMessageId] = useState(null);
+  const [, setSelectedThreadActiveMessageId] = useState(null);
 
   const [emailBodies, setEmailBodies] = useState({});
   const [emailHeaders, setEmailHeaders] = useState({});
@@ -157,6 +157,29 @@ const AllTheMail = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
+
+  // Hover state for email rows (Phase 2)
+  const [hoveredEmailId, setHoveredEmailId] = useState(null);
+
+  // Starred optimistic updates (Phase 2)
+  const [starredOverrides, setStarredOverrides] = useState({});
+
+  // Active mail category tab (Phase 4) — maps to 'primary','promotions','social','updates'
+  const [activeMailTab, setActiveMailTab] = useState(() => localStorage.getItem('atm_mail_tab') || 'primary');
+
+  // Thread collapsing state (Phase 5): set of collapsed message IDs
+  const [collapsedMsgIds, setCollapsedMsgIds] = useState(new Set());
+  const [threadExpanded, setThreadExpanded] = useState(false);
+
+  // Search operators dropdown (Phase 6)
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+
+  // Two-key shortcut sequence state (Phase 3)
+  const lastKeyRef = useRef(null);
+  const lastKeyTimerRef = useRef(null);
+
+  // Per-message expanded body state (Phase 5)
+  const [expandedBodies, setExpandedBodies] = useState({});
 
   const [splitMode, setSplitMode] = useState(() => {
     const m = migrateLayoutStorage(); if (m) return m;
@@ -249,7 +272,8 @@ const AllTheMail = () => {
     if (!gateVisible || appReady) return;
     const id = setInterval(() => setGateWordIdx(i => (i + 1) % GATE_WORDS.length), 1400);
     return () => clearInterval(id);
-  }, [gateVisible, appReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gateVisible, appReady]); // GATE_WORDS.length is stable (constant array)
 
   useEffect(() => {
     const el = listContainerRef.current; if (!el) return;
@@ -780,6 +804,8 @@ const AllTheMail = () => {
   const loadThread = useCallback(async (email) => {
     if(!email?.threadId||!email?.accountId){setSelectedThread(null);setSelectedThreadActiveMessageId(null);return;}
     setIsLoadingThread(true);
+    setCollapsedMsgIds(new Set()); // Reset collapse state for new thread
+    setThreadExpanded(false);
     try {
       const r=await fetch(`${API_BASE}/emails/${email.accountId}/${email.threadId}/thread`,{credentials:'include'});
       if(r.ok){
@@ -998,6 +1024,47 @@ const AllTheMail = () => {
         setPaletteIndex(0);
         return;
       }
+      // j/k navigation — Gmail style
+      if (!composeOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        const inInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.getAttribute?.('contenteditable') === 'true';
+        if (!inInput && activeModule === 'mail') {
+          if (e.key === 'j') {
+            e.preventDefault();
+            const idx = selectedEmail ? filteredEmails.findIndex(x => x.id === selectedEmail.id) : -1;
+            const ni = Math.min(idx + 1, filteredEmails.length - 1);
+            if (ni >= 0 && filteredEmails[ni]) { const ne = filteredEmails[ni]; setSelectedEmail(ne); loadEmailDetails(ne); loadThread(ne); }
+            return;
+          }
+          if (e.key === 'k') {
+            e.preventDefault();
+            const idx = selectedEmail ? filteredEmails.findIndex(x => x.id === selectedEmail.id) : filteredEmails.length;
+            const ni = Math.max(idx - 1, 0);
+            if (filteredEmails[ni]) { const ne = filteredEmails[ni]; setSelectedEmail(ne); loadEmailDetails(ne); loadThread(ne); }
+            return;
+          }
+          if (e.key === 'u' && selectedEmail) { e.preventDefault(); setSelectedEmail(null); setFullPageReaderOpen(false); return; }
+          if (e.key === 'x' && selectedEmail) { e.preventDefault(); toggleSelectId(selectedEmail.id); return; }
+          if (e.key === 's' && selectedEmail) { e.preventDefault(); starEmail(selectedEmail); return; }
+          if (e.key === 'a' && selectedEmail) { e.preventDefault(); shortcutsRef.current.openCompose?.('replyAll', selectedEmail); return; }
+          if (e.key === 'f' && selectedEmail) { e.preventDefault(); shortcutsRef.current.openCompose?.('forward', selectedEmail); return; }
+          // Two-key sequences: g+i, g+s, g+d, g+t
+          if (e.key === 'g') {
+            lastKeyRef.current = 'g';
+            if (lastKeyTimerRef.current) clearTimeout(lastKeyTimerRef.current);
+            lastKeyTimerRef.current = setTimeout(() => { lastKeyRef.current = null; }, 500);
+            return;
+          }
+          if (lastKeyRef.current === 'g') {
+            lastKeyRef.current = null;
+            if (lastKeyTimerRef.current) clearTimeout(lastKeyTimerRef.current);
+            if (e.key === 'i') { e.preventDefault(); setActiveCategory('primary'); setActiveMailTab('primary'); return; }
+            if (e.key === 's') { e.preventDefault(); setActiveCategory('primary'); setActiveMailTab('primary'); return; }
+            if (e.key === 'd') { e.preventDefault(); setActiveCategory('drafts'); return; }
+            if (e.key === 't') { e.preventDefault(); setActiveCategory('sent'); return; }
+          }
+        }
+      }
       if(composeOpen) return;
       const tag=(document.activeElement?.tagName||'').toLowerCase();
       if(tag==='input'||tag==='textarea'||tag==='select'||document.activeElement?.getAttribute?.('contenteditable')==='true') return;
@@ -1044,7 +1111,8 @@ const AllTheMail = () => {
       if (e.key === '/' && !e.metaKey) { e.preventDefault(); searchInputRef.current?.focus(); }
     };
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
-  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, activeModule, shortcutsOpen]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, activeModule, shortcutsOpen]); // starEmail/toggleSelectId accessed via ref
 
   const goBackToList = useCallback(()=>{setSelectedEmail(null);setSelectedThread(null);setSelectedThreadActiveMessageId(null);setFullPageReaderOpen(false);setReaderCompact(false);}, []);
 
@@ -1088,6 +1156,58 @@ const AllTheMail = () => {
     const undoFn = () => { setEmails(snapshot); setSuccessToast(null); };
     setSuccessToast({ message: 'Email archived', undoFn, executeFn });
   }, [selectedEmail, removeEmailIds, emails]);
+
+  // Toggle star on email — optimistic update + API call
+  const starEmail = useCallback(async (email) => {
+    if (!email?.id || !email?.accountId) return;
+    const key = email.id;
+    const currentlyStarred = starredOverrides[key] !== undefined ? starredOverrides[key] : email.isStarred;
+    const newStarred = !currentlyStarred;
+
+    // Optimistic update
+    setStarredOverrides(prev => ({ ...prev, [key]: newStarred }));
+
+    try {
+      await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/star`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starred: newStarred }),
+      });
+    } catch (err) {
+      // Revert on failure
+      setStarredOverrides(prev => ({ ...prev, [key]: currentlyStarred }));
+    }
+  }, [starredOverrides]);
+
+  // Cross-account API search (Phase 6)
+  const searchAllAccounts = useCallback(async (q) => {
+    if (!q.trim() || connectedAccounts.length === 0) return;
+    setIsLoadingEmails(true);
+    try {
+      const results = await Promise.all(
+        connectedAccounts.map(async (a) => {
+          try {
+            const r = await fetch(`${API_BASE}/emails/${a.id}?q=${encodeURIComponent(q)}&maxResults=25`, { credentials: 'include' });
+            if (!r.ok) return [];
+            const d = await r.json();
+            return (d.emails || []).map(e => ({ ...e, accountId: a.id }));
+          } catch { return []; }
+        })
+      );
+      const all = results.flat().sort((a, b) => new Date(b.date) - new Date(a.date));
+      const seen = new Set();
+      const deduped = all.filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true; });
+      // Store results in a special 'search' category for all accounts
+      setEmails(prev => {
+        const n = { ...prev };
+        connectedAccounts.forEach(a => {
+          n[a.id] = { ...(n[a.id] || {}), _search: deduped.filter(e => e.accountId === a.id) };
+        });
+        return n;
+      });
+    } catch (err) { console.error('Search error:', err); }
+    finally { setIsLoadingEmails(false); }
+  }, [connectedAccounts]);
 
   const batchAction = useCallback((action) => {
     if (selectedIds.size === 0) return;
@@ -1248,6 +1368,9 @@ const AllTheMail = () => {
   // Persist scheduled sends to localStorage
   useEffect(() => { localStorage.setItem('atm_scheduled_sends', JSON.stringify(scheduledSends)); }, [scheduledSends]);
 
+  // Persist active mail tab
+  useEffect(() => { localStorage.setItem('atm_mail_tab', activeMailTab); }, [activeMailTab]);
+
   // Check scheduled sends every 30 seconds — send when time is up
   useEffect(() => {
     const checkScheduled = async () => {
@@ -1338,12 +1461,6 @@ const AllTheMail = () => {
     if (idx >= 0) filteredEmails.slice(idx + 1, idx + 11).forEach((e, i) => setTimeout(() => loadEmailDetails(e), (i + 1) * 80));
   }, [loadEmailDetails, loadThread, splitMode, filteredEmails]);
 
-  const onSelectThreadMessage = useCallback((msg) => {
-    if(!selectedEmail?.accountId) return;
-    const obj={id:msg.id,threadId:msg.threadId,subject:msg.subject||selectedEmail.subject,from:msg.from||selectedEmail.from,date:msg.date||selectedEmail.date,snippet:msg.snippet||'',accountId:selectedEmail.accountId,accountName:selectedEmail.accountName,source:selectedEmail.source};
-    setSelectedThreadActiveMessageId(msg.id);setSelectedEmail(obj);setShowMetadata(false);loadEmailDetails(obj);
-  }, [selectedEmail, loadEmailDetails]);
-
   const useStackedRows = listWidth < 520;
 
   // ==================== SPLIT ICONS ====================
@@ -1397,7 +1514,7 @@ const AllTheMail = () => {
         <div className={`reader-content${readerCompact ? ' reader--compact' : ''}`}>
           <h1 className="reader-subject">{email.subject || '(no subject)'}</h1>
           <div className="reader-meta">
-            <div className="reader-avatar">{stripName(email.from || '').charAt(0).toUpperCase()}</div>
+            <Avatar email={getEmailOnly(email.from || '')} name={stripName(email.from || '')} size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px' }}>
                 <span className="reader-sender">{stripName(email.from || '')}</span>
@@ -1422,25 +1539,174 @@ const AllTheMail = () => {
             <button className="reader-action-icon" onClick={() => openCompose('replyAll', email)} title="Reply all" aria-label="Reply all"><Users size={16} strokeWidth={1.5} /></button>
             <button className="reader-action-icon" onClick={() => openCompose('forward', email)} title="Forward" aria-label="Forward"><Forward size={16} strokeWidth={1.5} /></button>
           </div>
-          {email.threadId && selectedThread?.messages?.length > 1 && (
-            <div style={{ border: '1px solid var(--line)', background: 'var(--bg-1)', padding: 12, marginBottom: 24, borderRadius: '8px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-2)', marginBottom: 10, fontWeight: 500 }}>Conversation ({selectedThread.messages.length})</div>
-              {isLoadingThread ? (<div style={{ fontSize: '12px', color: 'var(--text-2)' }}>Loading thread...</div>) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {selectedThread.messages.map(m => {
-                    const active = selectedThreadActiveMessageId === m.id;
-                    return (
-                      <button key={m.id} onClick={() => onSelectThreadMessage(m)}
-                        className={`conversation-msg-btn${active ? ' active' : ''}`}>
-                        <div className="conversation-msg-btn-sender">{stripName(m.from || '')}</div>
-                        <div className="conversation-msg-btn-snippet">{m.snippet || ''}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+          {/* Phase 8: Label chips */}
+          {email.labelIds && email.labelIds.filter(l => !['INBOX','UNREAD','IMPORTANT'].includes(l)).length > 0 && (
+            <div className="label-chips">
+              {email.labelIds
+                .filter(l => !['INBOX','UNREAD','IMPORTANT'].includes(l))
+                .map(labelId => {
+                  const isSystem = ['STARRED','SENT','DRAFT','TRASH','CATEGORY_PERSONAL','CATEGORY_PROMOTIONS','CATEGORY_SOCIAL','CATEGORY_UPDATES','CATEGORY_FORUMS'].includes(labelId);
+                  const labelName = labelId.startsWith('CATEGORY_') ? labelId.replace('CATEGORY_', '').toLowerCase()
+                    : labelId.charAt(0) + labelId.slice(1).toLowerCase();
+                  return (
+                    <span key={labelId} className={`label-chip${isSystem ? ' label-chip-system' : ''}`}>
+                      {labelName}
+                      {!isSystem && (
+                        <button className="label-chip-remove" title="Remove label" onClick={async () => {
+                          if (!email.accountId) return;
+                          await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/labels`, {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ removeLabelIds: [labelId] }),
+                          });
+                          setEmails(prev => {
+                            const n = { ...prev };
+                            Object.keys(n).forEach(ai => {
+                              Object.keys(n[ai] || {}).forEach(c => {
+                                if (n[ai][c]) n[ai][c] = n[ai][c].map(e2 =>
+                                  e2.id === email.id ? { ...e2, labelIds: (e2.labelIds || []).filter(l => l !== labelId) } : e2
+                                );
+                              });
+                            });
+                            return n;
+                          });
+                        }}>
+                          <X size={10} />
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
             </div>
           )}
+          {/* Phase 5: Thread collapsing */}
+          {email.threadId && selectedThread?.messages?.length > 1 && !isLoadingThread && (() => {
+            const msgs = selectedThread.messages;
+            const newestMsg = msgs[msgs.length - 1];
+
+            // Initialize: newest expanded, rest collapsed (unless user toggled)
+            const isCollapsed = (m) => {
+              if (threadExpanded) return false;
+              if (collapsedMsgIds.has(m.id)) return true;
+              // By default: only newest is expanded, all others collapsed
+              if (!collapsedMsgIds.has('__initialized__')) return m.id !== newestMsg.id;
+              return false;
+            };
+
+            const toggleMsg = (m) => {
+              setCollapsedMsgIds(prev => {
+                const next = new Set(prev);
+                next.add('__initialized__');
+                if (next.has(m.id)) next.delete(m.id); else next.add(m.id);
+                return next;
+              });
+            };
+
+            const hiddenMidCount = msgs.length > 4 ? msgs.length - 3 : 0;
+            const showHiddenMid = threadExpanded || collapsedMsgIds.has('__showmid__');
+
+            return (
+              <div style={{ marginBottom: 16 }}>
+                <div className="thread-controls">
+                  <span style={{ fontSize: '12px', color: 'var(--text-2)' }}>
+                    Conversation · {msgs.length} messages
+                  </span>
+                  <button className="thread-control-btn" onClick={() => {
+                    setThreadExpanded(false);
+                    setCollapsedMsgIds(new Set());
+                  }}>Collapse all</button>
+                  <button className="thread-control-btn" onClick={() => {
+                    setThreadExpanded(true);
+                    setCollapsedMsgIds(new Set(['__initialized__']));
+                  }}>Expand all</button>
+                </div>
+
+                {msgs.map((m, mi) => {
+                  const collapsed = isCollapsed(m);
+                  const isNewest = m.id === newestMsg.id;
+
+                  // Hidden middle messages
+                  if (!showHiddenMid && hiddenMidCount > 0 && mi > 0 && mi < msgs.length - 2 && mi <= msgs.length - 3) {
+                    if (mi === 1) {
+                      return (
+                        <button key="hidden-mid" className="thread-collapsed-group"
+                          onClick={() => setCollapsedMsgIds(prev => { const n = new Set(prev); n.add('__showmid__'); return n; })}>
+                          <ChevronDown size={14} strokeWidth={1.5} style={{ opacity: 0.5 }} />
+                          {hiddenMidCount} older messages
+                        </button>
+                      );
+                    }
+                    if (mi > 1 && mi < msgs.length - 2) return null;
+                  }
+
+                  if (collapsed) {
+                    return (
+                      <div key={m.id} className="thread-message-collapsed" onClick={() => toggleMsg(m)}>
+                        <Avatar email={getEmailOnly(m.from || '')} name={stripName(m.from || '')} size={24} />
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)', flexShrink: 0, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stripName(m.from || '')}</span>
+                        <span className="thread-message-collapsed-snippet">{m.snippet || ''}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-3)', flexShrink: 0 }}>{formatTime(m.date || '')}</span>
+                      </div>
+                    );
+                  }
+
+                  // Expanded message
+                  const msgBody = isNewest ? emailBodies[email.id] : emailBodies[m.id];
+                  const msgHeaders = isNewest ? emailHeaders[email.id] : emailHeaders[m.id];
+                  const expandedBody = !!expandedBodies[m.id];
+
+                  return (
+                    <div key={m.id} style={{ border: '1px solid var(--line-0)', borderRadius: 'var(--r-sm)', marginBottom: 8, overflow: 'hidden' }}>
+                      <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: 'var(--bg-2)' }}
+                        onClick={() => !isNewest && toggleMsg(m)}>
+                        <Avatar email={getEmailOnly(m.from || '')} name={stripName(m.from || '')} size={32} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-0)' }}>{stripName(m.from || '')}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{getEmailOnly(m.from || '')}</span>
+                          </div>
+                          {msgHeaders?.to && <div style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: 2 }}>To: {msgHeaders.to}</div>}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-3)', flexShrink: 0 }}>{formatTime(m.date || email.date)}</span>
+                        {isNewest && (
+                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                            <button className="reader-action-icon" onClick={e => { e.stopPropagation(); openCompose('reply', email); }} title="Reply"><Reply size={14} strokeWidth={1.5} /></button>
+                            <button className="reader-action-icon" onClick={e => { e.stopPropagation(); openCompose('forward', email); }} title="Forward"><Forward size={14} strokeWidth={1.5} /></button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ background: 'var(--email-bg)' }}>
+                        {!msgBody ? (
+                          <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-3)' }}>
+                            {m.snippet || 'Loading...'}
+                          </div>
+                        ) : (
+                          <>
+                            <iframe
+                              title={`Thread message ${m.id}`}
+                              srcDoc={buildEmailSrcDoc(msgBody)}
+                              sandbox="allow-same-origin allow-popups"
+                              scrolling="no"
+                              style={{ width: '100%', border: 'none', display: 'block', background: 'var(--email-bg)' }}
+                              onLoad={e => {
+                                const iframe = e.target;
+                                if (!iframe?.contentDocument?.body) return;
+                                const resize = () => { try { const h = iframe.contentDocument.body.scrollHeight; if (h > 0) iframe.style.height = (expandedBody ? h : Math.min(h, 360)) + 'px'; } catch(_) {} };
+                                resize(); setTimeout(resize, 200); setTimeout(resize, 800);
+                              }}
+                            />
+                            {!expandedBody && msgBody.length > 2000 && (
+                              <button className="expand-message-btn" onClick={() => setExpandedBodies(prev => ({ ...prev, [m.id]: true }))}>View entire message</button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div className="email-body-wrapper">
             {isLoadingBody ? (
               <div style={{ padding: '32px', background: 'var(--email-bg)' }}>
@@ -1507,58 +1773,98 @@ const AllTheMail = () => {
         </div>
       )}
       <div style={{ borderBottom: '1px solid var(--line)' }}>
-        {activeView !== 'everything' && (
-          <div style={{ padding: '14px 20px 8px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>{activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}</div>
-            {(() => {
-              const idx = connectedAccounts.findIndex(a => a.id === activeView);
-              if (idx === -1) return null;
-              const g = getAccountGradient(idx);
-              return (<div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: '11px', color: 'var(--text-3)' }}><span className="account-dot" style={{ background: g.gradient, width: 6, height: 6 }} /><span>{connectedAccounts[idx].account_name || connectedAccounts[idx].gmail_email}</span></div>);
-            })()}
-          </div>
-        )}
-        <div style={{ padding: activeView === 'everything' ? '12px 20px 8px' : '0 20px 8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div className="search-pill" style={{ flex: 1, minWidth: 0 }}><Search size={14} /><input ref={searchInputRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search across all accounts..." /></div>
+        {/* Search bar (Phase 6) */}
+        <div style={{ padding: '10px 16px 6px', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="search-pill" style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+              <Search size={14} />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onFocus={() => setShowSearchSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 150)}
+                onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) { searchAllAccounts(searchQuery); setShowSearchSuggestions(false); } if (e.key === 'Escape') { setSearchQuery(''); searchInputRef.current?.blur(); } }}
+                placeholder="Search mail…"
+              />
+              {searchQuery && <button style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center' }} onClick={() => setSearchQuery('')}><X size={13} /></button>}
+            </div>
             {searchQuery.trim() && !savedSearches.includes(searchQuery.trim()) && (
-              <button className="btn-ghost" onClick={() => setSavedSearches(prev => [searchQuery.trim(), ...prev].slice(0, 10))}
-                style={{ padding: '4px 10px', fontSize: 11, marginLeft: 8 }}
-                title="Save this search">Save</button>
+              <button className="btn-ghost" onClick={() => setSavedSearches(prev => [searchQuery.trim(), ...prev].slice(0, 10))} style={{ padding: '4px 10px', fontSize: 11 }} title="Save search">Save</button>
             )}
           </div>
+          {/* Search operator suggestions */}
+          {showSearchSuggestions && !searchQuery && (
+            <div className="search-suggestions">
+              {['from:', 'to:', 'subject:', 'has:attachment', 'is:unread', 'is:starred', 'before:', 'after:', 'label:', 'in:inbox'].map(op => (
+                <button key={op} className="search-suggestion-item" onMouseDown={() => { setSearchQuery(op); searchInputRef.current?.focus(); }}>
+                  <Search size={11} strokeWidth={1.5} style={{ opacity: 0.5 }} />{op}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {savedSearches.length > 0 && !searchQuery && (
           <div className="saved-searches">
-            <div className="saved-searches-label">Saved searches</div>
+            <div className="saved-searches-label">Saved</div>
             <div className="saved-searches-list">
               {savedSearches.map(q => (
                 <div key={q} className="saved-search-chip">
-                  <button onClick={() => setSearchQuery(q)} className="saved-search-chip-btn">
-                    <Search size={11} strokeWidth={1.5} /> {q}
-                  </button>
-                  <button onClick={() => setSavedSearches(prev => prev.filter(s => s !== q))} className="saved-search-chip-x" title="Remove">
-                    <X size={11} />
-                  </button>
+                  <button onClick={() => setSearchQuery(q)} className="saved-search-chip-btn"><Search size={11} strokeWidth={1.5} /> {q}</button>
+                  <button onClick={() => setSavedSearches(prev => prev.filter(s => s !== q))} className="saved-search-chip-x" title="Remove"><X size={11} /></button>
                 </div>
               ))}
             </div>
           </div>
         )}
-        <div style={{ padding: '4px 20px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => { if (selectedCount === filteredEmails.length && filteredEmails.length > 0) clearSelection(); else selectAllVisible(); }}
-              disabled={filteredEmails.length === 0} title={selectedCount === filteredEmails.length ? "Deselect all" : "Select all"}
-              style={{ background: 'transparent', border: 'none', padding: 0, cursor: filteredEmails.length === 0 ? 'default' : 'pointer', opacity: filteredEmails.length === 0 ? 0.2 : 0.4, display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}>
-              {selectedCount > 0 && selectedCount === filteredEmails.length ? <CheckSquare size={15} /> : selectedCount > 0 ? <MinusSquare size={15} /> : <Square size={15} />}
+
+        {/* Batch action bar */}
+        {selectedCount > 0 && (
+          <div style={{ padding: '4px 16px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => { if (selectedCount === filteredEmails.length) clearSelection(); else selectAllVisible(); }} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}>
+              {selectedCount === filteredEmails.length ? <CheckSquare size={15} /> : <MinusSquare size={15} />}
             </button>
-            {selectedCount > 0 && <span style={{ fontSize: '11px', color: 'var(--text-3)' }}>{selectedCount} selected</span>}
+            <span style={{ fontSize: '11px', color: 'var(--text-3)', flex: 1 }}>{selectedCount} selected</span>
+            <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} style={{ padding: '4px 10px', fontSize: 11 }}><Archive size={12} /> Archive</button>
+            <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} style={{ padding: '4px 10px', fontSize: 11 }}><Trash2 size={12} /> Delete</button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, visibility: selectedCount > 0 ? 'visible' : 'hidden' }}>
-            <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} title="Archive selected" style={{ padding: '4px 10px', fontSize: 11 }}><Archive size={13} /> Archive</button>
-            <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} title="Delete selected" style={{ padding: '4px 10px', fontSize: 11 }}><Trash2 size={13} /> Delete</button>
+        )}
+
+        {/* Category tabs (Phase 4) */}
+        {['primary','social','promotions','updates'].includes(activeCategory) || activeCategory === 'primary' ? (
+          <div className="mail-category-tabs">
+            {[
+              { key: 'primary', label: 'Primary' },
+              { key: 'promotions', label: 'Promotions' },
+              { key: 'social', label: 'Social' },
+              { key: 'updates', label: 'Updates' },
+            ].map(tab => {
+              const unreadCount = (() => {
+                if (activeView === 'everything') {
+                  return connectedAccounts.reduce((sum, a) => {
+                    const catEmails = emails[a.id]?.[tab.key] || [];
+                    return sum + catEmails.filter(e => !e.isRead).length;
+                  }, 0);
+                }
+                return (emails[activeView]?.[tab.key] || []).filter(e => !e.isRead).length;
+              })();
+              return (
+                <button
+                  key={tab.key}
+                  className={`mail-cat-tab${activeMailTab === tab.key ? ' active' : ''}`}
+                  onClick={() => { setActiveMailTab(tab.key); setActiveCategory(tab.key); }}
+                >
+                  {tab.label}
+                  {unreadCount > 0 && <span className="mail-cat-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        ) : (
+          <div style={{ padding: '4px 16px 2px', fontSize: '12px', color: 'var(--text-2)', fontWeight: 500 }}>
+            {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}
+          </div>
+        )}
       </div>
       {isLoadingEmails && filteredEmails.length === 0 ? (
         Array.from({ length: 8 }).map((_, i) => (
@@ -1600,9 +1906,14 @@ const AllTheMail = () => {
             : stripName(email.from || '');
           const threadBadge = conversationView && email.threadCount > 1;
 
+          const isHovered = hoveredEmailId === email.id;
+          const emailStarred = starredOverrides[email.id] !== undefined ? starredOverrides[email.id] : email.isStarred;
+          const acct = connectedAccounts[accountIndex];
+
           return (
             <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
-              onMouseEnter={() => { loadEmailDetails(email); loadThread(email); }}
+              onMouseEnter={() => { setHoveredEmailId(email.id); loadEmailDetails(email); loadThread(email); }}
+              onMouseLeave={() => setHoveredEmailId(null)}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
               onTouchStart={(e) => { const t = e.touches[0]; swipeRef.current = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, emailId: email.id }; e.currentTarget.dataset.swipe = ''; }}
               onTouchMove={(e) => { if (swipeRef.current.emailId === email.id) { swipeRef.current.currentX = e.touches[0].clientX; const d = e.touches[0].clientX - swipeRef.current.startX; if (d < -15) e.currentTarget.dataset.swipe = 'left'; else if (d > 15) e.currentTarget.dataset.swipe = 'right'; else e.currentTarget.dataset.swipe = ''; } }}
@@ -1614,11 +1925,11 @@ const AllTheMail = () => {
                 if (delta < -100) { try { navigator.vibrate?.(10); } catch (_) {} archiveEmail(email); }
                 else if (delta > 100) { try { navigator.vibrate?.(10); } catch (_) {} trashEmail(email); }
               }}
-              style={{ position: 'relative', padding: '0 16px', minHeight: `${rowHeight}px`, ...cs }}>
+              style={{ position: 'relative', padding: '0 12px 0 8px', minHeight: `${rowHeight}px`, ...cs }}>
               {!email.isRead && grad && <span className="unread-marker" style={{ background: grad.gradient }} />}
               {useStackedRows ? (
                 <div className="email-row-stacked">
-                  <SenderAvatar from={email.from || ''} size={24} />
+                  <Avatar email={getEmailOnly(email.from || '')} name={stripName(email.from || '')} src={acct?.picture} size={24} />
                   <div className="email-row-stacked-content">
                     <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
                       {senderLabel}
@@ -1630,22 +1941,64 @@ const AllTheMail = () => {
                 </div>
               ) : (
                 <div className="email-row-grid">
+                  {/* Checkbox */}
                   <button className={`email-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => { e.stopPropagation(); toggleSelectId(email.id); }} title={isSelected ? 'Deselect' : 'Select'}>
                     <span className="checkbox-box" />
                   </button>
+                  {/* Star */}
+                  <button className={`row-star-btn${emailStarred ? ' starred' : ''}`}
+                    onClick={e => { e.stopPropagation(); starEmail(email); }}
+                    title={emailStarred ? 'Unstar' : 'Star'}>
+                    <Star size={14} strokeWidth={1.5} fill={emailStarred ? 'currentColor' : 'none'} />
+                  </button>
+                  {/* Avatar */}
                   <div className="sender-avatar-wrap">
-                    <SenderAvatar from={email.from || ''} size={32} />
-                    {grad && activeView === 'everything' && <span className="account-indicator" style={{ background: grad.gradient }} title={connectedAccounts[accountIndex]?.account_name || ''} />}
+                    <Avatar email={getEmailOnly(email.from || '')} name={stripName(email.from || '')} size={32}
+                      ring={grad && activeView === 'everything' ? grad.g0 : undefined} />
                   </div>
-                  <span className="row-sender" style={{ fontWeight: 500, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
-                    {senderLabel}
-                    {threadBadge && <span className={`thread-count-badge${!email.isRead ? ' thread-count-badge-unread' : ''}`}>{email.threadCount}</span>}
-                  </span>
+                  {/* Sender + source chip */}
+                  <div className="row-sender-group">
+                    {activeView === 'everything' && grad && acct && (
+                      <span className="row-source-chip" style={{ background: grad.midRgba(0.15), color: grad.g0 }} title={acct.gmail_email}>
+                        {(acct.account_name || acct.gmail_email || '').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="row-sender" style={{ fontWeight: !email.isRead ? 600 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-1)' }}>
+                      {senderLabel}
+                      {threadBadge && <span className={`thread-count-badge${!email.isRead ? ' thread-count-badge-unread' : ''}`}>{email.threadCount}</span>}
+                    </span>
+                  </div>
+                  {/* Subject + snippet */}
                   <span className="row-subject">
                     <span className="row-subject-title" style={{ fontWeight: !email.isRead ? 500 : 400, color: !email.isRead ? 'var(--text-0)' : 'var(--text-2)' }}>{email.subject || '(no subject)'}</span>
                     {email.snippet && <span className="row-subject-preview">{' \u2014 '}{email.snippet}</span>}
                   </span>
-                  <span className="row-time">{formatTime(email.date)}</span>
+                  {/* Icons: attachment */}
+                  <div className="row-icons">
+                    {email.hasAttachment && <Paperclip size={12} strokeWidth={1.5} style={{ color: 'var(--text-3)', flexShrink: 0 }} />}
+                  </div>
+                  {/* Time / hover actions */}
+                  {isHovered ? (
+                    <div className="row-hover-actions" onClick={e => e.stopPropagation()}>
+                      <button className="row-action-btn" onClick={() => archiveEmail(email)} title="Archive"><Archive size={14} strokeWidth={1.5} /></button>
+                      <button className="row-action-btn danger" onClick={() => trashEmail(email)} title="Delete"><Trash2 size={14} strokeWidth={1.5} /></button>
+                      <button className="row-action-btn" onClick={async () => {
+                        await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/read`, { method: 'POST', credentials: 'include' });
+                        setEmails(p => { const n={...p}; Object.keys(n).forEach(ai => { Object.keys(n[ai]).forEach(c => { if(n[ai][c]) n[ai][c]=n[ai][c].map(e2=>e2.id===email.id?{...e2,isRead:true}:e2); }); }); return n; });
+                      }} title="Mark read"><MailOpen size={14} strokeWidth={1.5} /></button>
+                      <button className="row-action-btn" onClick={e2 => { e2.stopPropagation(); setSnoozeDropdownEmailId(prev => prev === email.id ? null : email.id); }} title="Snooze"><BellOff size={14} strokeWidth={1.5} /></button>
+                    </div>
+                  ) : (
+                    <span className="row-time" style={{ color: !email.isRead ? 'var(--text-0)' : 'var(--text-3)', fontWeight: !email.isRead ? 500 : 400 }}>{formatTime(email.date)}</span>
+                  )}
+                </div>
+              )}
+              {/* Snooze dropdown */}
+              {snoozeDropdownEmailId === email.id && (
+                <div className="dropdown-menu" style={{ right: 8, top: '100%' }} onMouseDown={e => e.stopPropagation()}>
+                  {getSnoozeOptions().map(opt => (
+                    <button key={opt.label} className="dropdown-item" onClick={() => snoozeEmail(email, opt.time)}>{opt.label}</button>
+                  ))}
                 </div>
               )}
             </div>
@@ -2264,7 +2617,7 @@ const AllTheMail = () => {
               const g = getAccountGradient(i);
               return (
                 <button key={a.id} className={`account-pill${activeView === a.id ? ' active' : ''}`} onClick={() => switchAccount(a.id)} title={a.gmail_email}>
-                  <span className="account-pill-avatar" style={{ background: g.gradient }}>{(a.account_name || a.gmail_email || '?').charAt(0).toUpperCase()}</span>
+                  <Avatar src={a.picture} email={a.gmail_email} name={a.account_name} size={22} ring={activeView === a.id ? g.g0 : undefined} />
                   <span className="account-pill-label">{getShortLabel(a, connectedAccounts)}</span>
                 </button>
               );
@@ -2656,32 +3009,52 @@ const AllTheMail = () => {
       {/* Keyboard shortcuts cheatsheet */}
       {shortcutsOpen && (
         <div className="modal-overlay" onClick={() => setShortcutsOpen(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <span className="modal-header-title">Keyboard shortcuts</span>
               <button className="btn-icon" onClick={() => setShortcutsOpen(false)}><X size={16} /></button>
             </div>
-            <div className="modal-body">
-              <div className="shortcuts-list">
-                {[
-                  { key: '⌘K / Ctrl K', desc: 'Open command palette' },
-                  { key: 'C', desc: 'Compose new message' },
-                  { key: 'R', desc: 'Reply to selected email' },
-                  { key: 'E', desc: 'Archive selected email' },
-                  { key: '#', desc: 'Delete selected email' },
+            <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+              {[
+                { group: 'Navigation', items: [
+                  { key: 'j', desc: 'Next message' },
+                  { key: 'k', desc: 'Previous message' },
+                  { key: 'Enter', desc: 'Open selected message' },
+                  { key: 'u', desc: 'Back to inbox' },
+                  { key: '↑ ↓', desc: 'Scroll / navigate list' },
+                ]},
+                { group: 'Actions', items: [
+                  { key: 'e', desc: 'Archive' },
+                  { key: '#', desc: 'Delete' },
+                  { key: 's', desc: 'Toggle star' },
+                  { key: 'x', desc: 'Select message' },
+                  { key: '!', desc: 'Report spam' },
+                ]},
+                { group: 'Compose', items: [
+                  { key: 'c', desc: 'Compose new' },
+                  { key: 'r', desc: 'Reply' },
+                  { key: 'a', desc: 'Reply all' },
+                  { key: 'f', desc: 'Forward' },
                   { key: '/', desc: 'Focus search' },
-                  { key: '↑ ↓', desc: 'Navigate emails' },
-                  { key: '← →', desc: 'Previous / next email' },
-                  { key: 'Enter', desc: 'Open selected email' },
-                  { key: 'Esc', desc: 'Close panel' },
-                  { key: '?', desc: 'Show this menu' },
-                ].map(s => (
-                  <div key={s.key} className="shortcut-row">
-                    <span className="shortcut-desc">{s.desc}</span>
-                    <kbd className="shortcut-key">{s.key}</kbd>
-                  </div>
-                ))}
-              </div>
+                ]},
+                { group: 'Jump to', items: [
+                  { key: 'gi', desc: 'Go to inbox' },
+                  { key: 'gd', desc: 'Go to drafts' },
+                  { key: 'gt', desc: 'Go to sent' },
+                  { key: '⌘K', desc: 'Command palette' },
+                  { key: '?', desc: 'Show shortcuts' },
+                ]},
+              ].map(section => (
+                <div key={section.group} style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{section.group}</div>
+                  {section.items.map(s => (
+                    <div key={s.key} className="shortcut-row">
+                      <span className="shortcut-desc">{s.desc}</span>
+                      <kbd className="shortcut-key">{s.key}</kbd>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         </div>

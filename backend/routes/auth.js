@@ -154,6 +154,7 @@ router.get('/google/callback', async (req, res) => {
         user_id: userId,
         gmail_email: userInfo.email,
         account_name: userInfo.name || userInfo.email,
+        picture: userInfo.picture || null,
         encrypted_tokens: encryptToken(tokens),
         granted_scopes: grantedServices
       });
@@ -166,7 +167,8 @@ router.get('/google/callback', async (req, res) => {
         .from('gmail_accounts')
         .update({
           encrypted_tokens: encryptToken(tokens),
-          granted_scopes: grantedServices
+          granted_scopes: grantedServices,
+          picture: userInfo.picture || null
         })
         .eq('id', existingAccount.id);
       if (updateErr) {

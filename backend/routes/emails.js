@@ -187,6 +187,7 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
     const { accountId } = req.params;
     const category = req.query.category || 'primary';
     const maxResults = parseInt(req.query.maxResults) || 50;
+    const searchQuery = req.query.q || '';
 
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
@@ -194,22 +195,23 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
     const client = await getOAuth2ClientForAccount(accountId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
-    const categoryLabel = getCategoryLabel(category);
+    const listParams = { userId: 'me', maxResults };
 
-    let labelIds;
-    if (category === 'sent' || category === 'drafts' || category === 'trash') {
-      labelIds = [categoryLabel];
-    } else if (category === 'primary') {
-      labelIds = ['INBOX'];
+    if (searchQuery) {
+      // Search mode: pass q directly to Gmail API, no labelIds filter
+      listParams.q = searchQuery;
     } else {
-      labelIds = ['INBOX', categoryLabel];
+      const categoryLabel = getCategoryLabel(category);
+      if (category === 'sent' || category === 'drafts' || category === 'trash') {
+        listParams.labelIds = [categoryLabel];
+      } else if (category === 'primary') {
+        listParams.labelIds = ['INBOX'];
+      } else {
+        listParams.labelIds = ['INBOX', categoryLabel];
+      }
     }
 
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      maxResults,
-      labelIds: labelIds
-    });
+    const response = await gmail.users.messages.list(listParams);
 
     const messages = response.data.messages || [];
     // Concurrency-limited to 10 parallel requests to avoid Gmail API rate limits
@@ -218,13 +220,17 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
         userId: 'me',
         id: msg.id,
         format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date']
+        metadataHeaders: ['From', 'Subject', 'Date', 'Content-Type']
       });
 
       const headers = detail.data.payload.headers;
       const from = headers.find(h => h.name === 'From')?.value || '';
       const subject = headers.find(h => h.name === 'Subject')?.value || '(no subject)';
       const date = headers.find(h => h.name === 'Date')?.value || '';
+      const labelIds = detail.data.labelIds || [];
+
+      // Detect attachments from payload parts
+      const hasAttachment = !!(detail.data.payload?.parts?.some(p => p.filename && p.filename.length > 0));
 
       return {
         id: msg.id,
@@ -233,7 +239,10 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
         subject,
         snippet: detail.data.snippet,
         date: date ? new Date(date).toISOString() : new Date().toISOString(),
-        isRead: !detail.data.labelIds?.includes('UNREAD')
+        isRead: !labelIds.includes('UNREAD'),
+        isStarred: labelIds.includes('STARRED'),
+        hasAttachment,
+        labelIds
       };
     }, 10);
 
@@ -380,7 +389,7 @@ router.get('/:accountId/:messageId/attachments/:attachmentId', authenticateToken
   }
 });
 
-// Get thread
+// Get thread (full format with bodies)
 router.get('/:accountId/:threadId/thread', authenticateToken, async (req, res) => {
   try {
     const { accountId, threadId } = req.params;
@@ -394,19 +403,26 @@ router.get('/:accountId/:threadId/thread', authenticateToken, async (req, res) =
     const thread = await gmail.users.threads.get({
       userId: 'me',
       id: threadId,
-      format: 'metadata',
-      metadataHeaders: ['From', 'Subject', 'Date']
+      format: 'full'
     });
 
     const messages = thread.data.messages.map(msg => {
       const headers = msg.payload.headers;
+      const labelIds = msg.labelIds || [];
       return {
         id: msg.id,
         threadId: msg.threadId,
         from: headers.find(h => h.name === 'From')?.value || '',
+        to: headers.find(h => h.name === 'To')?.value || '',
+        cc: headers.find(h => h.name === 'Cc')?.value || '',
         subject: headers.find(h => h.name === 'Subject')?.value || '',
         date: headers.find(h => h.name === 'Date')?.value || '',
-        snippet: msg.snippet
+        snippet: msg.snippet,
+        body: parseEmailBody(msg.payload),
+        attachments: extractAttachmentMetadata(msg.payload),
+        isRead: !labelIds.includes('UNREAD'),
+        isStarred: labelIds.includes('STARRED'),
+        labelIds
       };
     });
 
@@ -633,6 +649,82 @@ router.post('/:accountId/:messageId/trash', authenticateToken, async (req, res) 
   } catch (error) {
     console.error('Trash email error:', error);
     res.status(500).json({ error: 'Failed to delete email' });
+  }
+});
+
+// Toggle star
+router.post('/:accountId/:messageId/star', authenticateToken, async (req, res) => {
+  try {
+    const { accountId, messageId } = req.params;
+    const { starred } = req.body;
+
+    const account = await verifyAccountOwnership(accountId, req.userId);
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    const client = await getOAuth2ClientForAccount(accountId);
+    const gmail = google.gmail({ version: 'v1', auth: client });
+
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: starred
+        ? { addLabelIds: ['STARRED'] }
+        : { removeLabelIds: ['STARRED'] }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Star toggle error:', error);
+    res.status(500).json({ error: 'Failed to toggle star' });
+  }
+});
+
+// Modify labels
+router.post('/:accountId/:messageId/labels', authenticateToken, async (req, res) => {
+  try {
+    const { accountId, messageId } = req.params;
+    const { addLabelIds = [], removeLabelIds = [] } = req.body;
+
+    const account = await verifyAccountOwnership(accountId, req.userId);
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    const client = await getOAuth2ClientForAccount(accountId);
+    const gmail = google.gmail({ version: 'v1', auth: client });
+
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: { addLabelIds, removeLabelIds }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Modify labels error:', error);
+    res.status(500).json({ error: 'Failed to modify labels' });
+  }
+});
+
+// Mark as unread
+router.post('/:accountId/:messageId/unread', authenticateToken, async (req, res) => {
+  try {
+    const { accountId, messageId } = req.params;
+
+    const account = await verifyAccountOwnership(accountId, req.userId);
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    const client = await getOAuth2ClientForAccount(accountId);
+    const gmail = google.gmail({ version: 'v1', auth: client });
+
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: { addLabelIds: ['UNREAD'] }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark as unread error:', error);
+    res.status(500).json({ error: 'Failed to mark as unread' });
   }
 });
 
