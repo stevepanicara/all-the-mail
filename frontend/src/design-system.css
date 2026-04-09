@@ -427,9 +427,13 @@ body {
 }
 
 .app-gate-wordmark {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 0.10em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.28em;
+  font-family: 'Barlow Condensed', 'Trade Gothic Bold Condensed No. 20', 'Arial Narrow', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   line-height: 1;
 }
@@ -566,10 +570,11 @@ body {
 .top-bar-wordmark {
   display: flex;
   align-items: baseline;
-  gap: 0;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  gap: 0.28em;
+  font-family: 'Barlow Condensed', 'Trade Gothic Bold Condensed No. 20', 'Arial Narrow', sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
   margin-right: 20px;

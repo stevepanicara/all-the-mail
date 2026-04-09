@@ -2159,7 +2159,7 @@ const AllTheMail = () => {
   if (isAuthed === null) return (
     <div className="app-gate">
       <div className="app-gate-wordmark">
-        <span className="wordmark-static">ALL THE </span><span className="wordmark-module">MAIL</span>
+        <span className="wordmark-static">ALL THE</span><span className="wordmark-module">MAIL</span>
       </div>
       <div className="app-loading-bar" />
     </div>
@@ -2194,7 +2194,7 @@ const AllTheMail = () => {
         if (target) target.scrollTo({ top: 0, behavior: 'smooth' });
       }}>
         <div className="top-bar-wordmark" aria-live="polite" aria-atomic="true">
-          <span className="wordmark-static">ALL THE </span><span className="wordmark-module" key={activeModule}>{{ everything: 'EVERYTHING', mail: 'MAIL', docs: 'DOCS', cals: 'CALS' }[activeModule]}</span>
+          <span className="wordmark-static">ALL THE</span><span className="wordmark-module" key={activeModule}>{{ everything: 'EVERYTHING', mail: 'MAIL', docs: 'DOCS', cals: 'CALS' }[activeModule]}</span>
         </div>
         <nav className="module-tabs" role="navigation" aria-label="Main navigation">
           <button className={`module-tab${activeModule==='everything'?' active':''}`} onClick={()=>setActiveModule('everything')} aria-current={activeModule==='everything' ? 'page' : undefined} aria-label="Everything"><LayoutGrid size={15} strokeWidth={1.5} /></button>
@@ -2628,7 +2628,7 @@ const AllTheMail = () => {
       {gateVisible && (
         <div className={`app-gate${appReady ? ' app-gate--out' : ''}`} aria-hidden="true">
           <div className="app-gate-wordmark">
-            <span className="wordmark-static">ALL THE </span><span className="wordmark-module">MAIL</span>
+            <span className="wordmark-static">ALL THE</span><span className="wordmark-module">MAIL</span>
           </div>
           <div className="app-loading-bar" />
         </div>
