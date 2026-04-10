@@ -182,7 +182,7 @@ const ComposeModal = ({
                 <div className="docked-send-later-popup">
                   <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 6 }}>Schedule send</div>
                   <input type="datetime-local"
-                    style={{ width: '100%', padding: '6px 8px', fontSize: 12, background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 6 }}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)' }}
                     min={new Date().toISOString().slice(0, 16)}
                     onChange={e => { if (e.target.value && scheduleSend) { scheduleSend(new Date(e.target.value)); setSendLaterOpen(false); } }}
                   />
