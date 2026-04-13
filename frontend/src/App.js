@@ -344,7 +344,7 @@ const AllTheMail = () => {
     trashEmail, archiveEmail, starEmail,
     searchAllAccounts, batchAction,
     clearSelection, toggleSelectId, selectAllVisible,
-    snoozeEmail, getSnoozeOptions,
+    snoozeEmail, getSnoozeOptions, syncSnoozed,
     navigatePrev, navigateNext, onSelectEmail,
   } = useEmail({
     connectedAccounts,
@@ -654,6 +654,49 @@ const AllTheMail = () => {
     } catch (err) { console.error('Error loading events:', err); setEventsErrors(p => ({ ...p, [accountId]: 'network' })); }
   }, []);
 
+  // syncScheduledSends: called once on boot after accounts load.
+  // Fetches pending sends from Supabase, merges with localStorage
+  // (Supabase wins), and backfills any localStorage-only entries.
+  // Fails silently — localStorage continues to work if the request fails.
+  const syncScheduledSends = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/scheduled-sends?status=pending`, { credentials: 'include' });
+      if (!r.ok) return;
+      const { sends: dbSends } = await r.json();
+
+      const local = JSON.parse(localStorage.getItem('atm_scheduled_sends') || '[]');
+      const localOnly = local.filter(s => !s.id);
+
+      // Backfill: local entries with no DB id → fire-and-forget POSTs
+      localOnly.forEach(s => {
+        fetch(`${API_BASE}/scheduled-sends`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payload: { to: s.to, cc: s.cc, bcc: s.bcc, subject: s.subject, body: s.body, accountId: s.accountId },
+            sendAt: s.scheduledFor,
+          }),
+        }).then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data?.id) {
+              // Tag the local entry with its new DB id
+              setScheduledSends(prev => prev.map(x =>
+                (!x.id && x.scheduledFor === s.scheduledFor && x.to === s.to)
+                  ? { ...x, id: data.id }
+                  : x
+              ));
+            }
+          })
+          .catch(() => {});
+      });
+
+      // Merge: DB is authoritative; keep any local-only entries too
+      setScheduledSends([...dbSends, ...localOnly]);
+    } catch (err) {
+      console.error('syncScheduledSends error:', err);
+    }
+  }, []);
+
   const loadAccounts = useCallback(async () => {
     try {
       const r = await fetch(`${API_BASE}/accounts`,{credentials:'include'});
@@ -680,11 +723,13 @@ const AllTheMail = () => {
         Promise.all(accs.length > 0 ? emailPromises : []).then(() => setAppReady(true)).catch(() => setAppReady(true));
         loadUserProfile();
         loadBillingStatus();
+        syncSnoozed();
+        syncScheduledSends();
       } else if (r.status===401) {
         handleLogout();
       } else { setConnectedAccounts([]); }
     } catch(err) { console.error('Error loading accounts:', err); setError('Failed to load accounts'); }
-  }, [loadEmailsForAccount, loadDocsForAccount, loadEventsForAccount, loadUserProfile, loadBillingStatus]);
+  }, [loadEmailsForAccount, loadDocsForAccount, loadEventsForAccount, loadUserProfile, loadBillingStatus, syncSnoozed, syncScheduledSends]);
 
   const refreshEmails = useCallback(async () => {
     if (!isAuthed||connectedAccounts.length===0) return;
@@ -1003,21 +1048,54 @@ const AllTheMail = () => {
   // Persist active mail tab
   useEffect(() => { localStorage.setItem('atm_mail_tab', activeMailTab); }, [activeMailTab]);
 
-  // Check scheduled sends every 30 seconds — send when time is up
+  // Check scheduled sends every 30 seconds — send when time is up.
+  // For DB-backed items (have an id), uses a CAS lock (pending → sending)
+  // to prevent double-send across multiple open tabs.
+  // For localStorage-only items (no id), fires directly with no lock.
   useEffect(() => {
     const checkScheduled = async () => {
       const now = Date.now();
       const due = scheduledSends.filter(s => new Date(s.scheduledFor).getTime() <= now);
       if (due.length === 0) return;
+
       for (const item of due) {
         try {
-          await fetch(`${API_BASE}/emails/${item.accountId}/send`, {
+          if (item.id) {
+            // CAS: claim the send — 409 means another tab already got it
+            const claimRes = await fetch(`${API_BASE}/scheduled-sends/${item.id}`, {
+              method: 'PATCH', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'sending' }),
+            });
+            if (!claimRes.ok) continue; // already claimed — skip
+          }
+
+          const sendRes = await fetch(`${API_BASE}/emails/${item.accountId}/send`, {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mode: 'compose', to: item.to, cc: item.cc || '', bcc: item.bcc || '', subject: item.subject, body: item.body, includeSignature: true }),
           });
-        } catch (err) { console.error('Scheduled send failed:', err); }
+
+          // Update final status in DB (non-blocking)
+          if (item.id) {
+            fetch(`${API_BASE}/scheduled-sends/${item.id}`, {
+              method: 'PATCH', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: sendRes.ok ? 'sent' : 'failed' }),
+            }).catch(() => {});
+          }
+        } catch (err) {
+          console.error('Scheduled send failed:', err);
+          if (item.id) {
+            fetch(`${API_BASE}/scheduled-sends/${item.id}`, {
+              method: 'PATCH', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'failed' }),
+            }).catch(() => {});
+          }
+        }
       }
+
       setScheduledSends(prev => prev.filter(s => new Date(s.scheduledFor).getTime() > now));
     };
     checkScheduled();
@@ -1029,11 +1107,36 @@ const AllTheMail = () => {
     const fid = composeFromAccountId;
     if (!fid) { setComposeError('Select a sending account'); return; }
     if (!composeTo.trim()) { setComposeError('Recipient is required'); return; }
-    setScheduledSends(prev => [...prev, {
+
+    const newSend = {
       to: composeTo.trim(), cc: composeCc.trim(), bcc: composeBcc.trim(),
       subject: composeSubject.trim(), body: composeBody,
       accountId: fid, scheduledFor: scheduledFor.toISOString(),
-    }]);
+    };
+
+    // Optimistic local update first so UI reflects immediately
+    setScheduledSends(prev => [...prev, newSend]);
+
+    // Persist to Supabase; on success tag the entry with its DB id
+    fetch(`${API_BASE}/scheduled-sends`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        payload: { to: newSend.to, cc: newSend.cc, bcc: newSend.bcc, subject: newSend.subject, body: newSend.body, accountId: newSend.accountId },
+        sendAt: newSend.scheduledFor,
+      }),
+    }).then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.id) {
+          setScheduledSends(prev => prev.map(x =>
+            (!x.id && x.scheduledFor === newSend.scheduledFor && x.to === newSend.to)
+              ? { ...x, id: data.id }
+              : x
+          ));
+        }
+      })
+      .catch(() => {}); // graceful degradation — send still fires client-side
+
     setComposeOpen(false); setComposeOriginalEmail(null); setComposeAttachments([]); setComposeDraftId(null);
   }, [composeFromAccountId, composeTo, composeCc, composeBcc, composeSubject, composeBody]);
 

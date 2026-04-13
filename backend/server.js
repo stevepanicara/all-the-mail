@@ -12,6 +12,8 @@ import emailRoutes from './routes/emails.js';
 import docsRoutes from './routes/docs.js';
 import calendarRoutes from './routes/calendar.js';
 import billingRoutes from './routes/billing.js';
+import snoozedRoutes from './routes/snoozed.js';
+import scheduledSendsRoutes from './routes/scheduled-sends.js';
 
 const app = express();
 
@@ -85,6 +87,8 @@ app.use('/emails', emailRoutes);
 app.use('/docs', docsRoutes);
 app.use('/cals', calendarRoutes);
 app.use('/billing', billingRoutes);
+app.use('/snoozed', snoozedRoutes);
+app.use('/scheduled-sends', scheduledSendsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

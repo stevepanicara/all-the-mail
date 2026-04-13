@@ -47,10 +47,10 @@ export function useEmail({
   useEffect(() => { emailBodiesRef.current = emailBodies; }, [emailBodies]);
   useEffect(() => { emailHeadersRef.current = emailHeaders; }, [emailHeaders]);
 
-  // Persist snoozed emails
+  // Persist snoozed emails to localStorage (write-through cache for offline support)
   useEffect(() => { localStorage.setItem('atm_snoozed', JSON.stringify(snoozedEmails)); }, [snoozedEmails]);
 
-  // Check snoozed emails every 60 seconds
+  // Check snoozed emails every 60 seconds; delete expired entries from Supabase
   useEffect(() => {
     const checkSnoozed = () => {
       const now = Date.now();
@@ -59,6 +59,13 @@ export function useEmail({
         let changed = false;
         for (const key of Object.keys(updated)) {
           if (new Date(updated[key].until).getTime() <= now) {
+            // Fire-and-forget cleanup in Supabase
+            const { accountId, emailId } = updated[key];
+            if (accountId && emailId) {
+              fetch(`${API_BASE}/snoozed/${accountId}/${emailId}`, {
+                method: 'DELETE', credentials: 'include',
+              }).catch(() => {});
+            }
             delete updated[key];
             changed = true;
           }
@@ -69,6 +76,46 @@ export function useEmail({
     checkSnoozed();
     const interval = setInterval(checkSnoozed, 60000);
     return () => clearInterval(interval);
+  }, []);
+
+  // syncSnoozed: called once on boot from App.js after accounts load.
+  // Fetches Supabase state, merges with localStorage (Supabase wins on conflict),
+  // and backfills any localStorage-only entries up to Supabase.
+  // Fails silently — localStorage continues to work if the request fails.
+  const syncSnoozed = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/snoozed`, { credentials: 'include' });
+      if (!r.ok) return;
+      const { snoozes } = await r.json();
+
+      const localMap = JSON.parse(localStorage.getItem('atm_snoozed') || '{}');
+      const dbKeys = new Set(snoozes.map(s => `${s.accountId}_${s.messageId}`));
+
+      // Backfill: local entries not in Supabase (fire-and-forget)
+      Object.entries(localMap).forEach(([key, val]) => {
+        if (!dbKeys.has(key)) {
+          fetch(`${API_BASE}/snoozed`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: val.accountId, messageId: val.emailId, snoozeUntil: val.until }),
+          }).catch(() => {});
+        }
+      });
+
+      // Merge: Supabase wins on conflict
+      const merged = { ...localMap };
+      snoozes.forEach(s => {
+        merged[`${s.accountId}_${s.messageId}`] = {
+          emailId: s.messageId,
+          accountId: s.accountId,
+          until: s.snoozeUntil,
+        };
+      });
+
+      setSnoozedEmails(merged);
+    } catch (err) {
+      console.error('syncSnoozed error:', err);
+    }
   }, []);
 
   const loadEmailsForAccount = useCallback(async (accountId, category = null) => {
@@ -402,6 +449,12 @@ export function useEmail({
       if (setShowMetadata) setShowMetadata(false);
       if (setFullPageReaderOpen) setFullPageReaderOpen(false);
     }
+    // Persist to Supabase (fire-and-forget; localStorage is already updated above)
+    fetch(`${API_BASE}/snoozed`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId: email.accountId, messageId: email.id, snoozeUntil: until.toISOString() }),
+    }).catch(() => {});
   }, [selectedEmail, setSuccessToast, setShowMetadata, setFullPageReaderOpen]);
 
   const getSnoozeOptions = useCallback(() => {
@@ -506,7 +559,7 @@ export function useEmail({
     getCurrentEmails, trashEmail, archiveEmail, starEmail,
     searchAllAccounts, batchAction,
     clearSelection, toggleSelectId, selectAllVisible,
-    snoozeEmail, getSnoozeOptions,
+    snoozeEmail, getSnoozeOptions, syncSnoozed,
     navigatePrev, navigateNext, onSelectEmail,
     setEmails, setEmailBodies, setEmailHeaders, setEmailAttachments,
   };
