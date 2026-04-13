@@ -6,6 +6,12 @@ import { authenticateToken } from '../middleware/auth.js';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+// New tiered pricing — set these in your env
+const STRIPE_PRICE_ID_PRO_MONTHLY = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+const STRIPE_PRICE_ID_PRO_ANNUAL  = process.env.STRIPE_PRICE_ID_PRO_ANNUAL;
+// Legacy $9/mo price — kept for grandfathering existing subscribers
+const STRIPE_LEGACY_PRICE_ID = process.env.STRIPE_LEGACY_PRICE_ID;
+// Fallback: old single-price env var still works if the new ones aren't set
 const STRIPE_PRICE_ID_PRO = process.env.STRIPE_PRICE_ID_PRO;
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
@@ -84,7 +90,13 @@ router.get('/status', authenticateToken, async (req, res) => {
 
 // Create checkout session
 router.post('/checkout', authenticateToken, async (req, res) => {
-  if (!stripe || !STRIPE_PRICE_ID_PRO) {
+  // Resolve price ID: prefer new tiered prices, fall back to legacy env var
+  const { interval = 'monthly' } = req.body || {};
+  const priceId = interval === 'annual'
+    ? (STRIPE_PRICE_ID_PRO_ANNUAL || STRIPE_PRICE_ID_PRO)
+    : (STRIPE_PRICE_ID_PRO_MONTHLY || STRIPE_PRICE_ID_PRO);
+
+  if (!stripe || !priceId) {
     return res.status(501).json({ error: 'Stripe not configured' });
   }
 
@@ -98,7 +110,7 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
-      line_items: [{ price: STRIPE_PRICE_ID_PRO, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${FRONTEND_URL}/app?billing=success`,
       cancel_url: `${FRONTEND_URL}/app?billing=canceled`,
       customer_email: user?.email,

@@ -361,7 +361,7 @@ function Landing() {
                     <th>Gmail</th>
                     <th>Shift <span className="compare-price">($8/mo)</span></th>
                     <th>Superhuman <span className="compare-price">($30/mo)</span></th>
-                    <th className="compare-highlight">All The Mail <span className="compare-price">($9/mo)</span></th>
+                    <th className="compare-highlight">All The Mail <span className="compare-price">($15/mo or $12/mo annual)</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -419,7 +419,7 @@ function Landing() {
                     <td>Free</td>
                     <td>$99/yr</td>
                     <td>$30/mo</td>
-                    <td className="compare-highlight-cell">$9/mo</td>
+                    <td className="compare-highlight-cell">$15/mo or $12/mo annual</td>
                   </tr>
                 </tbody>
               </table>
@@ -453,9 +453,9 @@ function Landing() {
                 </button>
               </div>
               <div className="pricing-card">
-                <span className="pricing-label">PRO</span>
+                <span className="pricing-label">PRO MONTHLY</span>
                 <div className="pricing-price">
-                  <span className="pricing-amount">$9</span>
+                  <span className="pricing-amount">$15</span>
                   <span className="pricing-period">/ month</span>
                 </div>
                 <p className="pricing-cancel">Cancel anytime.</p>
@@ -464,6 +464,31 @@ function Landing() {
                   <li>Mail + Drive + Calendar unified</li>
                   <li>Conversation view + AI search</li>
                   <li>Secure OAuth + encrypted tokens</li>
+                </ul>
+                <button
+                  className="l-cta l-cta--secondary"
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  type="button"
+                >
+                  {isSigningIn ? 'Signing in\u2026' : 'Sign in with Google'}
+                </button>
+                <p className="pricing-note">Start free, upgrade anytime.</p>
+              </div>
+              <div className="pricing-card pricing-card--featured">
+                <span className="pricing-badge">Most Popular</span>
+                <span className="pricing-label">PRO ANNUAL</span>
+                <div className="pricing-price">
+                  <span className="pricing-amount">$12</span>
+                  <span className="pricing-period">/ month</span>
+                </div>
+                <p className="pricing-cancel">Billed annually at $144. Cancel anytime.</p>
+                <ul className="pricing-list">
+                  <li>Unlimited accounts</li>
+                  <li>Mail + Drive + Calendar unified</li>
+                  <li>Conversation view + AI search</li>
+                  <li>Secure OAuth + encrypted tokens</li>
+                  <li>Save $36 vs monthly</li>
                 </ul>
                 <button
                   className="l-cta"

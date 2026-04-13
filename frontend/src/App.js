@@ -386,10 +386,10 @@ const AllTheMail = () => {
     } catch (e) { console.error('Remove account error:', e); setError('Failed to remove account'); setRemovingAccountId(null); }
   }, [removingAccountId, connectedAccounts, activeView]);
 
-  const handleUpgrade = useCallback(async () => {
+  const handleUpgrade = useCallback(async (interval = 'monthly') => {
     setBillingLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+      const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval }) });
       if (r.ok) { const d = await r.json(); if (d.url) window.location.href = d.url; }
       else { const d = await r.json(); setError(d.error || 'Failed to start checkout'); }
     } catch (e) { console.error('Checkout error:', e); setError('Failed to start checkout'); }
@@ -2710,7 +2710,10 @@ const AllTheMail = () => {
                   {billingPlan === 'pro' ? (
                     <button onClick={handleManageBilling} disabled={billingLoading} style={{ background: 'transparent', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', color: 'var(--text-1)', fontSize: '12px', fontWeight: 500, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>Manage</button>
                   ) : (
-                    <button onClick={handleUpgrade} disabled={billingLoading} style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--r-xs)', color: '#fff', fontSize: '12px', fontWeight: 500, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>Upgrade</button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={() => handleUpgrade('monthly')} disabled={billingLoading} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', color: 'var(--text-1)', fontSize: '11px', fontWeight: 500, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>$15/mo</button>
+                      <button onClick={() => handleUpgrade('annual')} disabled={billingLoading} style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--r-xs)', color: '#fff', fontSize: '11px', fontWeight: 500, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>$144/yr</button>
+                    </div>
                   )}
                 </div>
                 <div className="avatar-dropdown-divider" />
