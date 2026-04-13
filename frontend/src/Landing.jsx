@@ -138,6 +138,7 @@ function Landing() {
   const [authError, setAuthError] = useState(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -177,7 +178,19 @@ function Landing() {
               Sign in
             </button>
           </nav>
+          <button className="l-nav-hamburger" onClick={() => setNavOpen(o => !o)} aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen}>
+            <span className={`l-hamburger-bar${navOpen ? ' open' : ''}`} />
+            <span className={`l-hamburger-bar${navOpen ? ' open' : ''}`} />
+            <span className={`l-hamburger-bar${navOpen ? ' open' : ''}`} />
+          </button>
         </div>
+        {navOpen && (
+          <nav className="l-nav-mobile-drawer">
+            <button className="l-nav-mobile-link" onClick={() => { scrollTo('pricing'); setNavOpen(false); }} type="button">Pricing</button>
+            <button className="l-nav-mobile-link" onClick={() => { scrollTo('howitworks'); setNavOpen(false); }} type="button">How it works</button>
+            <button className="l-nav-mobile-link l-nav-mobile-signin" onClick={handleSignIn} type="button">Sign in</button>
+          </nav>
+        )}
       </header>
 
       <main>

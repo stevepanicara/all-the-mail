@@ -24,8 +24,11 @@ const CalsModule = ({
 
   const renderEventChip = (ev) => (
     <div key={ev.id} className={`gcal-chip${selectedEvent?.id === ev.id ? ' active' : ''}`}
-      style={{ borderLeftColor: ev.calendarColor || 'var(--accent)', background: ev.calendarColor ? `${ev.calendarColor}18` : 'rgba(139, 124, 255, 0.08)' }}
-      onClick={() => setSelectedEvent(prev => prev?.id === ev.id ? null : ev)}>
+      role="button" tabIndex={0} aria-pressed={selectedEvent?.id === ev.id}
+      aria-label={`${ev.title}${ev.time && ev.time !== 'All day' ? `, ${ev.time}` : ', All day'}`}
+      style={{ borderLeftColor: ev.calendarColor || 'var(--accent)', background: ev.calendarColor ? `${ev.calendarColor}18` : 'var(--accent-weak)' }}
+      onClick={() => setSelectedEvent(prev => prev?.id === ev.id ? null : ev)}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setSelectedEvent(prev => prev?.id === ev.id ? null : ev)}>
       <span className="gcal-chip-time">{ev.time !== 'All day' ? ev.time : ''}</span>
       <span className="gcal-chip-title">{ev.title}</span>
     </div>
@@ -36,7 +39,7 @@ const CalsModule = ({
     const currentHour = now.getHours();
     const currentMinutes = now.getMinutes();
     return (
-      <div className="gcal-grid" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
+      <div className="gcal-grid" role="grid" aria-label="Calendar" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
         {/* Header row */}
         <div className="gcal-corner" />
         {days.map(day => (
@@ -92,16 +95,17 @@ const CalsModule = ({
             setSelectedEvent({ id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() });
             openEventEdit({ id: 'new', accountId: calsAccount.id, title: '', description: '', meta: '', startISO: now.toISOString(), endISO: oneHourLater.toISOString() });
           }}><Plus size={14} strokeWidth={1.5} /> New event</button>
-          <div className="gcal-nav-group">
-            <button className="btn-ghost gcal-toolbar-today" onClick={() => setCalDate(new Date())}>Today</button>
-            <button className="gcal-nav-btn" onClick={() => calNavigate(-1)}><ChevronLeft size={16} strokeWidth={1.5} /></button>
-            <button className="gcal-nav-btn" onClick={() => calNavigate(1)}><ChevronRight size={16} strokeWidth={1.5} /></button>
+          <div className="gcal-nav-group" role="group" aria-label="Calendar navigation">
+            <button className="btn-ghost gcal-toolbar-today" onClick={() => setCalDate(new Date())} aria-label="Go to today">Today</button>
+            <button className="gcal-nav-btn" onClick={() => calNavigate(-1)} aria-label="Previous period"><ChevronLeft size={16} strokeWidth={1.5} /></button>
+            <button className="gcal-nav-btn" onClick={() => calNavigate(1)} aria-label="Next period"><ChevronRight size={16} strokeWidth={1.5} /></button>
           </div>
           <span className="gcal-title">{calTitle}</span>
         </div>
-        <div className="gcal-toolbar-right">
+        <div className="gcal-toolbar-right" role="group" aria-label="Calendar view">
           {['day', 'week', 'month', 'year', 'schedule', '4day'].map(v => (
-            <button key={v} className={`ev-filter-btn${calsViewMode === v ? ' active' : ''}`} onClick={() => setCalsViewMode(v)}>
+            <button key={v} className={`ev-filter-btn${calsViewMode === v ? ' active' : ''}`}
+              onClick={() => setCalsViewMode(v)} aria-pressed={calsViewMode === v}>
               {v === '4day' ? '4 days' : v.charAt(0).toUpperCase() + v.slice(1)}
             </button>
           ))}
@@ -127,9 +131,10 @@ const CalsModule = ({
               ))}
             </div>
             {calMonthDays.map((week, wi) => (
-              <div key={wi} className="gcal-month-row">
+              <div key={wi} className="gcal-month-row" role="row">
                 {week.map((day, di) => (
-                  <div key={di} className={`gcal-month-cell${day.isToday ? ' gcal-today' : ''}${!day.isCurrentMonth ? ' gcal-muted' : ''}`}
+                  <div key={di} role="gridcell" aria-label={day.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + (day.events.length ? `, ${day.events.length} event${day.events.length !== 1 ? 's' : ''}` : '')}
+                    className={`gcal-month-cell${day.isToday ? ' gcal-today' : ''}${!day.isCurrentMonth ? ' gcal-muted' : ''}`}
                     onClick={() => { setCalDate(day.date); setCalsViewMode('day'); }}>
                     <span className={`gcal-month-daynum${day.isToday ? ' gcal-today-num' : ''}`}>{day.dayNum}</span>
                     {day.events.slice(0, 3).map(renderEventChip)}
@@ -184,7 +189,7 @@ const CalsModule = ({
       {/* Event detail slide-out */}
       {selectedEvent && (
         <div className="gcal-detail">
-          <button className="slide-over-close" onClick={() => setSelectedEvent(null)}><X size={16} strokeWidth={1.5} /></button>
+          <button className="slide-over-close" onClick={() => setSelectedEvent(null)} aria-label="Close event detail"><X size={16} strokeWidth={1.5} /></button>
           <div className="gcal-detail-body">
             <div className="gcal-detail-header">
               <div className="gcal-detail-marker" style={selectedEvent.calendarColor ? { background: selectedEvent.calendarColor } : selectedEvent.urgent ? { background: 'var(--warm-0)' } : undefined} />

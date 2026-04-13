@@ -25,11 +25,11 @@ const EverythingModule = ({
 }) => {
   return (
     <div className="ev-everything-wrap" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div className="ev-mobile-tabs">
-        <button className={`ev-filter-btn${evMobileTab === 'all' ? ' active' : ''}`} onClick={() => setEvMobileTab('all')}>All</button>
-        <button className={`ev-filter-btn${evMobileTab==='mail'?' active':''}`} onClick={()=>setEvMobileTab('mail')}>Mail</button>
-        <button className={`ev-filter-btn${evMobileTab==='docs'?' active':''}`} onClick={()=>setEvMobileTab('docs')}>Docs</button>
-        <button className={`ev-filter-btn${evMobileTab==='cals'?' active':''}`} onClick={()=>setEvMobileTab('cals')}>Cals</button>
+      <div className="ev-mobile-tabs" role="tablist" aria-label="Content type">
+        <button role="tab" aria-selected={evMobileTab === 'all'} className={`ev-filter-btn${evMobileTab === 'all' ? ' active' : ''}`} onClick={() => setEvMobileTab('all')}>All</button>
+        <button role="tab" aria-selected={evMobileTab === 'mail'} className={`ev-filter-btn${evMobileTab==='mail'?' active':''}`} onClick={()=>setEvMobileTab('mail')}>Mail</button>
+        <button role="tab" aria-selected={evMobileTab === 'docs'} className={`ev-filter-btn${evMobileTab==='docs'?' active':''}`} onClick={()=>setEvMobileTab('docs')}>Docs</button>
+        <button role="tab" aria-selected={evMobileTab === 'cals'} className={`ev-filter-btn${evMobileTab==='cals'?' active':''}`} onClick={()=>setEvMobileTab('cals')}>Cals</button>
       </div>
       <PanelGroup orientation="horizontal" id="atm-everything-layout" className={`ev-desktop-only${evMobileTab === 'all' ? ' ev-hide-on-mobile' : ''}`}>
         <Panel defaultSize="40%" minSize="30%" id="ev-mail">
@@ -37,8 +37,8 @@ const EverythingModule = ({
             <div className="ev-col-header">
               <span className="ev-col-title">Mail</span>
               <div className="ev-col-filters">
-                <button className={`ev-filter-btn${evMailFilter==='all'?' active':''}`} onClick={()=>setEvMailFilter('all')}>All</button>
-                <button className={`ev-filter-btn${evMailFilter==='unread'?' active':''}`} onClick={()=>setEvMailFilter('unread')}>Unread</button>
+                <button className={`ev-filter-btn${evMailFilter==='all'?' active':''}`} aria-pressed={evMailFilter==='all'} onClick={()=>setEvMailFilter('all')}>All</button>
+                <button className={`ev-filter-btn${evMailFilter==='unread'?' active':''}`} aria-pressed={evMailFilter==='unread'} onClick={()=>setEvMailFilter('unread')}>Unread</button>
               </div>
             </div>
             <div className="ev-col-body">
@@ -78,8 +78,8 @@ const EverythingModule = ({
             <div className="ev-col-header">
               <span className="ev-col-title">Docs</span>
               <div className="ev-col-filters">
-                <button className={`ev-filter-btn${evDocsFilter==='recent'?' active':''}`} onClick={()=>setEvDocsFilter('recent')}>Recent</button>
-                <button className={`ev-filter-btn${evDocsFilter==='shared'?' active':''}`} onClick={()=>setEvDocsFilter('shared')}>Shared</button>
+                <button className={`ev-filter-btn${evDocsFilter==='recent'?' active':''}`} aria-pressed={evDocsFilter==='recent'} onClick={()=>setEvDocsFilter('recent')}>Recent</button>
+                <button className={`ev-filter-btn${evDocsFilter==='shared'?' active':''}`} aria-pressed={evDocsFilter==='shared'} onClick={()=>setEvDocsFilter('shared')}>Shared</button>
               </div>
             </div>
             <div className="ev-col-body">
@@ -121,8 +121,8 @@ const EverythingModule = ({
             <div className="ev-col-header">
               <span className="ev-col-title">Cals</span>
               <div className="ev-col-filters">
-                <button className={`ev-filter-btn${evCalsFilter==='upcoming'?' active':''}`} onClick={()=>setEvCalsFilter('upcoming')}>Upcoming</button>
-                <button className={`ev-filter-btn${evCalsFilter==='week'?' active':''}`} onClick={()=>setEvCalsFilter('week')}>Week</button>
+                <button className={`ev-filter-btn${evCalsFilter==='upcoming'?' active':''}`} aria-pressed={evCalsFilter==='upcoming'} onClick={()=>setEvCalsFilter('upcoming')}>Upcoming</button>
+                <button className={`ev-filter-btn${evCalsFilter==='week'?' active':''}`} aria-pressed={evCalsFilter==='week'} onClick={()=>setEvCalsFilter('week')}>Week</button>
               </div>
             </div>
             <div className="ev-col-body">

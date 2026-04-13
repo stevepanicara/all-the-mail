@@ -75,6 +75,8 @@
   /* Email content (always light) */
   --email-bg: #f5f7fa;
   --email-text: #111111;
+  --email-text-muted: rgba(0, 0, 0, 0.45);
+  --email-text-faint: rgba(0, 0, 0, 0.35);
   --email-link: #0b57d0;
 
   /* 9. Shadows */
@@ -100,7 +102,7 @@
 ========================================================== */
 [data-theme="light"] {
   /* Foundation — warm white ramp */
-  --bg-0: #ffffff;
+  --bg-0: #fefeff;
   --bg-1: #f8f8fa;
   --bg-2: #f2f2f5;
   --bg-3: #eaeaef;
@@ -132,6 +134,8 @@
   /* Email content stays the same */
   --email-bg: #f5f7fa;
   --email-text: #111111;
+  --email-text-muted: rgba(0, 0, 0, 0.45);
+  --email-text-faint: rgba(0, 0, 0, 0.35);
   --email-link: #0b57d0;
 
   /* Shadows — lighter for white surfaces */
@@ -416,6 +420,7 @@ body {
     var(--bg-0);
   /* Ensure gate matches app background even before tokens are applied */
   background-color: #0b0f14;
+  will-change: opacity, transform;
 }
 
 /* Loading bar sits 32px below the true vertical center, independent of wordmark */
@@ -447,10 +452,10 @@ body {
 }
 
 [data-theme="light"] .app-gate {
-  background-color: #ffffff;
+  background-color: #fefeff;
   background:
     radial-gradient(1200px circle at 20% 0%, rgba(124, 107, 240, 0.04), transparent 60%),
-    #ffffff;
+    #fefeff;
 }
 
 /* ---------- BRANDED LOADING STATE (legacy auth-check screen) ---------- */
@@ -489,6 +494,7 @@ body {
   background: var(--accent);
   border-radius: 1px;
   animation: loadSlide 1.2s ease-in-out infinite;
+  will-change: transform;
 }
 
 @keyframes loadPulse {
@@ -949,6 +955,7 @@ body {
   overflow: auto;
   background: var(--surface-list);
   height: 100%;
+  container-type: inline-size;
 }
 
 .email-detail {

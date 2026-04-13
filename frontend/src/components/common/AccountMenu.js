@@ -68,7 +68,7 @@ const AccountMenu = ({
             ) : (
               <div style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => handleUpgrade('monthly')} disabled={billingLoading} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)', color: 'var(--text-1)', fontSize: '11px', fontWeight: 500, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>$15/mo</button>
-                <button onClick={() => handleUpgrade('annual')} disabled={billingLoading} style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--r-xs)', color: '#fff', fontSize: '11px', fontWeight: 500, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>$144/yr</button>
+                <button onClick={() => handleUpgrade('annual')} disabled={billingLoading} style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--r-xs)', color: 'var(--accent-contrast)', fontSize: '11px', fontWeight: 500, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>$144/yr</button>
               </div>
             )}
           </div>

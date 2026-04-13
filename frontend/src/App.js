@@ -5,8 +5,6 @@ import {
   Send, ArrowLeft, Reply, Archive, ExternalLink,
 } from 'lucide-react';
 import { Group as PanelGroup } from 'react-resizable-panels';
-import 'react-quill/dist/quill.snow.css';
-
 import { API_BASE, FILE_TYPES } from './utils/constants';
 import {
   getAccountGradient, buildEmailSrcDoc, stripName, ensurePrefix,
@@ -15,7 +13,6 @@ import {
   getDocEditUrl, getDocIcon, getDocEditorLabel, getRelativeTime, formatTime,
 } from './utils/helpers';
 
-import ComposeModal from './components/common/ComposeModal';
 import EventEditModal from './components/common/EventEditModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Avatar from './components/Avatar';
@@ -27,6 +24,8 @@ import EverythingModule from './components/everything/EverythingModule';
 import { useEmail } from './hooks/useEmail';
 
 import './design-system.css';
+
+const ComposeModal = React.lazy(() => import('./components/common/ComposeModal'));
 
 // ==================== MAIN COMPONENT ====================
 
@@ -1334,22 +1333,24 @@ const AllTheMail = () => {
       </main>
 
       {/* Compose modal */}
-      <ComposeModal
-        composeOpen={composeOpen} composeMode={composeMode} composeSending={composeSending} composeError={composeError}
-        composeFromAccountId={composeFromAccountId} setComposeFromAccountId={setComposeFromAccountId}
-        composeTo={composeTo} setComposeTo={setComposeTo}
-        composeCc={composeCc} setComposeCc={setComposeCc}
-        composeBcc={composeBcc} setComposeBcc={setComposeBcc}
-        composeSubject={composeSubject} setComposeSubject={setComposeSubject}
-        composeBody={composeBody} setComposeBody={setComposeBody}
-        composeShowCcBcc={composeShowCcBcc} setComposeShowCcBcc={setComposeShowCcBcc}
-        composeAttachments={composeAttachments} handleFileSelect={handleFileSelect} removeAttachment={removeAttachment}
-        connectedAccounts={connectedAccounts}
-        closeCompose={closeCompose} sendCompose={sendComposeWithDelay}
-        scheduleSend={scheduleSend}
-        saveDraft={saveDraft}
-        includeSignature={includeAtmSignature} setIncludeSignature={setIncludeAtmSignature}
-      />
+      <React.Suspense fallback={null}>
+        <ComposeModal
+          composeOpen={composeOpen} composeMode={composeMode} composeSending={composeSending} composeError={composeError}
+          composeFromAccountId={composeFromAccountId} setComposeFromAccountId={setComposeFromAccountId}
+          composeTo={composeTo} setComposeTo={setComposeTo}
+          composeCc={composeCc} setComposeCc={setComposeCc}
+          composeBcc={composeBcc} setComposeBcc={setComposeBcc}
+          composeSubject={composeSubject} setComposeSubject={setComposeSubject}
+          composeBody={composeBody} setComposeBody={setComposeBody}
+          composeShowCcBcc={composeShowCcBcc} setComposeShowCcBcc={setComposeShowCcBcc}
+          composeAttachments={composeAttachments} handleFileSelect={handleFileSelect} removeAttachment={removeAttachment}
+          connectedAccounts={connectedAccounts}
+          closeCompose={closeCompose} sendCompose={sendComposeWithDelay}
+          scheduleSend={scheduleSend}
+          saveDraft={saveDraft}
+          includeSignature={includeAtmSignature} setIncludeSignature={setIncludeAtmSignature}
+        />
+      </React.Suspense>
 
       {/* Slide-over preview panel */}
       {(slideOverEmail || slideOverDoc) && (

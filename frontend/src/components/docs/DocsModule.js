@@ -86,7 +86,7 @@ const DocsModule = ({
               <div className="email-detail-content">
                 <div style={{ padding: '24px 32px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: 'var(--r-sm)', background: 'rgba(139, 124, 255, 0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><DetailIcon size={18} strokeWidth={1.5} style={{ color: 'var(--accent)' }} /></div>
+                    <div style={{ width: '36px', height: '36px', borderRadius: 'var(--r-sm)', background: 'var(--accent-weak)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><DetailIcon size={18} strokeWidth={1.5} style={{ color: 'var(--accent)' }} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}><h1 style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: 0 }}>{selectedDoc.title}</h1></div>
                   </div>
                   <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', fontSize: '12px', color: 'var(--text-2)' }}>
