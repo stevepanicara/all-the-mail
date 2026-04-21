@@ -1,12 +1,9 @@
 import { useState } from 'react';
+import { ACCT_PALETTE } from '../utils/getAccountColor';
 
-// Deterministic color from email string
-const AVATAR_COLORS = [
-  '#1A73E8', '#D93025', '#188038', '#E37400',
-  '#A142F4', '#E8453C', '#1E8E3E', '#F29900',
-  '#8430CE', '#C5221F', '#0D652D', '#EA8600',
-  '#6200EA', '#B31412', '#137333', '#F9AB00',
-];
+// Brand-safe avatar palette — account identity colors only.
+// No SaaS-blue. No teal. No pastels. Mono initials.
+const AVATAR_COLORS = ACCT_PALETTE.map(p => p.bg);
 
 function hashString(str) {
   let hash = 0;
@@ -21,26 +18,26 @@ export function getAvatarColor(email) {
   return AVATAR_COLORS[hashString(email) % AVATAR_COLORS.length];
 }
 
+function inkForBg(bg) {
+  // Match the palette: light colors -> ink, dark colors -> paper
+  const slot = ACCT_PALETTE.find(p => p.bg.toLowerCase() === String(bg).toLowerCase());
+  return slot ? slot.ink : '#FFFFFF';
+}
+
 function getInitial(name, email) {
   const src = name || email || '?';
-  // Strip display name formatting
   const clean = src.replace(/<[^>]*>/g, '').trim();
   return (clean[0] || '?').toUpperCase();
 }
 
 /**
- * Avatar component.
- * Props:
- *   src   - direct image URL (Google profile pic)
- *   email - used for color/initial derivation
- *   name  - display name for initial
- *   size  - 24 | 32 | 40 | 56 (default 32)
- *   ring  - optional CSS color for the ring border
+ * Avatar component — account-colored disc with mono initial.
  */
 export default function Avatar({ src, email, name, size = 32, ring }) {
   const [imgFailed, setImgFailed] = useState(false);
 
   const color = getAvatarColor(email || name || '');
+  const ink = inkForBg(color);
   const initial = getInitial(name, email);
 
   const style = {
@@ -51,9 +48,11 @@ export default function Avatar({ src, email, name, size = 32, ring }) {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: size <= 24 ? '10px' : size <= 32 ? '12px' : size <= 40 ? '14px' : '18px',
-    fontWeight: 600,
-    color: 'rgba(255,255,255,0.92)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: size <= 24 ? '10px' : size <= 32 ? '11px' : size <= 40 ? '13px' : '16px',
+    fontWeight: 700,
+    letterSpacing: '0.04em',
+    color: ink,
     background: color,
     overflow: 'hidden',
     ...(ring ? { boxShadow: `0 0 0 2px ${ring}` } : {}),

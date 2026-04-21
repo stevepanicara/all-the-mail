@@ -1,0 +1,983 @@
+/* =====================================================
+   ALL THE MAIL — Brand v2 · Tokens + Typography
+   Paired to design_handoff_all_the_mail
+   Nike / Supreme posture · paper/ink high contrast
+   Signature red #FF3A1D · hard edges · printed shadows
+===================================================== */
+
+/* ---------- FONTS ----------
+   Production stand-ins (Google Fonts). Real families:
+     Display: Monument Grotesk Pro (paid)
+     UI:      NN Grotesk (paid)
+     Mono:    Commit Mono (paid)
+   Condensed display = Agency FB Black Condensed (bundled).
+------------------------------------------------------ */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@font-face {
+  font-family: 'Agency FB';
+  src: url('./fonts/Agency_FB_Black_Condensed.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==========================================================
+   ROOT — LIGHT MODE DEFAULT (canonical paper/ink)
+   Dark mode is an override via [data-theme="dark"].
+========================================================== */
+:root {
+  /* -------- Brand families -------- */
+  --font-display:   'Space Grotesk', 'Monument Grotesk Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-ui:        'Inter', 'NN Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-condensed: 'Agency FB', 'DIN Condensed', 'Oswald', 'Impact', sans-serif;
+  --font-mono:      'JetBrains Mono', 'Commit Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* Legacy alias (heavily referenced) */
+  --font-sans: var(--font-ui);
+
+  /* -------- Foundation (light default) -------- */
+  --ink:        #0A0A0A;
+  --paper:      #FAFAF7;
+  --paper-pure: #FFFFFF;
+  --ink-pure:   #000000;
+
+  --ink-1: #0A0A0A;
+  --ink-2: rgba(10,10,10,0.72);
+  --ink-3: rgba(10,10,10,0.52);
+  --ink-4: rgba(10,10,10,0.32);
+  --ink-5: rgba(10,10,10,0.12);
+  --ink-6: rgba(10,10,10,0.06);
+
+  --paper-1: #FAFAF7;
+  --paper-2: rgba(250,250,247,0.72);
+  --paper-3: rgba(250,250,247,0.52);
+  --paper-4: rgba(250,250,247,0.32);
+  --paper-5: rgba(250,250,247,0.14);
+  --paper-6: rgba(250,250,247,0.08);
+
+  /* -------- Primary (signature red) -------- */
+  --primary:       #FF3A1D;
+  --primary-ink:   #FFFFFF;
+  --primary-deep:  #C5270F;
+  --primary-wash:  rgba(255,58,29,0.10);
+
+  /* -------- Accents (one at a time) -------- */
+  --acid:        #CCFF00;
+  --acid-ink:    #0A0A0A;
+  --voltage:     #FFE500;
+  --voltage-ink: #0A0A0A;
+  --cobalt:      #1B2BFF;
+  --cobalt-ink:  #FFFFFF;
+
+  /* -------- Account identity -------- */
+  --acct-work:     #FF3A1D;
+  --acct-personal: #1B2BFF;
+  --acct-side:     #CCFF00;
+  --acct-nonprof:  #FFE500;
+  --acct-old:      #0A0A0A;
+  --acct-legacy:   #C5270F;
+
+  /* -------- Semantic -------- */
+  --danger:  #FF3A1D;
+  --warning: #FFE500;
+  --success: #CCFF00;
+  --info:    var(--ink-1);
+
+  /* -------- Type scale · display -------- */
+  --display-mega: clamp(80px, 14vw, 240px);
+  --display-xl:   clamp(56px, 8vw, 128px);
+  --display-lg:   clamp(40px, 5vw, 72px);
+  --display-md:   clamp(28px, 3.2vw, 44px);
+  --display-sm:   22px;
+  --display-tracking: -0.03em;
+
+  /* -------- Type scale · body -------- */
+  --body-xl: 22px;
+  --body-lg: 18px;
+  --body-md: 15px;
+  --body-sm: 13px;
+  --body-xs: 11px;
+
+  /* -------- Type scale · mono -------- */
+  --mono-sm: 11px;
+  --mono-md: 12px;
+  --mono-lg: 14px;
+  --mono-tracking: 0.02em;
+
+  /* -------- Spacing (8pt grid) -------- */
+  --sp-0: 0px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+  --sp-10: 128px;
+
+  /* -------- Radii (hard edges win) -------- */
+  --r-0: 0px;
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-3: 8px;
+  --r-pill: 999px;
+
+  /* -------- Borders -------- */
+  --border-hair:  1px solid var(--ink-5);
+  --border-line:  1px solid var(--ink-1);
+  --border-heavy: 2px solid var(--ink-1);
+  --border-mark:  3px solid var(--ink-1);
+
+  /* -------- Shadows (printed offsets) -------- */
+  --shadow-0: none;
+  --shadow-1: 0 1px 0 var(--ink-5);
+  --shadow-2: 0 2px 0 var(--ink-1);
+  --shadow-3: 4px 4px 0 var(--ink-1);
+  --shadow-4: 8px 8px 0 var(--ink-1);
+
+  /* -------- Motion -------- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --t-instant:    80ms;
+  --t-quick:     160ms;
+  --t-standard:  240ms;
+  --t-deliberate: 420ms;
+
+  /* -------- Z-index -------- */
+  --z-base:    1;
+  --z-sticky:  10;
+  --z-drawer:  100;
+  --z-modal:   1000;
+  --z-toast:   2000;
+  --z-top:     9999;
+
+  /* ==================================================
+     LEGACY TOKEN ALIASES — map old -> new palette
+     so existing components inherit the v2 brand.
+  ================================================== */
+
+  /* Surfaces / bg ramp */
+  --bg-0: var(--paper);
+  --bg-1: var(--paper);
+  --bg-2: var(--paper);
+  --bg-3: var(--ink-6);
+
+  /* Text ramp */
+  --text-0: var(--ink-1);
+  --text-1: var(--ink-2);
+  --text-2: var(--ink-3);
+  --text-3: var(--ink-4);
+
+  /* Lines */
+  --line-0: var(--ink-5);
+  --line-1: rgba(10,10,10,0.08);
+  --line:   var(--ink-5);
+
+  /* Accent -> primary red (was violet) */
+  --accent:          var(--primary);
+  --accent-weak:     var(--primary-wash);
+  --accent-focus:    rgba(255,58,29,0.35);
+  --accent-contrast: var(--primary-ink);
+
+  /* Warm */
+  --warm-0: var(--primary);
+  --warm-1: var(--primary);
+
+  /* Radii mapping (soft names -> structural) */
+  --r-xs: var(--r-1);
+  --r-sm: var(--r-2);
+  --r-md: var(--r-3);
+  --r-lg: var(--r-3);
+  --r-xl: var(--r-3);
+
+  /* Type size mapping */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.375rem;
+
+  /* Motion mapping */
+  --t-micro:    var(--t-quick);
+  --t-entrance: var(--t-deliberate);
+
+  /* Surfaces (reader, list, sidebar) */
+  --surface-sidebar:  var(--paper);
+  --surface-list:     var(--paper);
+  --surface-detail:   var(--paper);
+  --surface-elevated: var(--paper-pure);
+  --surface-reader:   var(--paper);
+
+  /* Email content (sanitized iframe) */
+  --email-bg:         #FAFAF7;
+  --email-text:       #0A0A0A;
+  --email-text-muted: rgba(10,10,10,0.52);
+  --email-text-faint: rgba(10,10,10,0.32);
+  --email-link:       var(--primary);
+
+  /* Shadows (legacy names -> printed) */
+  --shadow-sm:   var(--shadow-2);
+  --shadow-md:   var(--shadow-3);
+  --shadow-lg:   var(--shadow-4);
+  --shadow-xl:   var(--shadow-4);
+  --shadow-left: var(--shadow-3);
+
+  /* Interactive */
+  --hover-bg:     var(--ink-6);
+  --active-bg:    var(--ink-5);
+  --hover-border: var(--ink-1);
+
+  /* Z legacy */
+  --z-toast:    2000;
+  --z-modal:    1000;
+  --z-dropdown: 100;
+}
+
+/* ==========================================================
+   DARK MODE — inverted canvas (data-theme="dark")
+========================================================== */
+[data-theme="dark"] {
+  --ink:     #FAFAF7;
+  --paper:   #0A0A0A;
+  --paper-pure: #000000;
+  --ink-pure:   #FFFFFF;
+
+  --ink-1: #FAFAF7;
+  --ink-2: rgba(250,250,247,0.72);
+  --ink-3: rgba(250,250,247,0.52);
+  --ink-4: rgba(250,250,247,0.32);
+  --ink-5: rgba(250,250,247,0.14);
+  --ink-6: rgba(250,250,247,0.08);
+
+  --paper-1: #0A0A0A;
+  --paper-2: rgba(10,10,10,0.72);
+  --paper-3: rgba(10,10,10,0.52);
+
+  --surface-sidebar:  var(--paper);
+  --surface-list:     var(--paper);
+  --surface-detail:   var(--paper);
+  --surface-elevated: #121212;
+  --surface-reader:   var(--paper);
+}
+
+/* Ensure no-theme users get light */
+html:not([data-theme]),
+html[data-theme=""] {
+  /* light mode tokens already in :root */
+}
+
+/* ==========================================================
+   SEMANTIC RECIPES — display / body / mono classes
+========================================================== */
+
+.atm-wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: var(--display-tracking);
+  text-transform: uppercase;
+  line-height: 0.92;
+  color: var(--ink-1);
+}
+
+.atm-display-mega { font: 700 var(--display-mega)/0.9  var(--font-display); letter-spacing: -0.04em;  text-transform: uppercase; }
+.atm-display-xl   { font: 700 var(--display-xl)/0.92   var(--font-display); letter-spacing: -0.035em; text-transform: uppercase; }
+.atm-display-lg   { font: 700 var(--display-lg)/0.95   var(--font-display); letter-spacing: -0.03em;  text-transform: uppercase; }
+.atm-display-md   { font: 600 var(--display-md)/1.05   var(--font-display); letter-spacing: -0.02em;  text-transform: uppercase; }
+.atm-display-sm   { font: 600 var(--display-sm)/1.1    var(--font-display); letter-spacing: -0.01em;  text-transform: uppercase; }
+
+.atm-condensed-mega { font: 900 var(--display-mega)/0.88 var(--font-condensed); letter-spacing: 0.01em;  text-transform: uppercase; }
+.atm-condensed-xl   { font: 900 var(--display-xl)/0.9   var(--font-condensed); letter-spacing: 0.01em;  text-transform: uppercase; }
+.atm-condensed-lg   { font: 900 var(--display-lg)/0.92  var(--font-condensed); letter-spacing: 0.015em; text-transform: uppercase; }
+.atm-condensed-md   { font: 900 var(--display-md)/1.0   var(--font-condensed); letter-spacing: 0.02em;  text-transform: uppercase; }
+
+.atm-meta { font: 500 var(--body-xs)/1.3 var(--font-ui); color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.atm-mono     { font-family: var(--font-mono); letter-spacing: var(--mono-tracking); }
+.atm-mono-sm  { font: 500 var(--mono-sm)/1.4 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+.atm-mono-md  { font: 500 var(--mono-md)/1.4 var(--font-mono); letter-spacing: 0.03em; }
+.atm-mono-lg  { font: 500 var(--mono-lg)/1.4 var(--font-mono); letter-spacing: 0.02em; }
+
+.atm-bg-paper   { background: var(--paper);    color: var(--ink-1); }
+.atm-bg-ink     { background: var(--ink-1);    color: var(--paper); }
+.atm-bg-primary { background: var(--primary);  color: var(--primary-ink); }
+
+/* ==========================================================
+   PRINTED BUTTON — canonical primary / ghost / icon
+========================================================== */
+.atm-btn {
+  font: 600 11px var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    transform var(--t-quick) var(--ease),
+    box-shadow var(--t-quick) var(--ease),
+    background var(--t-instant) var(--ease),
+    color var(--t-instant) var(--ease);
+}
+
+.atm-btn--primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: 2px 2px 0 var(--ink-1);
+}
+.atm-btn--primary:hover { background: var(--primary-deep); }
+.atm-btn--primary:active,
+.atm-btn--primary.is-pressed {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink-1);
+}
+
+.atm-btn--ink {
+  background: var(--ink-1);
+  color: var(--paper);
+  box-shadow: 2px 2px 0 var(--ink-1);
+}
+.atm-btn--ink:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink-1);
+}
+
+.atm-btn--ghost {
+  background: transparent;
+  color: var(--ink-1);
+  border: 1px solid var(--ink-1);
+  padding: 8px 15px;
+}
+.atm-btn--ghost:hover {
+  background: var(--ink-1);
+  color: var(--paper);
+}
+
+.atm-btn--icon {
+  width: 30px; height: 30px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.atm-btn--icon:hover {
+  background: var(--ink-6);
+  color: var(--ink-1);
+}
+
+/* Disable italic for brand voice */
+.atm-no-italic { font-style: normal !important; }
+
+/* Focus ring — ink not blue */
+:where(button, [role="button"], a, input, textarea, select):focus-visible {
+  outline: 2px solid var(--ink-1);
+  outline-offset: 2px;
+}
+
+/* ==========================================================
+   ROW HOVER — 6% ink wash
+========================================================== */
+.atm-row-hover:hover {
+  background: var(--ink-6);
+}
+
+/* ==========================================================
+   APP-LEVEL BASELINE — light default body
+========================================================== */
+html, body {
+  background: var(--paper);
+  color: var(--ink-1);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Selection — ink on voltage */
+::selection {
+  background: var(--voltage);
+  color: var(--voltage-ink);
+}
+
+/* ==========================================================
+   BRAND V2 OVERRIDES — existing app chrome → new brand
+   Keeps markup intact; re-skins layout, shape, shadows.
+========================================================== */
+
+/* -- Kill radii on large structural containers ------------ */
+.modal,
+.modal-container,
+.tile,
+.card,
+.popover,
+.slide-over-panel,
+.avatar-dropdown,
+.event-edit-modal,
+.toast,
+.modal-input,
+.modal-textarea,
+.modal-header,
+.modal-actions {
+  border-radius: 0 !important;
+}
+
+/* -- App container: paper bg, no gradients ---------------- */
+.app-container,
+.app-loading,
+.app-gate {
+  background: var(--paper) !important;
+}
+
+.app-container::after,
+.app-container.intro::before {
+  background: none !important;
+  opacity: 0 !important;
+}
+
+/* -- Top bar ---------------------------------------------- */
+.top-bar {
+  height: 56px !important;
+  background: var(--paper) !important;
+  border-bottom: 1px solid var(--ink-5) !important;
+  padding: 0 var(--sp-5) !important;
+  gap: var(--sp-4) !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.top-bar-wordmark {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  font-size: 20px !important;
+  letter-spacing: -0.03em !important;
+  text-transform: uppercase !important;
+  line-height: 1 !important;
+  color: var(--ink-1) !important;
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 6px !important;
+}
+.top-bar-wordmark .wordmark-static,
+.top-bar-wordmark .wordmark-module {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--ink-1) !important;
+  text-transform: uppercase !important;
+}
+.wordmark-module {
+  animation: atm-word-fade var(--t-standard) var(--ease);
+}
+@keyframes atm-word-fade {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Gate (intro) wordmark — huge */
+.app-gate-wordmark {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.04em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-1) !important;
+}
+.app-gate-wordmark .wordmark-static,
+.app-gate-wordmark .wordmark-module {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.04em !important;
+  color: var(--ink-1) !important;
+}
+
+/* -- Module tabs ----------------------------------------- */
+.module-tabs {
+  display: flex !important;
+  gap: var(--sp-4) !important;
+  margin-left: var(--sp-4) !important;
+}
+.module-tab {
+  font: 600 11px var(--font-ui) !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-3) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 18px 0 !important;
+  position: relative;
+  cursor: pointer;
+  transition: color var(--t-instant) var(--ease);
+}
+.module-tab:hover { color: var(--ink-1) !important; background: transparent !important; }
+.module-tab.active { color: var(--ink-1) !important; background: transparent !important; }
+.module-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--ink-1);
+}
+
+.module-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--ink-5) !important;
+  margin: 0 var(--sp-3) !important;
+}
+
+/* -- Account rail + pills -------------------------------- */
+.account-rail {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: var(--sp-3) !important;
+}
+.account-pill {
+  font: 500 12px var(--font-ui) !important;
+  color: var(--ink-1) !important;
+  background: transparent !important;
+  border: 1px solid var(--ink-5) !important;
+  border-radius: var(--r-pill) !important;
+  padding: 4px 10px 4px 4px !important;
+  gap: 6px !important;
+  transition: background var(--t-instant) var(--ease), color var(--t-instant) var(--ease), border-color var(--t-instant) var(--ease);
+}
+.account-pill:hover {
+  border-color: var(--ink-1) !important;
+  background: transparent !important;
+}
+.account-pill.active {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+  border-color: var(--ink-1) !important;
+  font-weight: 600 !important;
+}
+.account-pill.add-pill {
+  border-style: dashed !important;
+  color: var(--ink-3) !important;
+}
+.account-pill.add-pill:hover {
+  border-style: dashed !important;
+  border-color: var(--ink-1) !important;
+  color: var(--ink-1) !important;
+}
+
+/* -- Toolbar buttons (header/top-bar icon buttons) ------- */
+.toolbar-btn {
+  width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: var(--ink-2) !important;
+  transition: background var(--t-instant) var(--ease), color var(--t-instant) var(--ease);
+}
+.toolbar-btn:hover {
+  background: var(--ink-6) !important;
+  color: var(--ink-1) !important;
+}
+.toolbar-btn.toolbar-active {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+}
+
+/* Theme toggle */
+.theme-toggle-btn { width: 30px !important; height: 30px !important; }
+.theme-icon { display: none; }
+.theme-icon.theme-icon-active { display: inline-flex; }
+
+/* -- Printed "compose" CTA — NEW MESSAGE style ----------- */
+.btn-compose,
+.compose-cta,
+.new-message-btn {
+  font: 600 11px var(--font-ui) !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  background: var(--primary) !important;
+  color: var(--primary-ink) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 9px 16px !important;
+  cursor: pointer !important;
+  box-shadow: 2px 2px 0 var(--ink-1) !important;
+  transition: transform var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease), background var(--t-instant) var(--ease) !important;
+}
+.btn-compose:hover,
+.compose-cta:hover,
+.new-message-btn:hover {
+  background: var(--primary-deep) !important;
+}
+.btn-compose:active,
+.compose-cta:active,
+.new-message-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink-1) !important;
+}
+
+/* -- Generic buttons used inside email/docs UI ----------- */
+button.btn-primary,
+.primary-button {
+  background: var(--primary) !important;
+  color: var(--primary-ink) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: 2px 2px 0 var(--ink-1) !important;
+  font: 600 11px var(--font-ui) !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 9px 16px !important;
+}
+button.btn-primary:hover,
+.primary-button:hover { background: var(--primary-deep) !important; }
+
+/* -- Modals ---------------------------------------------- */
+.modal,
+.modal-container,
+.event-edit-modal {
+  background: var(--paper) !important;
+  border: 2px solid var(--ink-1) !important;
+  box-shadow: 8px 8px 0 var(--ink-1) !important;
+}
+
+.modal-header {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-1) !important;
+  border-bottom: 1px solid var(--ink-5) !important;
+}
+
+.modal-input,
+.modal-textarea {
+  background: var(--paper-pure) !important;
+  border: 1px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  color: var(--ink-1) !important;
+  font-family: var(--font-ui) !important;
+}
+.modal-input:focus,
+.modal-textarea:focus {
+  outline: 2px solid var(--ink-1) !important;
+  outline-offset: 1px;
+}
+
+/* -- Toasts ---------------------------------------------- */
+.toast {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0 var(--primary) !important;
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: uppercase !important;
+  padding: 12px 18px !important;
+}
+.toast-x {
+  color: var(--paper) !important;
+}
+
+/* -- Slide-over (settings drawer) ------------------------ */
+.slide-over-panel {
+  background: var(--paper) !important;
+  border-left: 2px solid var(--ink-1) !important;
+  box-shadow: -8px 0 0 var(--ink-1) !important;
+  border-radius: 0 !important;
+}
+
+/* -- Avatar dropdown ------------------------------------- */
+.avatar-dropdown {
+  background: var(--paper) !important;
+  border: 1px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0 var(--ink-1) !important;
+}
+.avatar-dropdown-account-row:hover,
+.avatar-dropdown-add-btn:hover,
+.avatar-dropdown-signout:hover {
+  background: var(--ink-6) !important;
+}
+
+/* -- Mail rows + lists ----------------------------------- */
+.email-list-row,
+.message-row,
+.mail-row,
+.doc-row,
+.ev-row {
+  border-bottom: 1px solid var(--ink-5) !important;
+  border-radius: 0 !important;
+  transition: background var(--t-instant) var(--ease);
+}
+.email-list-row:hover,
+.message-row:hover,
+.mail-row:hover,
+.doc-row:hover,
+.ev-row:hover {
+  background: var(--ink-6) !important;
+}
+.email-list-row.selected,
+.message-row.selected,
+.mail-row.selected {
+  background: var(--ink-6) !important;
+  border-left: 2px solid var(--primary) !important;
+}
+
+/* Unread indicator — signature red dot */
+.unread-dot,
+.unread-indicator {
+  background: var(--primary) !important;
+  border-radius: var(--r-pill) !important;
+}
+
+/* -- Sidebar folder nav ---------------------------------- */
+.sidebar-item,
+.category-item {
+  border-radius: 0 !important;
+  border-left: 2px solid transparent !important;
+}
+.sidebar-item:hover,
+.category-item:hover {
+  background: var(--ink-6) !important;
+}
+.sidebar-item.active,
+.category-item.active {
+  border-left-color: var(--primary) !important;
+  background: transparent !important;
+  color: var(--ink-1) !important;
+  font-weight: 600 !important;
+}
+
+/* -- Search field ---------------------------------------- */
+.search-input,
+.search-bar input,
+input[type="search"] {
+  background: var(--paper-pure) !important;
+  border: 1px solid var(--ink-5) !important;
+  border-radius: 0 !important;
+  color: var(--ink-1) !important;
+  font-family: var(--font-ui) !important;
+}
+.search-input:focus,
+.search-bar input:focus,
+input[type="search"]:focus {
+  border-color: var(--ink-1) !important;
+  outline: none !important;
+}
+
+/* -- Sync status mono chip ------------------------------- */
+.sync-dot {
+  width: 6px; height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--acid) !important;
+  box-shadow: 0 0 0 2px rgba(204,255,0,0.25);
+  display: inline-block;
+}
+
+/* -- Quill (compose editor) ------------------------------ */
+.ql-snow .ql-tooltip,
+.ql-snow .ql-picker-options {
+  background: var(--paper) !important;
+  border: 1px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  color: var(--ink-1) !important;
+}
+.ql-editor { font-family: var(--font-ui) !important; color: var(--ink-1) !important; }
+
+/* -- Skeleton shimmer (kill) ----------------------------- */
+.skeleton-block {
+  background: var(--ink-6) !important;
+  background-image: none !important;
+  animation: none !important;
+}
+
+/* -- Loading bar ----------------------------------------- */
+.app-loading-bar,
+.loading-bar {
+  background: var(--ink-6) !important;
+}
+.app-loading-bar::after,
+.loading-bar::after {
+  background: var(--primary) !important;
+}
+
+/* -- Resizable panel handle ------------------------------ */
+.panel-resize-handle::after,
+.panel-resize-handle-vertical::after {
+  background: var(--ink-5) !important;
+}
+.panel-resize-handle:hover::after,
+.panel-resize-handle[data-resize-handle-active]::after,
+.panel-resize-handle-vertical:hover::after,
+.panel-resize-handle-vertical[data-resize-handle-active]::after {
+  background: var(--ink-1) !important;
+}
+
+/* -- Doc preview content --------------------------------- */
+.doc-preview-content {
+  color: var(--ink-1) !important;
+  background: var(--paper) !important;
+}
+.doc-preview-content a { color: var(--primary) !important; }
+
+/* -- Kill italic for brand voice (allow email bodies) ---- */
+.atm-display-mega, .atm-display-xl, .atm-display-lg, .atm-display-md, .atm-display-sm,
+.top-bar-wordmark, .wordmark-static, .wordmark-module,
+.module-tab, .account-pill, .toolbar-btn,
+.btn-compose, .btn-primary, .modal-header {
+  font-style: normal !important;
+}
+
+/* -- Intro animation simplification ---------------------- */
+.app-container.intro { animation: none !important; }
+
+/* -- Scrollbars ------------------------------------------ */
+html { scrollbar-color: var(--ink-5) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ink-5); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+/* ==========================================================
+   INTRO BANNER — ink bg, paper text, mono kbd hints
+========================================================== */
+.atm-intro-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: 10px var(--sp-5);
+  background: var(--ink-1);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  border-bottom: 1px solid var(--ink-1);
+  position: relative;
+  flex-wrap: wrap;
+}
+.atm-intro-banner-head {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  font-size: 14px;
+  color: var(--paper);
+}
+.atm-intro-banner-body {
+  color: var(--paper-2, rgba(250,250,247,0.72));
+  font-weight: 400;
+}
+.atm-intro-banner-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-3, rgba(250,250,247,0.52));
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.atm-intro-banner-kbd kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--paper-6, rgba(250,250,247,0.12));
+  color: var(--paper);
+  padding: 2px 6px;
+  border-radius: var(--r-1);
+  border: 1px solid rgba(250,250,247,0.18);
+}
+.atm-intro-banner-x {
+  margin-left: auto;
+  width: 24px; height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--paper-3, rgba(250,250,247,0.52));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  transition: color var(--t-instant) var(--ease), background var(--t-instant) var(--ease);
+}
+.atm-intro-banner-x:hover {
+  color: var(--paper);
+  background: var(--paper-6, rgba(250,250,247,0.12));
+}
+
+/* ==========================================================
+   COMMAND PALETTE — override existing styles per spec
+========================================================== */
+.command-palette-overlay {
+  background: rgba(10, 10, 10, 0.45) !important;
+  backdrop-filter: none !important;
+  align-items: flex-start !important;
+  padding-top: 10vh !important;
+}
+.command-palette {
+  max-width: 640px !important;
+  background: var(--paper) !important;
+  border: 2px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  box-shadow: 8px 8px 0 var(--ink-1) !important;
+  padding: 0 !important;
+}
+.command-palette-input {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--ink-5) !important;
+  border-radius: 0 !important;
+  color: var(--ink-1) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 15px !important;
+  padding: 16px 20px !important;
+}
+.command-palette-input::placeholder { color: var(--ink-3) !important; }
+.command-palette-input:focus { outline: none !important; border-bottom-color: var(--ink-1) !important; }
+
+.command-palette-list {
+  max-height: 420px !important;
+  overflow-y: auto !important;
+}
+.command-palette-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 12px 20px !important;
+  font: 500 13px var(--font-ui) !important;
+  color: var(--ink-1) !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  border-bottom: 1px solid var(--ink-6) !important;
+  transition: background var(--t-instant) var(--ease);
+}
+.command-palette-item.active,
+.command-palette-item:hover {
+  background: var(--ink-6) !important;
+}
+.command-palette-item-hint {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  color: var(--ink-3) !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid var(--ink-5);
+  border-radius: var(--r-1);
+}
+.command-palette-empty {
+  padding: 32px 20px !important;
+  text-align: center;
+  color: var(--ink-3) !important;
+}
+.command-palette-empty-title { font: 600 13px var(--font-ui); color: var(--ink-2); margin-bottom: 6px; }
+.command-palette-empty-hint { font: 500 11px var(--font-mono); color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; }
+.command-palette-empty-hint kbd {
+  font-family: var(--font-mono);
+  background: var(--ink-6);
+  border: 1px solid var(--ink-5);
+  padding: 1px 5px;
+  border-radius: var(--r-1);
+}

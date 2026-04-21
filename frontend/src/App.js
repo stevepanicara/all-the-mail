@@ -24,6 +24,7 @@ import EverythingModule from './components/everything/EverythingModule';
 import { useEmail } from './hooks/useEmail';
 
 import './design-system.css';
+import './brand.css';
 
 const ComposeModal = React.lazy(() => import('./components/common/ComposeModal'));
 
@@ -39,9 +40,15 @@ const AllTheMail = () => {
   const GATE_WORDS = ['MAIL', 'DOCS', 'CALS'];
   const [gateWordIdx, setGateWordIdx] = useState(0);
   const [cascadeKey, setCascadeKey] = useState(0);
-  const [theme, setTheme] = useState(() => localStorage.getItem('atm-theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('atm-theme') || 'light');
+  const [introBannerOpen, setIntroBannerOpen] = useState(() => localStorage.getItem('atm_intro_banner') !== 'dismissed');
 
   const [activeModule, setActiveModule] = useState('everything');
+
+  const dismissIntroBanner = () => {
+    setIntroBannerOpen(false);
+    try { localStorage.setItem('atm_intro_banner', 'dismissed'); } catch (e) {}
+  };
 
   // Docs state
   const [docsCategory, setDocsCategory] = useState('recent');
@@ -982,6 +989,13 @@ const AllTheMail = () => {
       if(e.key==='Enter'&&splitMode==='none'&&selectedEmail&&!fullPageReaderOpen){e.preventDefault();setFullPageReaderOpen(true);return;}
       if(e.metaKey||e.ctrlKey||e.altKey) return;
       if(e.key==='?'){e.preventDefault();setShortcutsOpen(true);return;}
+      // View switchers (spec: 1/2/3/4)
+      if(e.key==='1'){e.preventDefault();setActiveModule('everything');return;}
+      if(e.key==='2'){e.preventDefault();setActiveModule('mail');return;}
+      if(e.key==='3'){e.preventDefault();setActiveModule('docs');return;}
+      if(e.key==='4'){e.preventDefault();setActiveModule('cals');return;}
+      // Compose shortcut (spec: N)
+      if(e.key==='n'||e.key==='N'){const oc=shortcutsRef.current.openCompose;if(oc){e.preventDefault();oc('compose');return;}}
       const readerOpen = selectedEmail && (splitMode!=='none' || fullPageReaderOpen);
       if(readerOpen){
         if(e.key==='ArrowLeft'){e.preventDefault();navigatePrev();return;}
@@ -1312,6 +1326,21 @@ const AllTheMail = () => {
           />
         </div>
       </header>
+
+      {/* Intro banner — first-load cheatsheet */}
+      {introBannerOpen && (
+        <div className="atm-intro-banner" role="region" aria-label="Welcome">
+          <span className="atm-intro-banner-head">ALL THE MAIL.</span>
+          <span className="atm-intro-banner-body">Unify Gmail, Drive &amp; Calendar across accounts.</span>
+          <span className="atm-intro-banner-kbd"><kbd>⌘K</kbd> command</span>
+          <span className="atm-intro-banner-kbd"><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd>/<kbd>4</kbd> views</span>
+          <span className="atm-intro-banner-kbd"><kbd>N</kbd> new</span>
+          <span className="atm-intro-banner-kbd"><kbd>J</kbd>/<kbd>K</kbd> navigate</span>
+          <button className="atm-intro-banner-x" onClick={dismissIntroBanner} aria-label="Dismiss">
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <main className="main-content" role="main">

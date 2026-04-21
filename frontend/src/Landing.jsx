@@ -31,7 +31,7 @@ const FAQ_ITEMS = [
 
 // Realistic in-product preview — built from the actual app's design tokens
 function AppPreview() {
-  const senderColors = ['#1A73E8','#D93025','#188038','#E37400','#A142F4','#1E8E3E','#F29900','#8430CE'];
+  const senderColors = ['#FF3A1D','#1B2BFF','#CCFF00','#FFE500','#0A0A0A','#C5270F','#FF3A1D','#1B2BFF'];
   const c = (i) => senderColors[i % senderColors.length];
 
   const mailItems = [
@@ -62,9 +62,9 @@ function AppPreview() {
         </div>
         <div className="app-preview-rail">
           <div className="app-preview-pill app-preview-pill-active">All</div>
-          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'linear-gradient(135deg,#6C4CFF,#FF4C8B)'}} />Work</div>
-          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'linear-gradient(135deg,#00E5FF,#00FF94)'}} />Personal</div>
-          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'linear-gradient(135deg,#FFD84D,#FF8C2B)'}} />Studio</div>
+          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'#FF3A1D'}} />Work</div>
+          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'#1B2BFF'}} />Personal</div>
+          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'#FFE500'}} />Studio</div>
         </div>
       </div>
       <div className="app-preview-body">
@@ -268,10 +268,10 @@ function Landing() {
                   </div>
                   <div className="hiw-mock-body">
                     {[
-                      { i: 'S', name: 'Sarah Chen', subj: 'Q1 roadmap finalized', src: 'Work', g: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)', color: '#1A73E8', unread: true },
-                      { i: 'D', name: 'Delta Airlines', subj: 'Flight confirmation', src: 'Personal', g: 'linear-gradient(135deg,#00E5FF,#00FF94)', color: '#D93025', unread: false },
-                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice approved', src: 'Studio', g: 'linear-gradient(135deg,#FFD84D,#FF8C2B)', color: '#188038', unread: true },
-                      { i: 'G', name: 'GitHub', subj: 'PR #142 merged', src: 'Work', g: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)', color: '#A142F4', unread: false },
+                      { i: 'S', name: 'Sarah Chen', subj: 'Q1 roadmap finalized', src: 'Work', g: '#FF3A1D', color: '#FF3A1D', unread: true },
+                      { i: 'D', name: 'Delta Airlines', subj: 'Flight confirmation', src: 'Personal', g: '#1B2BFF', color: '#1B2BFF', unread: false },
+                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice approved', src: 'Studio', g: '#FFE500', color: '#CCFF00', unread: true },
+                      { i: 'G', name: 'GitHub', subj: 'PR #142 merged', src: 'Work', g: '#FF3A1D', color: '#C5270F', unread: false },
                     ].map((m, i) => (
                       <div key={i} className={`hiw-row${m.unread ? ' unread' : ''}`}>
                         <span className="hiw-avatar" style={{ background: m.color }}>{m.i}</span>
@@ -297,7 +297,7 @@ function Landing() {
                 <div className="hiw-mock hiw-mock--zoom">
                   <div className="hiw-zoom-stage">
                     <div className="hiw-zoom-row">
-                      <span className="hiw-avatar hiw-avatar--lg" style={{ background: '#1A73E8' }}>S</span>
+                      <span className="hiw-avatar hiw-avatar--lg" style={{ background: '#FF3A1D' }}>S</span>
                       <div className="hiw-row-content">
                         <div className="hiw-zoom-name">Sarah Chen</div>
                         <div className="hiw-zoom-subject">Q1 roadmap finalized</div>
@@ -305,11 +305,11 @@ function Landing() {
                     </div>
                     <div className="hiw-zoom-chip-wrap">
                       <span className="hiw-source-chip hiw-source-chip--lg">
-                        <span className="hiw-source-dot hiw-source-dot--lg" style={{ background: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)' }} />
+                        <span className="hiw-source-dot hiw-source-dot--lg" style={{ background: '#FF3A1D' }} />
                         Work
                       </span>
                       <svg className="hiw-callout-line" width="100" height="40" viewBox="0 0 100 40" fill="none">
-                        <path d="M2 38 L40 38 L60 8 L98 8" stroke="rgba(139,124,255,0.6)" strokeWidth="1" strokeDasharray="2 3" />
+                        <path d="M2 38 L40 38 L60 8 L98 8" stroke="rgba(10,10,10,0.52)" strokeWidth="1" strokeDasharray="2 3" />
                       </svg>
                       <span className="hiw-callout-label">gradient identity</span>
                     </div>
@@ -328,10 +328,10 @@ function Landing() {
                   </div>
                   <div className="hiw-mock-body">
                     {[
-                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice #2041 approved', src: 'Studio', g: 'linear-gradient(135deg,#FFD84D,#FF8C2B)', color: '#188038' },
-                      { i: 'B', name: 'Billing@Stripe', subj: 'Your invoice is ready', src: 'Personal', g: 'linear-gradient(135deg,#00E5FF,#00FF94)', color: '#1A73E8' },
-                      { i: 'M', name: 'Maria Lopez', subj: 'Re: invoice question', src: 'Work', g: 'linear-gradient(135deg,#6C4CFF,#FF4C8B)', color: '#D93025' },
-                      { i: 'F', name: 'Freshbooks', subj: 'Invoice draft saved', src: 'Studio', g: 'linear-gradient(135deg,#FFD84D,#FF8C2B)', color: '#A142F4' },
+                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice #2041 approved', src: 'Studio', g: '#FFE500', color: '#CCFF00' },
+                      { i: 'B', name: 'Billing@Stripe', subj: 'Your invoice is ready', src: 'Personal', g: '#1B2BFF', color: '#FF3A1D' },
+                      { i: 'M', name: 'Maria Lopez', subj: 'Re: invoice question', src: 'Work', g: '#FF3A1D', color: '#1B2BFF' },
+                      { i: 'F', name: 'Freshbooks', subj: 'Invoice draft saved', src: 'Studio', g: '#FFE500', color: '#C5270F' },
                     ].map((m, i) => (
                       <div key={i} className="hiw-row">
                         <span className="hiw-avatar" style={{ background: m.color }}>{m.i}</span>

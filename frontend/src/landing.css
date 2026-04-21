@@ -1607,3 +1607,381 @@
     font-size: 44px;
   }
 }
+
+/* ==========================================================
+   BRAND V2 OVERRIDE — landing page reskin
+   Paper/ink, printed buttons, hard edges, no gradients.
+========================================================== */
+
+.l {
+  background: var(--paper) !important;
+  color: var(--ink-1) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.l-nav {
+  background: var(--paper) !important;
+  border-bottom: 1px solid var(--ink-5) !important;
+  backdrop-filter: none !important;
+}
+.l-nav-wordmark {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--ink-1) !important;
+  text-transform: uppercase !important;
+  font-size: 20px !important;
+}
+.l-nav-link {
+  color: var(--ink-2) !important;
+  font-family: var(--font-ui) !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 8px 12px !important;
+  border-radius: 0 !important;
+}
+.l-nav-link:hover { color: var(--ink-1) !important; background: transparent !important; }
+.l-nav-signin {
+  background: var(--primary) !important;
+  color: var(--primary-ink) !important;
+  font-weight: 600 !important;
+  padding: 9px 16px !important;
+  border-radius: 0 !important;
+  box-shadow: 2px 2px 0 var(--ink-1) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  font-size: 11px !important;
+}
+.l-nav-signin:hover {
+  background: var(--primary-deep) !important;
+  color: var(--primary-ink) !important;
+}
+.l-hamburger-bar { background: var(--ink-1) !important; }
+.l-nav-mobile-drawer { background: var(--paper) !important; border-top: 1px solid var(--ink-5) !important; }
+.l-nav-mobile-link { color: var(--ink-1) !important; background: transparent !important; border-bottom: 1px solid var(--ink-5) !important; }
+.l-nav-mobile-signin { background: var(--primary) !important; color: var(--primary-ink) !important; }
+
+.l-hero {
+  background: var(--paper) !important;
+}
+.l-hero::before { display: none !important; }
+.l-hero-eyebrow {
+  color: var(--ink-2) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+}
+.l-hero-eyebrow-bar { background: var(--primary) !important; }
+
+.l-h1 {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.04em !important;
+  line-height: 0.92 !important;
+  color: var(--ink-1) !important;
+  text-transform: uppercase !important;
+}
+.l-h1-accent {
+  color: var(--primary) !important;
+  font-style: normal !important;
+}
+.l-sub {
+  color: var(--ink-2) !important;
+  font-family: var(--font-ui) !important;
+  font-weight: 400 !important;
+}
+
+.l-cta {
+  background: var(--primary) !important;
+  color: var(--primary-ink) !important;
+  font: 600 13px var(--font-ui) !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 14px 24px !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: 4px 4px 0 var(--ink-1) !important;
+  transition: transform var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease), background var(--t-instant) var(--ease) !important;
+}
+.l-cta:hover:not(:disabled) {
+  background: var(--primary-deep) !important;
+}
+.l-cta:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--ink-1) !important;
+}
+.l-cta--secondary {
+  background: transparent !important;
+  color: var(--ink-1) !important;
+  border: 1px solid var(--ink-1) !important;
+  box-shadow: none !important;
+}
+.l-cta--secondary:hover:not(:disabled) {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+}
+
+.l-trust {
+  color: var(--ink-3) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+
+.l-error {
+  background: transparent !important;
+  color: var(--primary) !important;
+  border: 1px solid var(--primary) !important;
+  border-radius: 0 !important;
+  padding: 10px 14px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+}
+
+.l-statement {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+}
+.l-feature-label {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  text-transform: uppercase !important;
+  color: var(--paper) !important;
+}
+.l-feature-desc {
+  color: var(--paper-2, rgba(250,250,247,0.72)) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.l-section-title {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-1) !important;
+}
+
+/* HIW cards — flat, no soft shadows */
+.hiw-card, .hiw-mock {
+  background: var(--paper-pure, #FFF) !important;
+  border: 1px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0 var(--ink-1) !important;
+}
+.hiw-mock-header {
+  background: var(--paper) !important;
+  border-bottom: 1px solid var(--ink-5) !important;
+  color: var(--ink-1) !important;
+}
+.hiw-mock-chip, .app-preview-col-chip {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  background: transparent !important;
+  border: 1px solid var(--ink-5) !important;
+  border-radius: var(--r-1) !important;
+  padding: 2px 6px !important;
+  color: var(--ink-3) !important;
+}
+.hiw-row {
+  background: transparent !important;
+  border-bottom: 1px solid var(--ink-6) !important;
+}
+.hiw-sender { color: var(--ink-1) !important; font-weight: 600 !important; }
+.hiw-subject { color: var(--ink-2) !important; }
+.hiw-avatar {
+  color: var(--paper) !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 700 !important;
+  border-radius: var(--r-pill) !important;
+}
+.hiw-source-chip {
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-2) !important;
+  border: 1px solid var(--ink-5) !important;
+  border-radius: var(--r-pill) !important;
+  padding: 2px 6px !important;
+}
+.hiw-source-dot {
+  border-radius: var(--r-pill) !important;
+}
+.hiw-caption {
+  font-family: var(--font-ui) !important;
+  color: var(--ink-3) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+.hiw-mark {
+  background: var(--voltage) !important;
+  color: var(--voltage-ink) !important;
+  padding: 1px 4px !important;
+}
+
+/* App preview mock in hero */
+.app-preview {
+  background: var(--paper-pure, #FFF) !important;
+  border: 2px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  box-shadow: 8px 8px 0 var(--ink-1) !important;
+}
+.app-preview-chrome { background: var(--paper) !important; border-bottom: 1px solid var(--ink-5) !important; }
+.app-preview-traffic span { background: var(--ink-4) !important; }
+.app-preview-pill {
+  background: transparent !important;
+  border: 1px solid var(--ink-5) !important;
+  color: var(--ink-1) !important;
+  border-radius: var(--r-pill) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 11px !important;
+}
+.app-preview-pill-active {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+  border-color: var(--ink-1) !important;
+}
+.app-preview-dot { border-radius: var(--r-pill) !important; }
+.app-preview-col { border-right: 1px solid var(--ink-5) !important; }
+.app-preview-col-header { color: var(--ink-1) !important; font-family: var(--font-display) !important; font-weight: 700 !important; letter-spacing: -0.02em !important; text-transform: uppercase !important; border-bottom: 1px solid var(--ink-5) !important; }
+.app-preview-row { border-bottom: 1px solid var(--ink-6) !important; }
+.app-preview-row.unread { background: transparent !important; border-left: 2px solid var(--primary) !important; }
+.app-preview-avatar {
+  color: var(--paper) !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 700 !important;
+  border-radius: var(--r-pill) !important;
+}
+.app-preview-sender { color: var(--ink-1) !important; font-weight: 600 !important; }
+.app-preview-time { color: var(--ink-3) !important; font-family: var(--font-mono) !important; }
+.app-preview-subject { color: var(--ink-2) !important; }
+.app-preview-doc-name { color: var(--ink-1) !important; }
+.app-preview-doc-meta { color: var(--ink-3) !important; font-family: var(--font-mono) !important; }
+.app-preview-doc-icon { color: var(--ink-2) !important; }
+.app-preview-cal-marker { background: var(--primary) !important; border-radius: 0 !important; }
+.app-preview-cal-time { color: var(--ink-3) !important; font-family: var(--font-mono) !important; font-weight: 500 !important; }
+.app-preview-cal-title { color: var(--ink-1) !important; }
+
+/* Pricing */
+.pricing-amount {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.04em !important;
+  color: var(--ink-1) !important;
+}
+.l-pricing {
+  background: var(--paper) !important;
+}
+
+/* FAQ */
+.l-faq {
+  background: var(--paper) !important;
+}
+
+/* Footer */
+.l-footer {
+  background: var(--ink-1) !important;
+  color: var(--paper) !important;
+}
+.l-footer-wordmark {
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--paper) !important;
+  text-transform: uppercase !important;
+}
+.l-footer-links a { color: var(--paper-2, rgba(250,250,247,0.72)) !important; }
+.l-footer-links a:hover { color: var(--paper) !important; }
+.l-footer-tag {
+  color: var(--paper-3, rgba(250,250,247,0.52)) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+
+/* Compare table */
+.l-compare-table {
+  border: 1px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+}
+.l-compare-table th, .l-compare-table td {
+  border-color: var(--ink-5) !important;
+}
+.l-compare-spec {
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-3) !important;
+}
+
+/* Source chip callout */
+.hiw-callout-label {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  color: var(--ink-3) !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+.hiw-callout-line path { stroke: var(--ink-3) !important; }
+
+/* Gallery / mock shadows — all printed */
+.l-mock, .l-mock-lg, .l-gallery {
+  background: var(--paper-pure, #FFF) !important;
+  border: 1px solid var(--ink-1) !important;
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0 var(--ink-1) !important;
+}
+
+/* ==========================================================
+   Privacy / Terms pages — use the same base but constrain width
+========================================================== */
+.landing {
+  background: var(--paper);
+  color: var(--ink-1);
+  font-family: var(--font-ui);
+  min-height: 100vh;
+}
+.landing-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 var(--sp-5);
+}
+.landing h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  color: var(--ink-1);
+}
+.landing h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--ink-1);
+}
+.landing h3 {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--ink-1);
+}
+.landing p, .landing li {
+  color: var(--ink-2);
+}
+.landing a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.landing a:hover { color: var(--primary-deep); }
