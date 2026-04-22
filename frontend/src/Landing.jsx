@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './landing.css';
 
 const API_BASE =
@@ -6,146 +6,32 @@ const API_BASE =
   process.env.REACT_APP_API_URL ||
   'http://localhost:3000';
 
-const FAQ_ITEMS = [
-  {
-    q: 'Do you store my emails?',
-    a: 'No. Emails are fetched in real time from Google. We never store email content on our servers.',
-  },
-  {
-    q: 'What permissions do you request?',
-    a: 'Only what\u2019s needed to read, send, and organize your Gmail\u2014read, send, modify labels, and basic profile info. Nothing more.',
-  },
-  {
-    q: 'Can I disconnect an account?',
-    a: 'Yes\u2014disconnect anytime from your settings. Your OAuth tokens are deleted immediately.',
-  },
-  {
-    q: 'Is it secure?',
-    a: 'We use Google OAuth and encrypt all tokens at rest. We never see or store your Google password.',
-  },
-  {
-    q: 'How many accounts can I connect?',
-    a: 'Pro supports unlimited connected Gmail accounts.',
-  },
-];
-
-// Realistic in-product preview — built from the actual app's design tokens
-function AppPreview() {
-  const senderColors = ['#FF3A1D','#1B2BFF','#CCFF00','#FFE500','#0A0A0A','#C5270F','#FF3A1D','#1B2BFF'];
-  const c = (i) => senderColors[i % senderColors.length];
-
-  const mailItems = [
-    { initial: 'S', from: 'Sarah Chen', subject: 'Q1 roadmap finalized', time: '2m', unread: true, acct: 0 },
-    { initial: 'D', from: 'Delta Airlines', subject: 'Your flight confirmation', time: '18m', unread: false, acct: 1 },
-    { initial: 'A', from: 'Alex Rivera', subject: 'Invoice approved', time: '1h', unread: true, acct: 2 },
-    { initial: 'G', from: 'GitHub', subject: 'PR #142 merged', time: '2h', unread: false, acct: 0 },
-    { initial: 'N', from: 'Notion', subject: 'Workspace digest', time: '5h', unread: false, acct: 1 },
-  ];
-
-  const docItems = [
-    { name: 'Q1 Roadmap', edited: '2h ago', acct: 0 },
-    { name: 'Brand Guidelines.pdf', edited: 'Yesterday', acct: 2 },
-    { name: 'Invoice Template', edited: '3d ago', acct: 1 },
-  ];
-
-  const calItems = [
-    { time: '10:00', title: 'Standup', acct: 0 },
-    { time: '14:00', title: 'Client review', acct: 2 },
-    { time: '16:30', title: 'Design crit', acct: 0 },
-  ];
-
-  return (
-    <div className="app-preview">
-      <div className="app-preview-chrome">
-        <div className="app-preview-traffic">
-          <span /><span /><span />
-        </div>
-        <div className="app-preview-rail">
-          <div className="app-preview-pill app-preview-pill-active">All</div>
-          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'#FF3A1D'}} />Work</div>
-          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'#1B2BFF'}} />Personal</div>
-          <div className="app-preview-pill"><span className="app-preview-dot" style={{background:'#FFE500'}} />Studio</div>
-        </div>
-      </div>
-      <div className="app-preview-body">
-        {/* Mail column */}
-        <div className="app-preview-col">
-          <div className="app-preview-col-header">
-            <span>Mail</span>
-            <span className="app-preview-col-chip">All</span>
-          </div>
-          <div className="app-preview-col-body">
-            {mailItems.map((m, i) => (
-              <div key={i} className={`app-preview-row${m.unread ? ' unread' : ''}`}>
-                <span className="app-preview-avatar" style={{background: c(i)}}>{m.initial}</span>
-                <div className="app-preview-row-content">
-                  <div className="app-preview-row-line1">
-                    <span className="app-preview-sender">{m.from}</span>
-                    <span className="app-preview-time">{m.time}</span>
-                  </div>
-                  <div className="app-preview-subject">{m.subject}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Docs column */}
-        <div className="app-preview-col">
-          <div className="app-preview-col-header">
-            <span>Docs</span>
-            <span className="app-preview-col-chip">Recent</span>
-          </div>
-          <div className="app-preview-col-body">
-            {docItems.map((d, i) => (
-              <div key={i} className="app-preview-row">
-                <span className="app-preview-doc-icon">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                </span>
-                <div className="app-preview-row-content">
-                  <div className="app-preview-doc-name">{d.name}</div>
-                  <div className="app-preview-doc-meta">{d.edited}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Cals column */}
-        <div className="app-preview-col">
-          <div className="app-preview-col-header">
-            <span>Cals</span>
-            <span className="app-preview-col-chip">Today</span>
-          </div>
-          <div className="app-preview-col-body">
-            {calItems.map((e, i) => (
-              <div key={i} className="app-preview-row">
-                <span className="app-preview-cal-marker" />
-                <div className="app-preview-row-content">
-                  <div className="app-preview-row-line1">
-                    <span className="app-preview-cal-time">{e.time}</span>
-                  </div>
-                  <div className="app-preview-cal-title">{e.title}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const HERO_WORDS = ['MAIL', 'DOCS', 'CALS', 'EVERYTHING'];
+const FOOT_WORDS = ['EVERYTHING', 'MAIL', 'DOCS', 'CALS'];
 
 function Landing() {
   const [authError, setAuthError] = useState(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [openFaq, setOpenFaq] = useState(null);
-  const [navOpen, setNavOpen] = useState(false);
+  const [hero, setHero] = useState('billboard');
+  const [wordIdx, setWordIdx] = useState(3); // start on "EVERYTHING"
+
+  const heroMorphRef = useRef(null);
+  const footMorphRef = useRef(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('auth') === 'error') {
-      setAuthError('Login failed. Please try again.');
+      setAuthError('Login failed. Retry.');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+  }, []);
+
+  // Corner morph cycles every 1.8s with a 120ms cross-fade
+  useEffect(() => {
+    const id = setInterval(() => {
+      setWordIdx((i) => (i + 1) % HERO_WORDS.length);
+    }, 1800);
+    return () => clearInterval(id);
   }, []);
 
   const handleSignIn = useCallback(() => {
@@ -153,419 +39,446 @@ function Landing() {
     window.location.href = `${API_BASE}/auth/google`;
   }, []);
 
-  const toggleFaq = useCallback((index) => {
-    setOpenFaq((prev) => (prev === index ? null : index));
-  }, []);
-
-  const scrollTo = useCallback((id) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  const currentHeroWord = HERO_WORDS[wordIdx];
+  const currentFootWord = FOOT_WORDS[wordIdx];
 
   return (
-    <div className="l">
-      {/* -------- NAV -------- */}
-      <header className="l-nav">
-        <div className="l-nav-inner">
-          <span className="l-nav-wordmark">ALL THE MAIL</span>
-          <nav className="l-nav-links">
-            <button className="l-nav-link" onClick={() => scrollTo('pricing')} type="button">
-              Pricing
-            </button>
-            <button className="l-nav-link" onClick={() => scrollTo('howitworks')} type="button">
-              How it works
-            </button>
-            <button className="l-nav-link l-nav-signin" onClick={handleSignIn} type="button">
-              Sign in
-            </button>
-          </nav>
-          <button className="l-nav-hamburger" onClick={() => setNavOpen(o => !o)} aria-label={navOpen ? 'Close menu' : 'Open menu'} aria-expanded={navOpen}>
-            <span className={`l-hamburger-bar${navOpen ? ' open' : ''}`} />
-            <span className={`l-hamburger-bar${navOpen ? ' open' : ''}`} />
-            <span className={`l-hamburger-bar${navOpen ? ' open' : ''}`} />
+    <div className="atm-l" data-theme="light">
+      {/* ============================== NAV ============================== */}
+      <header className="atm-nav">
+        <div className="atm-nav-wm">ALL THE MAIL</div>
+        <nav className="atm-nav-links">
+          <a href="#how">How it works</a>
+          <a href="#sources">Sources</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <div className="atm-nav-right">
+          <span className="atm-nav-status">Pre-launch &middot; Waitlist open</span>
+          <button type="button" className="atm-nav-cta" onClick={handleSignIn} disabled={isSigningIn}>
+            {isSigningIn ? 'Signing in\u2026' : 'Sign in'}
           </button>
         </div>
-        {navOpen && (
-          <nav className="l-nav-mobile-drawer">
-            <button className="l-nav-mobile-link" onClick={() => { scrollTo('pricing'); setNavOpen(false); }} type="button">Pricing</button>
-            <button className="l-nav-mobile-link" onClick={() => { scrollTo('howitworks'); setNavOpen(false); }} type="button">How it works</button>
-            <button className="l-nav-mobile-link l-nav-mobile-signin" onClick={handleSignIn} type="button">Sign in</button>
-          </nav>
-        )}
       </header>
 
-      <main>
-        {/* -------- HERO (Gradient over black + cinematic render) -------- */}
-        <section className="l-hero">
-          <div className="l-hero-inner">
-            <div className="l-hero-grid">
-              <div className="l-hero-copy">
-                <div className="l-hero-eyebrow"><span className="l-hero-eyebrow-bar" />A NEW EMAIL TOOL</div>
-                <h1 className="l-h1">
-                  Email. <span className="l-h1-accent">Unified.</span>
+      {/* ========================== HERO SWITCHER ========================== */}
+      <div className="atm-hero-switcher" role="tablist" aria-label="Hero variation">
+        {['billboard', 'plate', 'poster'].map((key, i) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={hero === key}
+            className={`atm-hs-btn${hero === key ? ' on' : ''}`}
+            onClick={() => setHero(key)}
+          >
+            {String(i + 1).padStart(2, '0')} &middot; {key[0].toUpperCase() + key.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <section className="atm-hero">
+        {/* ---------------- v1 · BILLBOARD ---------------- */}
+        {hero === 'billboard' && (
+          <div className="atm-h1 atm-wrap">
+            <div className="atm-h1-tag">
+              <span className="atm-h1-bar" />
+              <span>ALL THE MAIL &middot; R1 &middot; EVERYTHING INBOX</span>
+            </div>
+            <h1 className="atm-h1-title">
+              ALL THE<br />
+              <span key={currentHeroWord} ref={heroMorphRef} className="atm-morph">{currentHeroWord}</span>
+            </h1>
+            {authError && <div className="atm-l-error" role="alert">{authError}</div>}
+            <div className="atm-cta-row">
+              <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
+                {isSigningIn ? 'Signing in\u2026' : 'Add your first account'}
+              </button>
+              <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn}>
+                Sign in with Google
+              </button>
+              <span className="atm-h1-trust">
+                Encrypted tokens &middot; No passwords stored &middot; Disconnect anytime
+              </span>
+            </div>
+            <div className="atm-h1-meta">
+              <div className="atm-h1-cell">
+                <div className="atm-h1-k">The brief</div>
+                <div className="atm-h1-v">Every Google account. Mail, docs, and cals. One window. One inbox. Zero tab-switching.</div>
+              </div>
+              <div className="atm-h1-cell">
+                <div className="atm-h1-k">Built for</div>
+                <div className="atm-h1-v">People with five Google accounts. Work, personal, side-project, nonprofit, old job.</div>
+              </div>
+              <div className="atm-h1-cell">
+                <div className="atm-h1-k">Price</div>
+                <div className="atm-h1-v">$7 / month. Unlimited accounts. 14-day trial, no card.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- v2 · PLATE ---------------- */}
+        {hero === 'plate' && (
+          <div className="atm-h2 atm-wrap">
+            <div className="atm-h2-grid">
+              <div className="atm-h2-left">
+                <h1 className="atm-h2-title">
+                  ALL THE <span key={currentHeroWord} className="atm-morph">{currentHeroWord}</span>
                 </h1>
-                <p className="l-sub">
-                  Run every Gmail account from one deliberate interface.
-                </p>
-
-                {authError && (
-                  <div className="l-error" role="alert">{authError}</div>
-                )}
-
-                <button
-                  className="l-cta"
-                  onClick={handleSignIn}
-                  disabled={isSigningIn}
-                  type="button"
-                >
-                  {isSigningIn ? 'Signing in\u2026' : 'Sign in with Google'}
-                </button>
-
-                <p className="l-trust">
-                  Encrypted tokens &bull; No passwords stored &bull; Disconnect anytime
-                </p>
-              </div>
-
-              {/* App preview — built mockup matching the actual product */}
-              <div className="l-hero-render-col">
-                <AppPreview />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* -------- FEATURE STRIP -------- */}
-        <section className="l-statement">
-          <div className="l-statement-inner">
-            <div className="l-features">
-              <div className="l-feature">
-                <span className="l-feature-label">Gmail</span>
-                <span className="l-feature-desc">Read, send, archive across every account</span>
-              </div>
-              <div className="l-feature">
-                <span className="l-feature-label">Drive</span>
-                <span className="l-feature-desc">All your docs, sheets, and slides in one list</span>
-              </div>
-              <div className="l-feature">
-                <span className="l-feature-label">Calendar</span>
-                <span className="l-feature-desc">Every schedule, unified by account</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-        {/* -------- HOW IT WORKS (Three product mockups) -------- */}
-        <section className="l-section" id="howitworks">
-          <div className="l-container">
-            <h2 className="l-section-title">HOW IT WORKS</h2>
-            <div className="l-howitworks">
-              {/* Mockup 1 — Unified inbox */}
-              <figure className="hiw-card">
-                <div className="hiw-mock">
-                  <div className="hiw-mock-header">
-                    <span>Inbox</span>
-                    <span className="hiw-mock-chip">All accounts</span>
-                  </div>
-                  <div className="hiw-mock-body">
-                    {[
-                      { i: 'S', name: 'Sarah Chen', subj: 'Q1 roadmap finalized', src: 'Work', g: '#FF3A1D', color: '#FF3A1D', unread: true },
-                      { i: 'D', name: 'Delta Airlines', subj: 'Flight confirmation', src: 'Personal', g: '#1B2BFF', color: '#1B2BFF', unread: false },
-                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice approved', src: 'Studio', g: '#FFE500', color: '#CCFF00', unread: true },
-                      { i: 'G', name: 'GitHub', subj: 'PR #142 merged', src: 'Work', g: '#FF3A1D', color: '#C5270F', unread: false },
-                    ].map((m, i) => (
-                      <div key={i} className={`hiw-row${m.unread ? ' unread' : ''}`}>
-                        <span className="hiw-avatar" style={{ background: m.color }}>{m.i}</span>
-                        <div className="hiw-row-content">
-                          <div className="hiw-row-line1">
-                            <span className="hiw-sender">{m.name}</span>
-                            <span className="hiw-source-chip">
-                              <span className="hiw-source-dot" style={{ background: m.g }} />
-                              {m.src}
-                            </span>
-                          </div>
-                          <div className="hiw-subject">{m.subj}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <figcaption className="hiw-caption">One inbox, every account.</figcaption>
-              </figure>
-
-              {/* Mockup 2 — Source chip close-up */}
-              <figure className="hiw-card">
-                <div className="hiw-mock hiw-mock--zoom">
-                  <div className="hiw-zoom-stage">
-                    <div className="hiw-zoom-row">
-                      <span className="hiw-avatar hiw-avatar--lg" style={{ background: '#FF3A1D' }}>S</span>
-                      <div className="hiw-row-content">
-                        <div className="hiw-zoom-name">Sarah Chen</div>
-                        <div className="hiw-zoom-subject">Q1 roadmap finalized</div>
-                      </div>
-                    </div>
-                    <div className="hiw-zoom-chip-wrap">
-                      <span className="hiw-source-chip hiw-source-chip--lg">
-                        <span className="hiw-source-dot hiw-source-dot--lg" style={{ background: '#FF3A1D' }} />
-                        Work
-                      </span>
-                      <svg className="hiw-callout-line" width="100" height="40" viewBox="0 0 100 40" fill="none">
-                        <path d="M2 38 L40 38 L60 8 L98 8" stroke="rgba(10,10,10,0.52)" strokeWidth="1" strokeDasharray="2 3" />
-                      </svg>
-                      <span className="hiw-callout-label">gradient identity</span>
-                    </div>
-                  </div>
-                </div>
-                <figcaption className="hiw-caption">See where it came from.</figcaption>
-              </figure>
-
-              {/* Mockup 3 — Cross-account search */}
-              <figure className="hiw-card">
-                <div className="hiw-mock">
-                  <div className="hiw-search-bar">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <span className="hiw-search-text">invoice<span className="hiw-search-caret" /></span>
-                    <span className="hiw-search-scope">all accounts</span>
-                  </div>
-                  <div className="hiw-mock-body">
-                    {[
-                      { i: 'A', name: 'Alex Rivera', subj: 'Invoice #2041 approved', src: 'Studio', g: '#FFE500', color: '#CCFF00' },
-                      { i: 'B', name: 'Billing@Stripe', subj: 'Your invoice is ready', src: 'Personal', g: '#1B2BFF', color: '#FF3A1D' },
-                      { i: 'M', name: 'Maria Lopez', subj: 'Re: invoice question', src: 'Work', g: '#FF3A1D', color: '#1B2BFF' },
-                      { i: 'F', name: 'Freshbooks', subj: 'Invoice draft saved', src: 'Studio', g: '#FFE500', color: '#C5270F' },
-                    ].map((m, i) => (
-                      <div key={i} className="hiw-row">
-                        <span className="hiw-avatar" style={{ background: m.color }}>{m.i}</span>
-                        <div className="hiw-row-content">
-                          <div className="hiw-row-line1">
-                            <span className="hiw-sender">{m.name}</span>
-                            <span className="hiw-source-chip">
-                              <span className="hiw-source-dot" style={{ background: m.g }} />
-                              {m.src}
-                            </span>
-                          </div>
-                          <div className="hiw-subject">
-                            {m.subj.split(/(invoice)/i).map((part, idx) =>
-                              part.toLowerCase() === 'invoice'
-                                ? <mark key={idx} className="hiw-mark">{part}</mark>
-                                : <span key={idx}>{part}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <figcaption className="hiw-caption">Search across everything.</figcaption>
-              </figure>
-            </div>
-          </div>
-        </section>
-
-        {/* -------- COMPARISON TABLE -------- */}
-        <section className="l-section" id="compare">
-          <div className="l-container">
-            <h2 className="l-section-title">HOW WE COMPARE</h2>
-            <div className="l-compare-spec">CHECKED &#9656; SPECS</div>
-            <div className="l-compare-wrap">
-              <table className="l-compare-table">
-                <thead>
-                  <tr>
-                    <th>Feature</th>
-                    <th>Gmail</th>
-                    <th>Shift <span className="compare-price">($8/mo)</span></th>
-                    <th>Superhuman <span className="compare-price">($30/mo)</span></th>
-                    <th className="compare-highlight">All The Mail <span className="compare-price">($15/mo or $12/mo annual)</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Multi-account unified inbox</td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>Google Drive integration</td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>Google Calendar integration</td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>Source identification</td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>Conversation threading</td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>AI-powered features</td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>Dark + Light mode</td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-dash">&ndash;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                    <td><span className="compare-check">&#10003;</span></td>
-                  </tr>
-                  <tr>
-                    <td>Price</td>
-                    <td>Free</td>
-                    <td>$99/yr</td>
-                    <td>$30/mo</td>
-                    <td className="compare-highlight-cell">$15/mo or $12/mo annual</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        {/* -------- PRICING (Clinical) -------- */}
-        <section className="l-section" id="pricing">
-          <div className="l-container">
-            <div className="l-pricing">
-              <div className="pricing-card pricing-card--free">
-                <span className="pricing-label pricing-label--free">FREE</span>
-                <div className="pricing-price">
-                  <span className="pricing-amount">$0</span>
-                  <span className="pricing-period">forever</span>
-                </div>
-                <p className="pricing-cancel">No credit card required.</p>
-                <ul className="pricing-list">
-                  <li>1 connected account</li>
-                  <li>Unified mail view</li>
-                  <li>Secure OAuth + encrypted tokens</li>
-                </ul>
-                <button
-                  className="l-cta l-cta--secondary"
-                  onClick={handleSignIn}
-                  disabled={isSigningIn}
-                  type="button"
-                >
-                  {isSigningIn ? 'Signing in\u2026' : 'Get started'}
-                </button>
-              </div>
-              <div className="pricing-card">
-                <span className="pricing-label">PRO MONTHLY</span>
-                <div className="pricing-price">
-                  <span className="pricing-amount">$15</span>
-                  <span className="pricing-period">/ month</span>
-                </div>
-                <p className="pricing-cancel">Cancel anytime.</p>
-                <ul className="pricing-list">
-                  <li>Unlimited accounts</li>
-                  <li>Mail + Drive + Calendar unified</li>
-                  <li>Conversation view + AI search</li>
-                  <li>Secure OAuth + encrypted tokens</li>
-                </ul>
-                <button
-                  className="l-cta l-cta--secondary"
-                  onClick={handleSignIn}
-                  disabled={isSigningIn}
-                  type="button"
-                >
-                  {isSigningIn ? 'Signing in\u2026' : 'Sign in with Google'}
-                </button>
-                <p className="pricing-note">Start free, upgrade anytime.</p>
-              </div>
-              <div className="pricing-card pricing-card--featured">
-                <span className="pricing-badge">Most Popular</span>
-                <span className="pricing-label">PRO ANNUAL</span>
-                <div className="pricing-price">
-                  <span className="pricing-amount">$12</span>
-                  <span className="pricing-period">/ month</span>
-                </div>
-                <p className="pricing-cancel">Billed annually at $144. Cancel anytime.</p>
-                <ul className="pricing-list">
-                  <li>Unlimited accounts</li>
-                  <li>Mail + Drive + Calendar unified</li>
-                  <li>Conversation view + AI search</li>
-                  <li>Secure OAuth + encrypted tokens</li>
-                  <li>Save $36 vs monthly</li>
-                </ul>
-                <button
-                  className="l-cta"
-                  onClick={handleSignIn}
-                  disabled={isSigningIn}
-                  type="button"
-                >
-                  {isSigningIn ? 'Signing in\u2026' : 'Sign in with Google'}
-                </button>
-                <p className="pricing-note">Start free, upgrade anytime.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* -------- FAQ -------- */}
-        <section className="l-section" id="faq">
-          <div className="l-container">
-            <h2 className="l-section-title">FAQ</h2>
-            <div className="l-faq">
-              {FAQ_ITEMS.map((item, i) => (
-                <div className="faq-item" key={i}>
-                  <button
-                    className={`faq-trigger${openFaq === i ? ' faq-open' : ''}`}
-                    onClick={() => toggleFaq(i)}
-                    aria-expanded={openFaq === i}
-                    type="button"
-                  >
-                    <span>{item.q}</span>
-                    <svg
-                      className="faq-chevron"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      aria-hidden="true"
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
+                <p className="atm-h2-sub">The everything inbox. Every Google account in one window.</p>
+                {authError && <div className="atm-l-error" role="alert">{authError}</div>}
+                <div className="atm-cta-row atm-h2-ctas">
+                  <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
+                    {isSigningIn ? 'Signing in\u2026' : 'Add your first account'}
                   </button>
-                  <div className="faq-body" role="region" hidden={openFaq !== i}>
-                    <p>{item.a}</p>
+                  <span className="atm-h1-trust">
+                    Encrypted tokens &middot; No passwords stored &middot; Disconnect anytime
+                  </span>
+                </div>
+              </div>
+              <div className="atm-h2-right">
+                <div className="atm-plate">
+                  <div className="atm-mock">
+                    <div className="atm-mock-side">
+                      <div className="atm-mock-wm">ALL THE MAIL</div>
+                      <div className="atm-mock-tab on"><span>Everything</span><span className="atm-mock-n">1,284</span></div>
+                      <div className="atm-mock-tab"><span>Mail</span><span className="atm-mock-n">874</span></div>
+                      <div className="atm-mock-tab"><span>Docs</span><span className="atm-mock-n">312</span></div>
+                      <div className="atm-mock-tab"><span>Cals</span><span className="atm-mock-n">98</span></div>
+                      <div className="atm-mock-section">Accounts &middot; 5</div>
+                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#FF3A1D'}} />jesse@studio.co</div>
+                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#1B2BFF'}} />jesse@gmail.com</div>
+                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#CCFF00'}} />j@sideproject.dev</div>
+                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#FFE500'}} />jesse@the-np.org</div>
+                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#0A0A0A'}} />jesse@oldjob.net</div>
+                    </div>
+                    <div className="atm-mock-main">
+                      <div className="atm-mock-toolbar">
+                        <div className="atm-mock-tabs">
+                          <div className="atm-mock-ttab on">Everything</div>
+                          <div className="atm-mock-ttab">Mail</div>
+                          <div className="atm-mock-ttab">Docs</div>
+                          <div className="atm-mock-ttab">Cals</div>
+                        </div>
+                        <div className="atm-mock-search">⌘K &middot; Search all accounts</div>
+                      </div>
+                      {[
+                        { star:true,  c:'#FF3A1D', ck:'studio',    who:'Nora Park',        k:'MAIL', subj:'Re: Q2 brand system. Sign-off needed by Friday', t:'09:42' },
+                        { star:true,  c:'#CCFF00', ck:'side',      who:'Calendar',         k:'CAL',  subj:'Today · Investor intro · 11:00 AM · 30 min',      t:'11:00' },
+                        { star:false, c:'#1B2BFF', ck:'personal',  who:'Linnea',           k:'MAIL', subj:'the lease paperwork. i signed mine, yours is next', t:'Yday' },
+                        { star:false, c:'#FFE500', ck:'nonprofit', who:'Board draft v3',   k:'DOC',  subj:'shared by marcus · edited 2h ago · 14 comments',   t:'Yday' },
+                        { star:false, c:'#FF3A1D', ck:'studio',    who:'Stripe',           k:'MAIL', subj:'Payout. $4,280.00 sent to your bank',              t:'Yday' },
+                        { star:false, c:'#0A0A0A', ck:'legacy',    who:'Calendar',         k:'CAL',  subj:'Tomorrow · All-hands · 10:00 AM · 60 min',         t:'Tmrw' },
+                        { star:false, c:'#1B2BFF', ck:'personal',  who:'Flight receipts',  k:'DOC',  subj:'sheet · 42 rows · last edit by you',               t:'Mon' },
+                      ].map((r, i) => (
+                        <div key={i} className={`atm-mock-row${r.star ? ' unread' : ''}`}>
+                          <div className="atm-mock-star" />
+                          <div className="atm-mock-chip"><span className="atm-mock-dot" style={{background:r.c}} />{r.ck}</div>
+                          <div>
+                            <div className="atm-mock-sender">{r.who} <span className="atm-mock-kind">{r.k}</span></div>
+                            <div className="atm-mock-subj">{r.subj}</div>
+                          </div>
+                          <div className="atm-mock-time">{r.t}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
-        </section>
-      </main>
+        )}
 
-      {/* -------- FOOTER -------- */}
-      <footer className="l-footer">
-        <div className="l-container">
-          <div className="l-footer-mark">
-            <span className="l-footer-wordmark">ALL THE MAIL</span>
-            <span className="l-footer-tag">For people who run everything through Google.</span>
+        {/* ---------------- v3 · POSTER ---------------- */}
+        {hero === 'poster' && (
+          <div className="atm-h3 atm-wrap">
+            <div className="atm-h3-poster">
+              <div className="atm-h3-corner">
+                R1 / 2026<br />
+                PRE-LAUNCH EDITION<br />
+                NO. <b style={{color:'var(--ink-1)'}}>0001</b>
+              </div>
+              <h1 className="atm-h3-lockup">
+                ALL THE<br />
+                <span key={currentHeroWord} className="atm-h3-red atm-morph">{currentHeroWord}</span>
+              </h1>
+              <div className="atm-h3-meta">
+                <div className="atm-h3-cell">One window<br /><b>Every account</b></div>
+                <div className="atm-h3-cell">Mail &middot; Docs &middot; Cals<br /><b>Unified feed</b></div>
+                <div className="atm-h3-cell">$7 / month<br /><b>Unlimited accounts</b></div>
+                <div className="atm-h3-cell">14-day trial<br /><b>No card required</b></div>
+              </div>
+              {authError && <div className="atm-l-error atm-h3-error" role="alert">{authError}</div>}
+              <div className="atm-h3-ctarow">
+                <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
+                  {isSigningIn ? 'Signing in\u2026' : 'Claim your handle'}
+                </button>
+                <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn}>
+                  Sign in with Google
+                </button>
+              </div>
+              <div className="atm-h3-stamp">One window.<br />Fewer tabs.<br />Zero apology.</div>
+            </div>
           </div>
-          <div className="l-footer-inner">
-            <p>&copy; 2026 ALL THE MAIL</p>
-            <div className="l-footer-links">
+        )}
+      </section>
+
+      {/* ============================ MARQUEE ============================ */}
+      <div className="atm-marquee" aria-hidden="true">
+        <div className="atm-marquee-track">
+          <span>ALL THE MAIL</span>
+          <span>ALL THE DOCS</span>
+          <span>ALL THE CALS</span>
+          <span>ALL THE EVERYTHING</span>
+          <span>ALL THE MAIL</span>
+          <span>ALL THE DOCS</span>
+          <span>ALL THE CALS</span>
+          <span>ALL THE EVERYTHING</span>
+        </div>
+      </div>
+
+      {/* ========================== FEATURE RAIL ========================== */}
+      <section className="atm-rail">
+        <div className="atm-wrap">
+          <div className="atm-rail-title">The feed, sorted by meaning</div>
+          <div className="atm-rail-grid">
+            <div className="atm-rail-item">
+              <div className="atm-rail-k">01 &middot; MAIL</div>
+              <div className="atm-rail-v">Every inbox</div>
+              <div className="atm-rail-d">Read, send, archive across every account. A source chip tells you which one. No mystery senders.</div>
+              <ul className="atm-rail-list">
+                <li>Unified thread view</li>
+                <li>Send-as any account</li>
+                <li>Cross-account search</li>
+              </ul>
+            </div>
+            <div className="atm-rail-item">
+              <div className="atm-rail-k">02 &middot; DOCS</div>
+              <div className="atm-rail-v">Every doc</div>
+              <div className="atm-rail-d">Drive, Sheets, Slides from all accounts in one list. Open in Google in one click. Edit where you always did.</div>
+              <ul className="atm-rail-list">
+                <li>Five Drives, one list</li>
+                <li>Filter by kind or owner</li>
+                <li>Recent-across-accounts</li>
+              </ul>
+            </div>
+            <div className="atm-rail-item">
+              <div className="atm-rail-k">03 &middot; CALS</div>
+              <div className="atm-rail-v">Every calendar</div>
+              <div className="atm-rail-d">A single agenda colored by account. See the double-book before you book it. Respond from the right identity.</div>
+              <ul className="atm-rail-list">
+                <li>Unified day view</li>
+                <li>Per-account colors</li>
+                <li>RSVP-as any account</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================== HOW IT WORKS ========================== */}
+      <section className="atm-how" id="how">
+        <div className="atm-wrap">
+          <div className="atm-how-head">
+            <div>
+              <div className="atm-how-sup">How it works &middot; Three steps &middot; Ninety seconds</div>
+              <h2 className="atm-how-h">Connect. Unify. Work.</h2>
+            </div>
+            <p className="atm-how-p">No plug-ins. No forwarding. No copy-paste. OAuth in, all five identities intact.</p>
+          </div>
+          <div className="atm-steps">
+            <div className="atm-step">
+              <div className="atm-step-n">01 &middot; CONNECT</div>
+              <h3 className="atm-step-h">Sign in with Google.</h3>
+              <p className="atm-step-p">OAuth each account. Tokens stay encrypted on your device. Passwords never touch our servers.</p>
+              <div className="atm-step-vis atm-step-vis-1">
+                <div className="atm-step-chips">
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#FF3A1D'}} />studio</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#1B2BFF'}} />personal</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#CCFF00'}} />side</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#FFE500'}} />nonprofit</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#0A0A0A'}} />legacy</div>
+                </div>
+              </div>
+            </div>
+            <div className="atm-step">
+              <div className="atm-step-n">02 &middot; UNIFY</div>
+              <h3 className="atm-step-h">One window opens.</h3>
+              <p className="atm-step-p">Every account streams into a single feed. Every item carries its source. Nothing gets merged that shouldn't.</p>
+              <div className="atm-step-vis atm-step-vis-2">
+                5 in. <span className="atm-step-red">1 out.</span>
+              </div>
+            </div>
+            <div className="atm-step">
+              <div className="atm-step-n">03 &middot; WORK</div>
+              <h3 className="atm-step-h">Send. Book. Ship.</h3>
+              <p className="atm-step-p">Reply from the right identity. Attach from any Drive. Drop events on the unified calendar.</p>
+              <div className="atm-step-vis atm-step-vis-3">
+                <div><b>874</b>MAIL</div>
+                <div><b>312</b>DOCS</div>
+                <div><b>98</b>CALS</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================= SOURCE CHIP SHOWCASE ======================= */}
+      <section className="atm-chips-section" id="sources">
+        <div className="atm-wrap">
+          <div className="atm-chips-head">
+            <div>
+              <div className="atm-chips-sup">The source chip &middot; Every item, every time</div>
+              <h2 className="atm-chips-h">Know which <span style={{color:'var(--primary)'}}>you</span> it came from.</h2>
+            </div>
+            <p className="atm-chips-p">The chip is the rule. Every message, every doc, every event carries its account. No guessing. No reply-from-wrong-email.</p>
+          </div>
+          <div className="atm-chips-grid">
+            <div className="atm-chips-col">
+              <h4 className="atm-chips-ch">Accounts &middot; 5</h4>
+              <div className="atm-chips-cluster">
+                <span className="atm-source-chip atm-work"><span className="atm-source-dot" style={{background:'#FF3A1D'}} />studio</span>
+                <span className="atm-source-chip atm-personal"><span className="atm-source-dot" style={{background:'#1B2BFF'}} />personal</span>
+                <span className="atm-source-chip atm-side"><span className="atm-source-dot" style={{background:'#CCFF00'}} />side-project</span>
+                <span className="atm-source-chip atm-np"><span className="atm-source-dot" style={{background:'#FFE500'}} />nonprofit</span>
+                <span className="atm-source-chip atm-legacy"><span className="atm-source-dot" style={{background:'#0A0A0A'}} />legacy</span>
+              </div>
+              <h4 className="atm-chips-ch">Kinds &middot; 3</h4>
+              <div className="atm-chips-cluster">
+                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'#FF3A1D'}} />MAIL</span>
+                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'#1B2BFF'}} />DOC</span>
+                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'#CCFF00'}} />CAL</span>
+              </div>
+            </div>
+            <div className="atm-chips-col">
+              <h4 className="atm-chips-ch">In the feed</h4>
+              <div className="atm-sample-rows">
+                <div className="atm-sample-row">
+                  <span className="atm-source-chip atm-work"><span className="atm-source-dot" style={{background:'#FF3A1D'}} />studio</span>
+                  <div className="atm-sample-msg">Nora Park <em>&middot; Q2 brand system &middot; sign-off</em></div>
+                  <span className="atm-sample-t">09:42</span>
+                </div>
+                <div className="atm-sample-row">
+                  <span className="atm-source-chip atm-personal"><span className="atm-source-dot" style={{background:'#1B2BFF'}} />personal</span>
+                  <div className="atm-sample-msg">Linnea <em>&middot; lease paperwork</em></div>
+                  <span className="atm-sample-t">Yday</span>
+                </div>
+                <div className="atm-sample-row">
+                  <span className="atm-source-chip atm-side"><span className="atm-source-dot" style={{background:'#CCFF00'}} />side</span>
+                  <div className="atm-sample-msg">Investor intro <em>&middot; 11:00 AM &middot; 30 min</em></div>
+                  <span className="atm-sample-t">11:00</span>
+                </div>
+                <div className="atm-sample-row">
+                  <span className="atm-source-chip atm-np"><span className="atm-source-dot" style={{background:'#FFE500'}} />nonprofit</span>
+                  <div className="atm-sample-msg">Board draft v3 <em>&middot; 14 comments</em></div>
+                  <span className="atm-sample-t">Yday</span>
+                </div>
+                <div className="atm-sample-row">
+                  <span className="atm-source-chip atm-legacy"><span className="atm-source-dot" style={{background:'#0A0A0A'}} />legacy</span>
+                  <div className="atm-sample-msg">All-hands <em>&middot; 10:00 AM &middot; 60 min</em></div>
+                  <span className="atm-sample-t">Tmrw</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================= PRICING ============================= */}
+      <section className="atm-pricing" id="pricing">
+        <div className="atm-wrap">
+          <div className="atm-pricing-head">
+            <div>
+              <div className="atm-pricing-sup">Pricing &middot; Pre-launch &middot; R1</div>
+              <h2 className="atm-pricing-h">Seven dollars.</h2>
+            </div>
+            <p className="atm-pricing-p">Every account. One window. Less than a sandwich.</p>
+          </div>
+          <div className="atm-prices">
+            <div className="atm-price">
+              <div className="atm-price-label"><span>Free</span></div>
+              <div className="atm-price-amount"><sup>$</sup>0</div>
+              <div className="atm-price-period">Forever</div>
+              <ul className="atm-price-list">
+                <li>1 connected account</li>
+                <li>Unified mail view</li>
+                <li>Encrypted OAuth</li>
+                <li>Mobile web</li>
+              </ul>
+              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Get started</button>
+            </div>
+            <div className="atm-price atm-price-ft">
+              <div className="atm-price-label"><span>Pro</span><span className="atm-price-tag">R1 launch</span></div>
+              <div className="atm-price-amount"><sup>$</sup>7</div>
+              <div className="atm-price-period">/ month</div>
+              <ul className="atm-price-list">
+                <li>Unlimited accounts</li>
+                <li>Mail &middot; Docs &middot; Cals unified</li>
+                <li>Cross-account search</li>
+                <li>Source chips everywhere</li>
+                <li>Send-as / RSVP-as</li>
+                <li>Priority sync</li>
+              </ul>
+              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Start 14-day trial</button>
+            </div>
+            <div className="atm-price">
+              <div className="atm-price-label"><span>Team</span></div>
+              <div className="atm-price-amount"><sup>$</sup>12</div>
+              <div className="atm-price-period">/ user / month</div>
+              <ul className="atm-price-list">
+                <li>Everything in Pro</li>
+                <li>SAML SSO</li>
+                <li>Centralized billing</li>
+                <li>Admin console</li>
+                <li>Priority support</li>
+              </ul>
+              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Contact sales</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================= FOOTER ============================= */}
+      <footer className="atm-foot">
+        <div className="atm-wrap">
+          <div className="atm-foot-mega">
+            ALL THE<br />
+            <span key={currentFootWord} ref={footMorphRef} className="atm-foot-m">{currentFootWord}</span>
+          </div>
+
+          <div className="atm-foot-grid">
+            <div className="atm-foot-col">
+              <h5>Product</h5>
+              <a href="#">Mail</a>
+              <a href="#">Docs</a>
+              <a href="#">Cals</a>
+              <a href="#sources">Source chips</a>
+              <a href="#">Changelog</a>
+            </div>
+            <div className="atm-foot-col">
+              <h5>Company</h5>
+              <a href="#">Brief</a>
+              <a href="#pricing">Pricing</a>
+              <a href="#">Security</a>
+              <a href="#">Status</a>
+            </div>
+            <div className="atm-foot-col">
+              <h5>Stay in the loop</h5>
+              <a href="#">Waitlist</a>
+              <a href="#">X / Twitter</a>
+              <a href="#">Github</a>
+              <a href="#">Contact</a>
+            </div>
+          </div>
+
+          <div className="atm-foot-row">
+            <span>&copy; 2026 ALL THE MAIL &middot; Pre-launch &middot; R1</span>
+            <div className="atm-foot-links">
               <a href="/privacy">Privacy</a>
               <a href="/terms">Terms</a>
+              <a href="#">Security</a>
+              <a href="#">DPA</a>
             </div>
           </div>
         </div>
