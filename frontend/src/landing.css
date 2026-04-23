@@ -157,12 +157,13 @@
   background: var(--primary);
   color: #fff;
   padding: 18px 24px;
-  box-shadow: 4px 4px 0 var(--ink-1);
+  /* 4x4 ink drop on bottom-right; 1px ink stroke on top-left so all 4 edges read */
+  box-shadow: 4px 4px 0 var(--ink-1), -1px -1px 0 var(--ink-1);
   transition: transform var(--t-quick), box-shadow var(--t-quick), background var(--t-quick);
 }
 .atm-btn-primary:hover:not(:disabled) {
   transform: translate(-1px, -1px);
-  box-shadow: 5px 5px 0 var(--ink-1);
+  box-shadow: 5px 5px 0 var(--ink-1), -1px -1px 0 var(--ink-1);
 }
 .atm-btn-primary:active {
   transform: translate(2px, 2px);
