@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, FileText, Calendar, Plus, X, ArrowLeft, Reply, Archive } from 'lucide-react';
+import { Mail, FileText, Calendar, Plus, X, ArrowLeft, Reply, Forward, Users, Archive } from 'lucide-react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { getAccountGradient, getDocIcon, formatRelativeEdit, formatTime, stripName, buildEmailSrcDoc } from '../../utils/helpers';
 
@@ -323,15 +323,21 @@ const EverythingEmailReader = ({
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, margin: '16px 0' }}>
-            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => { closeSlideOver(); setActiveModule('mail'); setActiveView('everything'); onSelectEmail(email); }}>
-              <ArrowLeft size={14} strokeWidth={1.5} /> Open full view
-            </button>
+          <div style={{ display: 'flex', gap: 8, margin: '16px 0', flexWrap: 'wrap' }}>
             <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => { closeSlideOver(); openCompose('reply', email); }}>
               <Reply size={14} strokeWidth={1.5} /> Reply
             </button>
+            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => { closeSlideOver(); openCompose('replyAll', email); }}>
+              <Users size={14} strokeWidth={1.5} /> Reply all
+            </button>
+            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => { closeSlideOver(); openCompose('forward', email); }}>
+              <Forward size={14} strokeWidth={1.5} /> Forward
+            </button>
             <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={archive}>
               <Archive size={14} strokeWidth={1.5} /> Archive
+            </button>
+            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px', marginLeft: 'auto' }} onClick={() => { closeSlideOver(); setActiveModule('mail'); setActiveView('everything'); onSelectEmail(email); }}>
+              <ArrowLeft size={14} strokeWidth={1.5} /> Open full view
             </button>
           </div>
           <div style={{ height: 1, background: 'var(--line-0)', marginBottom: 20 }} />

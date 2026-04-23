@@ -842,6 +842,56 @@ html { scrollbar-color: var(--ink-5) transparent; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
 
 /* ==========================================================
+   COMPOSE — standalone schedule-send button
+========================================================== */
+.docked-send-btn {
+  border-radius: 0 !important;
+}
+.docked-schedule-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.docked-schedule-btn {
+  color: var(--ink-2);
+}
+.docked-schedule-btn[aria-expanded="true"] {
+  background: var(--ink-6);
+  color: var(--ink-1);
+}
+.docked-schedule-wrap .docked-send-later-popup {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  background: var(--paper);
+  border: 1px solid var(--ink-1);
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--ink-1);
+  padding: 12px;
+  min-width: 240px;
+  z-index: var(--z-drawer);
+}
+
+/* Expanded Quill toolbar — brand overrides */
+.docked-compose-editor .ql-toolbar.ql-snow {
+  border-color: var(--ink-5) !important;
+  border-radius: 0 !important;
+  background: var(--paper);
+}
+.docked-compose-editor .ql-container.ql-snow {
+  border-color: var(--ink-5) !important;
+  border-radius: 0 !important;
+}
+.docked-compose-editor .ql-toolbar.ql-snow .ql-formats button:hover .ql-stroke,
+.docked-compose-editor .ql-toolbar.ql-snow .ql-formats button.ql-active .ql-stroke {
+  stroke: var(--primary) !important;
+}
+.docked-compose-editor .ql-toolbar.ql-snow .ql-formats button:hover .ql-fill,
+.docked-compose-editor .ql-toolbar.ql-snow .ql-formats button.ql-active .ql-fill {
+  fill: var(--primary) !important;
+}
+
+/* ==========================================================
    EVERYTHING VIEW — inline email reader (replaces docs+cals cols)
 ========================================================== */
 .ev-inline-reader {

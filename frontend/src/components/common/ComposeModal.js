@@ -1,7 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { X, Minus, Maximize2, Paperclip, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { X, Minus, Maximize2, Paperclip, Clock, Image as ImageIcon } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+
+// Match bare URLs in body. Matches http(s)://..., www...., and common TLDs.
+const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+[^\s<>"'.,;:!?()])/gi;
 
 /**
  * Docked compose panel — Phase 7.
@@ -29,6 +32,67 @@ const ComposeModal = ({
   const [confirmingEmptySubject, setConfirmingEmptySubject] = useState(false);
   const [toError, setToError] = useState(false);
   const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const quillRef = useRef(null);
+  const lastAutoLinkAtRef = useRef(0);
+
+  // Insert a local image inline as a base64 data URL at the current cursor position.
+  const insertInlineImageFile = useCallback((file) => {
+    if (!file || !file.type?.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const quill = quillRef.current?.getEditor?.();
+      if (!quill) return;
+      const range = quill.getSelection(true);
+      quill.insertEmbed(range ? range.index : quill.getLength(), 'image', reader.result, 'user');
+      quill.setSelection((range ? range.index : quill.getLength()) + 1, 0);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleImageButtonClick = useCallback(() => { imageInputRef.current?.click(); }, []);
+  const handleImageFileChosen = useCallback((e) => {
+    const f = e.target.files?.[0];
+    if (f) insertInlineImageFile(f);
+    e.target.value = '';
+  }, [insertInlineImageFile]);
+
+  // Quill image toolbar handler — open our file picker so images embed inline.
+  useEffect(() => {
+    const quill = quillRef.current?.getEditor?.();
+    if (!quill) return;
+    const toolbar = quill.getModule('toolbar');
+    if (toolbar && typeof toolbar.addHandler === 'function') {
+      toolbar.addHandler('image', handleImageButtonClick);
+    }
+  }, [handleImageButtonClick]);
+
+  // Auto-linkify bare URLs as the user types. Runs shortly after each change,
+  // debounced so we don't thrash on every keystroke. Skips ranges already linked.
+  const handleEditorChange = useCallback((value, delta, source, editor) => {
+    setComposeBody(value);
+    if (source !== 'user') return;
+    const now = Date.now();
+    if (now - lastAutoLinkAtRef.current < 150) return;
+    lastAutoLinkAtRef.current = now;
+    try {
+      const quill = quillRef.current?.getEditor?.();
+      if (!quill) return;
+      const text = quill.getText();
+      const matches = [...text.matchAll(URL_REGEX)];
+      if (!matches.length) return;
+      const currentSelection = quill.getSelection();
+      matches.forEach(m => {
+        const start = m.index;
+        const len = m[0].length;
+        const href = m[0].startsWith('http') ? m[0] : `https://${m[0]}`;
+        const existing = quill.getFormat(start, len);
+        if (existing.link === href) return;
+        quill.formatText(start, len, 'link', href, 'silent');
+      });
+      if (currentSelection) quill.setSelection(currentSelection.index, currentSelection.length, 'silent');
+    } catch (_) {}
+  }, [setComposeBody]);
 
   const validateTo = useCallback((val) => {
     const addresses = (val || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -133,11 +197,33 @@ const ComposeModal = ({
           {/* Body */}
           <div className="docked-compose-editor">
             <ReactQuill
+              ref={quillRef}
               theme="snow"
               value={composeBody}
-              onChange={setComposeBody}
+              onChange={handleEditorChange}
               placeholder="Write your message…"
-              modules={{ toolbar: [['bold','italic','underline'],['link'],[{'list':'bullet'}],['clean']] }}
+              formats={[
+                'header',
+                'bold', 'italic', 'underline', 'strike',
+                'color', 'background',
+                'blockquote', 'code-block',
+                'list', 'bullet', 'indent',
+                'align',
+                'link', 'image',
+              ]}
+              modules={{
+                toolbar: [
+                  [{ header: [1, 2, 3, false] }],
+                  ['bold', 'italic', 'underline', 'strike'],
+                  [{ color: [] }, { background: [] }],
+                  [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
+                  [{ align: [] }],
+                  ['blockquote', 'code-block'],
+                  ['link', 'image'],
+                  ['clean'],
+                ],
+                clipboard: { matchVisual: false },
+              }}
             />
           </div>
 
@@ -175,25 +261,51 @@ const ComposeModal = ({
               <button className="btn btn-primary docked-send-btn" onClick={handleSendClick} disabled={composeSending}>
                 {composeSending ? 'Sending…' : 'Send'}
               </button>
-              <button className="docked-send-later" onClick={() => setSendLaterOpen(o => !o)} disabled={composeSending} title="Schedule send">
-                <ChevronDown size={13} strokeWidth={1.5} />
-              </button>
-              {sendLaterOpen && (
-                <div className="docked-send-later-popup">
-                  <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 6 }}>Schedule send</div>
-                  <input type="datetime-local"
-                    style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)' }}
-                    min={new Date().toISOString().slice(0, 16)}
-                    onChange={e => { if (e.target.value && scheduleSend) { scheduleSend(new Date(e.target.value)); setSendLaterOpen(false); } }}
-                  />
-                </div>
-              )}
             </div>
             <div className="docked-footer-right">
               <input type="file" multiple onChange={handleFileSelect} ref={fileInputRef} style={{ display: 'none' }} />
-              <button className="docked-toolbar-btn" onClick={() => fileInputRef.current?.click()} title="Attach files">
+              <input type="file" accept="image/*" onChange={handleImageFileChosen} ref={imageInputRef} style={{ display: 'none' }} />
+              <button
+                className="docked-toolbar-btn"
+                onClick={handleImageButtonClick}
+                title="Insert image inline"
+                aria-label="Insert image inline"
+                type="button"
+              >
+                <ImageIcon size={15} strokeWidth={1.5} />
+              </button>
+              <button
+                className="docked-toolbar-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach files"
+                aria-label="Attach files"
+                type="button"
+              >
                 <Paperclip size={15} strokeWidth={1.5} />
               </button>
+              <div className="docked-schedule-wrap">
+                <button
+                  className="docked-toolbar-btn docked-schedule-btn"
+                  onClick={() => setSendLaterOpen(o => !o)}
+                  disabled={composeSending}
+                  title="Schedule send"
+                  aria-label="Schedule send"
+                  aria-expanded={sendLaterOpen}
+                  type="button"
+                >
+                  <Clock size={15} strokeWidth={1.5} />
+                </button>
+                {sendLaterOpen && (
+                  <div className="docked-send-later-popup">
+                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 6 }}>Schedule send</div>
+                    <input type="datetime-local"
+                      style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)' }}
+                      min={new Date().toISOString().slice(0, 16)}
+                      onChange={e => { if (e.target.value && scheduleSend) { scheduleSend(new Date(e.target.value)); setSendLaterOpen(false); } }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
