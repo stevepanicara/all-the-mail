@@ -842,6 +842,47 @@ html { scrollbar-color: var(--ink-5) transparent; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
 
 /* ==========================================================
+   EVERYTHING VIEW — inline email reader (replaces docs+cals cols)
+========================================================== */
+.ev-inline-reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--paper);
+  border-left: 1px solid var(--ink-5);
+}
+.ev-inline-reader-head {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ink-5);
+  flex-shrink: 0;
+}
+.ev-inline-reader-close {
+  width: 28px; height: 28px;
+  background: transparent;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  transition: background var(--t-instant) var(--ease), color var(--t-instant) var(--ease);
+}
+.ev-inline-reader-close:hover {
+  background: var(--ink-6);
+  color: var(--ink-1);
+}
+.ev-inline-reader-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ==========================================================
    INTRO BANNER — ink bg, paper text, mono kbd hints
 ========================================================== */
 .atm-intro-banner {

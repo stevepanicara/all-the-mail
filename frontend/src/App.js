@@ -995,6 +995,14 @@ const AllTheMail = () => {
       if(e.key==='2'){e.preventDefault();setActiveModule('mail');return;}
       if(e.key==='3'){e.preventDefault();setActiveModule('docs');return;}
       if(e.key==='4'){e.preventDefault();setActiveModule('cals');return;}
+      // Cal event nav — arrow left/right cycles through filteredAllEvents when an event is selected
+      if((e.key==='ArrowLeft'||e.key==='ArrowRight') && activeModule==='cals' && selectedEvent && filteredAllEvents.length){
+        const idx=filteredAllEvents.findIndex(x=>x.id===selectedEvent.id);
+        if(idx>=0){
+          const ni=e.key==='ArrowRight'?Math.min(idx+1,filteredAllEvents.length-1):Math.max(idx-1,0);
+          if(ni!==idx){e.preventDefault();const ne=filteredAllEvents[ni];setSelectedEvent(ne);if(eventEditOpen)openEventEdit(ne);return;}
+        }
+      }
       // Compose shortcut (spec: N)
       if(e.key==='n'||e.key==='N'){const oc=shortcutsRef.current.openCompose;if(oc){e.preventDefault();oc('compose');return;}}
       const readerOpen = selectedEmail && (splitMode!=='none' || fullPageReaderOpen);
@@ -1026,7 +1034,7 @@ const AllTheMail = () => {
     };
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, activeModule, shortcutsOpen]); // starEmail/toggleSelectId accessed via ref
+  }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, composeOpen, splitMode, fullPageReaderOpen, navigatePrev, navigateNext, activeModule, shortcutsOpen, selectedEvent, filteredAllEvents, eventEditOpen, openEventEdit]); // starEmail/toggleSelectId accessed via ref
 
   const openCompose = useCallback(async (mode, email=null) => {
     setComposeError(null);setComposeMode(mode);setComposeOriginalEmail(email);setComposeShowCcBcc(false);
@@ -1367,6 +1375,15 @@ const AllTheMail = () => {
               handleAddAccount={handleAddAccount}
               cascadeTimestampRef={cascadeTimestampRef}
               cascadeKey={cascadeKey}
+              emailBodies={emailBodies}
+              emailHeaders={emailHeaders}
+              openCompose={openCompose}
+              onSelectEmail={onSelectEmail}
+              setActiveModule={setActiveModule}
+              setActiveView={setActiveView}
+              setEmails={setEmails}
+              setError={setError}
+              apiBase={API_BASE}
             />
           )}
           {activeModule === 'cals' && (
@@ -1485,8 +1502,8 @@ const AllTheMail = () => {
         />
       </React.Suspense>
 
-      {/* Slide-over preview panel */}
-      {(slideOverEmail || slideOverDoc) && (
+      {/* Slide-over preview panel — suppressed for email in Everything view (rendered inline there) */}
+      {((slideOverEmail && activeModule !== 'everything') || slideOverDoc) && (
         <div className="slide-over-backdrop" onClick={closeSlideOver}>
           <div className="slide-over-panel" onClick={e => e.stopPropagation()}>
             {slideOverIndex !== null && (<span className="slide-over-position">{slideOverIndex + 1} / {slideOverEmail ? evFilteredEmails.slice(0, 50).length : evFilteredDocs.length}</span>)}

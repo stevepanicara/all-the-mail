@@ -1,7 +1,7 @@
 import React from 'react';
-import { Mail, FileText, Calendar, Plus } from 'lucide-react';
+import { Mail, FileText, Calendar, Plus, X, ArrowLeft, Reply, Archive } from 'lucide-react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import { getAccountGradient, getDocIcon, formatRelativeEdit, formatTime, stripName } from '../../utils/helpers';
+import { getAccountGradient, getDocIcon, formatRelativeEdit, formatTime, stripName, buildEmailSrcDoc } from '../../utils/helpers';
 
 const EverythingModule = ({
   evFilteredEmails, evFilteredDocs, evFilteredEvents, filteredAllEvents,
@@ -22,7 +22,13 @@ const EverythingModule = ({
   handleAddAccount,
   cascadeTimestampRef,
   cascadeKey,
+  emailBodies, emailHeaders,
+  openCompose, onSelectEmail,
+  setActiveModule, setActiveView,
+  setEmails, setError,
+  apiBase,
 }) => {
+  const readerOpen = !!slideOverEmail;
   return (
     <div className="ev-everything-wrap" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div className="ev-mobile-tabs" role="tablist" aria-label="Content type">
@@ -72,7 +78,29 @@ const EverythingModule = ({
             </div>
           </div>
         </Panel>
-        <PanelResizeHandle className="ev-column-divider ev-column-divider--mail-docs" />
+        {readerOpen && (
+          <>
+            <PanelResizeHandle className="ev-column-divider ev-column-divider--mail-docs" />
+            <Panel defaultSize="60%" minSize="40%" id="ev-reader">
+              <EverythingEmailReader
+                email={slideOverEmail}
+                emailBodies={emailBodies}
+                emailHeaders={emailHeaders}
+                connectedAccounts={connectedAccounts}
+                closeSlideOver={closeSlideOver}
+                openCompose={openCompose}
+                setActiveModule={setActiveModule}
+                setActiveView={setActiveView}
+                onSelectEmail={onSelectEmail}
+                setEmails={setEmails}
+                setError={setError}
+                apiBase={apiBase}
+              />
+            </Panel>
+          </>
+        )}
+        {!readerOpen && (
+        <><PanelResizeHandle className="ev-column-divider ev-column-divider--mail-docs" />
         <Panel defaultSize="30%" minSize="22%" id="ev-docs">
           <div className={`ev-column${evMobileTab === 'docs' ? ' ev-mobile-active' : ''}`}>
             <div className="ev-col-header">
@@ -161,7 +189,8 @@ const EverythingModule = ({
               })()}
             </div>
           </div>
-        </Panel>
+        </Panel></>
+        )}
       </PanelGroup>
       <div className={`ev-mobile-unified-wrap${evMobileTab === 'all' ? ' active' : ''}`}>
         <div className="ev-col-header">
@@ -219,6 +248,117 @@ const EverythingModule = ({
             <div className="empty-state">
               <div className="empty-state-title">Nothing to show</div>
               <div className="empty-state-subtitle">Connect an account to see your activity</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Inline reader shown in the Everything view when an email is selected.
+// Occupies the combined Docs + Cals column space.
+const EverythingEmailReader = ({
+  email,
+  emailBodies,
+  emailHeaders,
+  connectedAccounts,
+  closeSlideOver,
+  openCompose,
+  setActiveModule,
+  setActiveView,
+  onSelectEmail,
+  setEmails,
+  setError,
+  apiBase,
+}) => {
+  if (!email) return null;
+  const eid = email.id;
+  const body = emailBodies[eid];
+  const headers = emailHeaders[eid];
+  const accountIndex = connectedAccounts.findIndex(a => a.id === email.accountId);
+  const grad = accountIndex !== -1 ? getAccountGradient(accountIndex) : null;
+  const accountName = connectedAccounts[accountIndex]?.account_name || connectedAccounts[accountIndex]?.gmail_email || '';
+
+  const archive = async () => {
+    const aid = email.accountId || connectedAccounts[0]?.id;
+    if (!aid) return;
+    try {
+      await fetch(`${apiBase}/emails/${aid}/${email.id}/archive`, { method: 'POST', credentials: 'include' });
+      setEmails(p => {
+        const n = { ...p };
+        Object.keys(n).forEach(ai => {
+          Object.keys(n[ai]).forEach(c => { if (n[ai][c]) n[ai][c] = n[ai][c].filter(e => e.id !== email.id); });
+        });
+        return n;
+      });
+      closeSlideOver();
+    } catch (err) { setError && setError('Failed to archive'); }
+  };
+
+  return (
+    <div className="ev-inline-reader">
+      <div className="ev-inline-reader-head">
+        <button className="ev-inline-reader-close" onClick={closeSlideOver} aria-label="Close reader">
+          <X size={16} strokeWidth={1.5} />
+        </button>
+      </div>
+      <div className="ev-inline-reader-body">
+        <div style={{ padding: '24px 32px 32px', maxWidth: 920, margin: '0 auto' }}>
+          {grad && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: '3px 10px 3px 6px', borderRadius: 'var(--r-pill)', background: grad.midRgba(0.08), fontSize: 11, fontWeight: 500, color: 'var(--text-1)' }}>
+              <span className="account-dot" style={{ background: grad.gradient, width: 8, height: 8 }} />
+              {accountName}
+            </div>
+          )}
+          <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text-0)', margin: '0 0 16px', lineHeight: 1.3 }}>
+            {email.subject || '(no subject)'}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div className="reader-avatar">{stripName(headers?.from || email.from || '').charAt(0).toUpperCase()}</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-0)' }}>{stripName(headers?.from || email.from || '')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                {headers?.to ? `To: ${stripName(headers.to)}` : ''} · {formatTime(email.date)}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, margin: '16px 0' }}>
+            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => { closeSlideOver(); setActiveModule('mail'); setActiveView('everything'); onSelectEmail(email); }}>
+              <ArrowLeft size={14} strokeWidth={1.5} /> Open full view
+            </button>
+            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => { closeSlideOver(); openCompose('reply', email); }}>
+              <Reply size={14} strokeWidth={1.5} /> Reply
+            </button>
+            <button className="btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={archive}>
+              <Archive size={14} strokeWidth={1.5} /> Archive
+            </button>
+          </div>
+          <div style={{ height: 1, background: 'var(--line-0)', marginBottom: 20 }} />
+          {!body ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '20px 0' }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 3 ? '60%' : '100%' }} />
+              ))}
+            </div>
+          ) : (
+            <div className="email-body-wrapper" style={{ overflow: 'hidden' }}>
+              <iframe
+                title="Email preview"
+                srcDoc={buildEmailSrcDoc(body)}
+                scrolling="no"
+                sandbox="allow-same-origin allow-popups"
+                style={{ width: '100%', border: 'none', display: 'block', background: 'var(--email-bg)', minHeight: 120 }}
+                onLoad={e => {
+                  const iframe = e.target;
+                  if (!iframe?.contentDocument?.body) return;
+                  const resize = () => { try { const h = iframe.contentDocument.body.scrollHeight; if (h > 0) iframe.style.height = h + 'px'; } catch (_) {} };
+                  resize();
+                  [100, 400, 1000, 2000].forEach(ms => setTimeout(resize, ms));
+                  try { Array.from(iframe.contentDocument.images || []).forEach(img => { if (!img.complete) img.addEventListener('load', resize); }); } catch (_) {}
+                  try { const ro = new ResizeObserver(resize); ro.observe(iframe.contentDocument.body); } catch (_) {}
+                }}
+              />
             </div>
           )}
         </div>
