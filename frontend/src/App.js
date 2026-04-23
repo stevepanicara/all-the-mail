@@ -273,16 +273,6 @@ const AllTheMail = () => {
     return () => document.removeEventListener('keydown', handler);
   }, [avatarDropdownOpen]);
 
-  // Close snooze dropdown on outside click or Escape
-  useEffect(() => {
-    if (!snoozeDropdownEmailId) return;
-    const handler = () => setSnoozeDropdownEmailId(null);
-    const keyHandler = (e) => { if (e.key === 'Escape') setSnoozeDropdownEmailId(null); };
-    setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    document.addEventListener('keydown', keyHandler);
-    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler); };
-  }, [snoozeDropdownEmailId]);
-
   const handleReaderScroll = useCallback((e) => {
     setReaderCompact(e.target.scrollTop > 60);
   }, []);
@@ -379,6 +369,17 @@ const AllTheMail = () => {
       setEditMode(false); setAvatarDropdownOpen(false); setUserProfile(null); setBillingPlan('free');
     };
   });
+
+  // Close snooze dropdown on outside click or Escape
+  // Must be declared AFTER useEmail() destructures snoozeDropdownEmailId (TDZ-safe).
+  useEffect(() => {
+    if (!snoozeDropdownEmailId) return;
+    const handler = () => setSnoozeDropdownEmailId(null);
+    const keyHandler = (e) => { if (e.key === 'Escape') setSnoozeDropdownEmailId(null); };
+    setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    document.addEventListener('keydown', keyHandler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', keyHandler); };
+  }, [snoozeDropdownEmailId, setSnoozeDropdownEmailId]);
 
   const loadUserProfile = useCallback(async () => {
     try {
