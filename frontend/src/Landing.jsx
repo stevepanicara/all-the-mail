@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './landing.css';
 
 const API_BASE =
@@ -12,11 +12,7 @@ const FOOT_WORDS = ['EVERYTHING', 'MAIL', 'DOCS', 'CALS'];
 function Landing() {
   const [authError, setAuthError] = useState(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [hero, setHero] = useState('billboard');
   const [wordIdx, setWordIdx] = useState(3); // start on "EVERYTHING"
-
-  const heroMorphRef = useRef(null);
-  const footMorphRef = useRef(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -61,167 +57,43 @@ function Landing() {
         </div>
       </header>
 
-      {/* ========================== HERO SWITCHER ========================== */}
-      <div className="atm-hero-switcher" role="tablist" aria-label="Hero variation">
-        {['billboard', 'plate', 'poster'].map((key, i) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={hero === key}
-            className={`atm-hs-btn${hero === key ? ' on' : ''}`}
-            onClick={() => setHero(key)}
-          >
-            {String(i + 1).padStart(2, '0')} &middot; {key[0].toUpperCase() + key.slice(1)}
-          </button>
-        ))}
-      </div>
-
       <section className="atm-hero">
-        {/* ---------------- v1 · BILLBOARD ---------------- */}
-        {hero === 'billboard' && (
-          <div className="atm-h1 atm-wrap">
-            <div className="atm-h1-tag">
-              <span className="atm-h1-bar" />
-              <span>ALL THE MAIL &middot; R1 &middot; EVERYTHING INBOX</span>
+        <div className="atm-h1 atm-wrap">
+          <div className="atm-h1-tag">
+            <span className="atm-h1-bar" />
+            <span>ALL THE MAIL &middot; R1 &middot; EVERYTHING INBOX</span>
+          </div>
+          <h1 className="atm-h1-title">
+            ALL THE<br />
+            <span key={currentHeroWord} className="atm-morph">{currentHeroWord}</span>
+          </h1>
+          {authError && <div className="atm-l-error" role="alert">{authError}</div>}
+          <div className="atm-cta-row">
+            <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
+              {isSigningIn ? 'Signing in\u2026' : 'Add your first account'}
+            </button>
+            <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn}>
+              Sign in with Google
+            </button>
+            <span className="atm-h1-trust">
+              Encrypted tokens &middot; No passwords stored &middot; Disconnect anytime
+            </span>
+          </div>
+          <div className="atm-h1-meta">
+            <div className="atm-h1-cell">
+              <div className="atm-h1-k">The brief</div>
+              <div className="atm-h1-v">Every Google account. Mail, docs, and cals. One window. One inbox. Zero tab-switching.</div>
             </div>
-            <h1 className="atm-h1-title">
-              ALL THE<br />
-              <span key={currentHeroWord} ref={heroMorphRef} className="atm-morph">{currentHeroWord}</span>
-            </h1>
-            {authError && <div className="atm-l-error" role="alert">{authError}</div>}
-            <div className="atm-cta-row">
-              <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
-                {isSigningIn ? 'Signing in\u2026' : 'Add your first account'}
-              </button>
-              <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn}>
-                Sign in with Google
-              </button>
-              <span className="atm-h1-trust">
-                Encrypted tokens &middot; No passwords stored &middot; Disconnect anytime
-              </span>
+            <div className="atm-h1-cell">
+              <div className="atm-h1-k">Built for</div>
+              <div className="atm-h1-v">People with five Google accounts. Work, personal, side-project, nonprofit, old job.</div>
             </div>
-            <div className="atm-h1-meta">
-              <div className="atm-h1-cell">
-                <div className="atm-h1-k">The brief</div>
-                <div className="atm-h1-v">Every Google account. Mail, docs, and cals. One window. One inbox. Zero tab-switching.</div>
-              </div>
-              <div className="atm-h1-cell">
-                <div className="atm-h1-k">Built for</div>
-                <div className="atm-h1-v">People with five Google accounts. Work, personal, side-project, nonprofit, old job.</div>
-              </div>
-              <div className="atm-h1-cell">
-                <div className="atm-h1-k">Price</div>
-                <div className="atm-h1-v">$7 / month. Unlimited accounts. 14-day trial, no card.</div>
-              </div>
+            <div className="atm-h1-cell">
+              <div className="atm-h1-k">Price</div>
+              <div className="atm-h1-v">$7 / month. Unlimited accounts. 14-day trial, no card.</div>
             </div>
           </div>
-        )}
-
-        {/* ---------------- v2 · PLATE ---------------- */}
-        {hero === 'plate' && (
-          <div className="atm-h2 atm-wrap">
-            <div className="atm-h2-grid">
-              <div className="atm-h2-left">
-                <h1 className="atm-h2-title">
-                  ALL THE <span key={currentHeroWord} className="atm-morph">{currentHeroWord}</span>
-                </h1>
-                <p className="atm-h2-sub">The everything inbox. Every Google account in one window.</p>
-                {authError && <div className="atm-l-error" role="alert">{authError}</div>}
-                <div className="atm-cta-row atm-h2-ctas">
-                  <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
-                    {isSigningIn ? 'Signing in\u2026' : 'Add your first account'}
-                  </button>
-                  <span className="atm-h1-trust">
-                    Encrypted tokens &middot; No passwords stored &middot; Disconnect anytime
-                  </span>
-                </div>
-              </div>
-              <div className="atm-h2-right">
-                <div className="atm-plate">
-                  <div className="atm-mock">
-                    <div className="atm-mock-side">
-                      <div className="atm-mock-wm">ALL THE MAIL</div>
-                      <div className="atm-mock-tab on"><span>Everything</span><span className="atm-mock-n">1,284</span></div>
-                      <div className="atm-mock-tab"><span>Mail</span><span className="atm-mock-n">874</span></div>
-                      <div className="atm-mock-tab"><span>Docs</span><span className="atm-mock-n">312</span></div>
-                      <div className="atm-mock-tab"><span>Cals</span><span className="atm-mock-n">98</span></div>
-                      <div className="atm-mock-section">Accounts &middot; 5</div>
-                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#FF3A1D'}} />jesse@studio.co</div>
-                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#1B2BFF'}} />jesse@gmail.com</div>
-                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#CCFF00'}} />j@sideproject.dev</div>
-                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#FFE500'}} />jesse@the-np.org</div>
-                      <div className="atm-mock-acct"><span className="atm-mock-dot" style={{background:'#0A0A0A'}} />jesse@oldjob.net</div>
-                    </div>
-                    <div className="atm-mock-main">
-                      <div className="atm-mock-toolbar">
-                        <div className="atm-mock-tabs">
-                          <div className="atm-mock-ttab on">Everything</div>
-                          <div className="atm-mock-ttab">Mail</div>
-                          <div className="atm-mock-ttab">Docs</div>
-                          <div className="atm-mock-ttab">Cals</div>
-                        </div>
-                        <div className="atm-mock-search">⌘K &middot; Search all accounts</div>
-                      </div>
-                      {[
-                        { star:true,  c:'#FF3A1D', ck:'studio',    who:'Nora Park',        k:'MAIL', subj:'Re: Q2 brand system. Sign-off needed by Friday', t:'09:42' },
-                        { star:true,  c:'#CCFF00', ck:'side',      who:'Calendar',         k:'CAL',  subj:'Today · Investor intro · 11:00 AM · 30 min',      t:'11:00' },
-                        { star:false, c:'#1B2BFF', ck:'personal',  who:'Linnea',           k:'MAIL', subj:'the lease paperwork. i signed mine, yours is next', t:'Yday' },
-                        { star:false, c:'#FFE500', ck:'nonprofit', who:'Board draft v3',   k:'DOC',  subj:'shared by marcus · edited 2h ago · 14 comments',   t:'Yday' },
-                        { star:false, c:'#FF3A1D', ck:'studio',    who:'Stripe',           k:'MAIL', subj:'Payout. $4,280.00 sent to your bank',              t:'Yday' },
-                        { star:false, c:'#0A0A0A', ck:'legacy',    who:'Calendar',         k:'CAL',  subj:'Tomorrow · All-hands · 10:00 AM · 60 min',         t:'Tmrw' },
-                        { star:false, c:'#1B2BFF', ck:'personal',  who:'Flight receipts',  k:'DOC',  subj:'sheet · 42 rows · last edit by you',               t:'Mon' },
-                      ].map((r, i) => (
-                        <div key={i} className={`atm-mock-row${r.star ? ' unread' : ''}`}>
-                          <div className="atm-mock-star" />
-                          <div className="atm-mock-chip"><span className="atm-mock-dot" style={{background:r.c}} />{r.ck}</div>
-                          <div>
-                            <div className="atm-mock-sender">{r.who} <span className="atm-mock-kind">{r.k}</span></div>
-                            <div className="atm-mock-subj">{r.subj}</div>
-                          </div>
-                          <div className="atm-mock-time">{r.t}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- v3 · POSTER ---------------- */}
-        {hero === 'poster' && (
-          <div className="atm-h3 atm-wrap">
-            <div className="atm-h3-poster">
-              <div className="atm-h3-corner">
-                R1 / 2026<br />
-                PRE-LAUNCH EDITION<br />
-                NO. <b style={{color:'var(--ink-1)'}}>0001</b>
-              </div>
-              <h1 className="atm-h3-lockup">
-                ALL THE<br />
-                <span key={currentHeroWord} className="atm-h3-red atm-morph">{currentHeroWord}</span>
-              </h1>
-              <div className="atm-h3-meta">
-                <div className="atm-h3-cell">One window<br /><b>Every account</b></div>
-                <div className="atm-h3-cell">Mail &middot; Docs &middot; Cals<br /><b>Unified feed</b></div>
-                <div className="atm-h3-cell">$7 / month<br /><b>Unlimited accounts</b></div>
-                <div className="atm-h3-cell">14-day trial<br /><b>No card required</b></div>
-              </div>
-              {authError && <div className="atm-l-error atm-h3-error" role="alert">{authError}</div>}
-              <div className="atm-h3-ctarow">
-                <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
-                  {isSigningIn ? 'Signing in\u2026' : 'Claim your handle'}
-                </button>
-                <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn}>
-                  Sign in with Google
-                </button>
-              </div>
-              <div className="atm-h3-stamp">One window.<br />Fewer tabs.<br />Zero apology.</div>
-            </div>
-          </div>
-        )}
+        </div>
       </section>
 
       {/* ============================ MARQUEE ============================ */}
@@ -444,7 +316,7 @@ function Landing() {
         <div className="atm-wrap">
           <div className="atm-foot-mega">
             ALL THE<br />
-            <span key={currentFootWord} ref={footMorphRef} className="atm-foot-m">{currentFootWord}</span>
+            <span key={currentFootWord} className="atm-foot-m">{currentFootWord}</span>
           </div>
 
           <div className="atm-foot-grid">
