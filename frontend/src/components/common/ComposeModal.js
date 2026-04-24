@@ -4,7 +4,11 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
 // Match bare URLs in body. Matches http(s)://..., www...., and common TLDs.
-const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+[^\s<>"'.,;:!?()])/gi;
+// P2 — /u flag + \p{C} (control/format) exclusion. Without them, Unicode
+// bidi marks like U+200F (RTL mark) or zero-width chars could hide inside
+// the matched URL, letting a typed string "https://good.com<U+200F>.evil.com"
+// be auto-linked to evil.com while visually reading as good.com.
+const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"'\p{C}]+[^\s<>"'\p{C}.,;:!?()])/giu;
 
 /**
  * Docked compose panel — Phase 7.
