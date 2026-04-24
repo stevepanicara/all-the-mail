@@ -1,16 +1,9 @@
 import { Router } from 'express';
-import crypto from 'crypto';
 import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
 import { oauth2Client, ALL_SCOPES, getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
-
-function signState(userId) {
-  const hmac = crypto.createHmac('sha256', process.env.JWT_SECRET);
-  hmac.update(userId);
-  const sig = hmac.digest('hex').slice(0, 16);
-  return `${userId}.${sig}`;
-}
+import { issueOAuthState } from '../lib/security.js';
 
 const router = Router();
 
@@ -35,7 +28,7 @@ router.get('/connect', authenticateToken, (req, res) => {
     scope: ALL_SCOPES,
     prompt: 'consent',
     include_granted_scopes: true,
-    state: signState(req.userId)
+    state: issueOAuthState({ purpose: 'link', userId: req.userId })
   });
   res.redirect(authUrl);
 });
