@@ -93,7 +93,7 @@ router.get('/:accountId/labels', authenticateToken, async (req, res) => {
 
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     const { data } = await gmail.users.labels.list({ userId: 'me' });

@@ -16,6 +16,36 @@ async function verifyAccountOwnership(accountId, userId) {
   return account;
 }
 
+// P0.4 — calendarId allowlist per (account, user). The patch / insert routes
+// previously took req.body.calendarId verbatim and passed it to
+// calendar.events.patch/insert. Combined with a known eventId, this let a
+// user act on calendars outside the app's intent (shared work calendars,
+// other people's calendars they have ACL on, etc.) — Google enforces
+// account-level ACLs, but the *app* never restricted scope. Now: only
+// 'primary' or an entry from this account's calendarList.list() is allowed.
+const _calendarListCache = new Map(); // `${accountId}:${userId}` → { ids: Set, expiresAt }
+const CALENDAR_LIST_TTL_MS = 5 * 60 * 1000;
+
+async function resolveCalendarId(accountId, userId, requested, googleClient) {
+  if (!requested || requested === 'primary') return 'primary';
+  const cacheKey = `${accountId}:${userId}`;
+  let entry = _calendarListCache.get(cacheKey);
+  if (!entry || entry.expiresAt < Date.now()) {
+    const calendar = google.calendar({ version: 'v3', auth: googleClient });
+    const resp = await calendar.calendarList.list();
+    const ids = new Set((resp.data.items || []).map(c => c.id));
+    ids.add('primary');
+    entry = { ids, expiresAt: Date.now() + CALENDAR_LIST_TTL_MS };
+    _calendarListCache.set(cacheKey, entry);
+  }
+  if (!entry.ids.has(requested)) {
+    const e = new Error('calendar_not_allowed');
+    e.statusCode = 403;
+    throw e;
+  }
+  return requested;
+}
+
 // Get calendar events
 router.get('/:accountId/events', authenticateToken, async (req, res) => {
   try {
@@ -29,7 +59,7 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'missing_scope', message: 'This account has not granted Calendar access', service: 'cals' });
     }
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const calendar = google.calendar({ version: 'v3', auth: client });
 
     const now = new Date();
@@ -161,10 +191,9 @@ router.patch('/:accountId/events/:eventId', authenticateToken, async (req, res) 
       }
     }
 
-    const patchCalendarId = req.body.calendarId || 'primary';
-
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const calendar = google.calendar({ version: 'v3', auth: client });
+    const patchCalendarId = await resolveCalendarId(accountId, req.userId, req.body.calendarId, client);
 
     const response = await calendar.events.patch({
       calendarId: patchCalendarId,
@@ -190,6 +219,9 @@ router.patch('/:accountId/events/:eventId', authenticateToken, async (req, res) 
     });
   } catch (error) {
     console.error('Patch calendar event error:', error?.message || error);
+    if (error?.message === 'calendar_not_allowed') {
+      return res.status(403).json({ error: 'calendar_not_allowed', message: 'That calendar is not on your allowed list for this account.' });
+    }
     if (error?.code === 403 || error?.response?.status === 403) {
       return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
     }
@@ -224,10 +256,9 @@ router.post('/:accountId/events', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Event title is required' });
     }
 
-    const calendarId = req.body.calendarId || 'primary';
-
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const calendar = google.calendar({ version: 'v3', auth: client });
+    const calendarId = await resolveCalendarId(accountId, req.userId, req.body.calendarId, client);
 
     const response = await calendar.events.insert({
       calendarId,
@@ -252,6 +283,9 @@ router.post('/:accountId/events', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Create calendar event error:', error?.message || error);
+    if (error?.message === 'calendar_not_allowed') {
+      return res.status(403).json({ error: 'calendar_not_allowed', message: 'That calendar is not on your allowed list for this account.' });
+    }
     if (error?.code === 403 || error?.response?.status === 403) {
       return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
     }
@@ -274,7 +308,7 @@ router.get('/:accountId/calendars', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'missing_scope', message: 'This account has not granted Calendar access', service: 'cals' });
     }
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const calendar = google.calendar({ version: 'v3', auth: client });
 
     const response = await calendar.calendarList.list();
