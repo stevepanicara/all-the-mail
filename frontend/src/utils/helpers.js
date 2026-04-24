@@ -2,6 +2,38 @@ import DOMPurify from 'dompurify';
 import { FileText, Table2, Presentation } from 'lucide-react';
 import { GRADIENT_PRESETS, FILE_TYPES } from './constants';
 
+// Force every <a> in untrusted HTML to be safe to click:
+// - rel="noopener noreferrer nofollow" prevents reverse-tabnabbing + referrer leak
+// - target="_blank" so a click never replaces the app frame
+// - Strip dangerous CSS values from style="" attributes (position:fixed, url(), expression, etc.)
+//   Style is allowed for layout (Gmail HTML uses it heavily) but never for active loading.
+const DANGEROUS_CSS_RE = /(url\s*\(|expression\s*\(|behavior\s*:|@import|position\s*:\s*fixed|position\s*:\s*absolute)/i;
+
+let _hooksRegistered = false;
+function ensureDOMPurifyHooks() {
+  if (_hooksRegistered) return;
+  _hooksRegistered = true;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.hasAttribute('href')) {
+      node.setAttribute('rel', 'noopener noreferrer nofollow');
+      node.setAttribute('target', '_blank');
+    }
+    if (node.hasAttribute && node.hasAttribute('style')) {
+      const v = node.getAttribute('style') || '';
+      if (DANGEROUS_CSS_RE.test(v)) {
+        const cleaned = v
+          .replace(/url\s*\([^)]*\)/gi, '')
+          .replace(/expression\s*\([^)]*\)/gi, '')
+          .replace(/behavior\s*:[^;]+;?/gi, '')
+          .replace(/@import[^;]+;?/gi, '')
+          .replace(/position\s*:\s*(fixed|absolute)\s*;?/gi, '');
+        if (cleaned.trim()) node.setAttribute('style', cleaned);
+        else node.removeAttribute('style');
+      }
+    }
+  });
+}
+
 // Gmail-style deterministic avatar color from sender name
 const AVATAR_COLORS = [
   '#1A73E8', '#D93025', '#188038', '#E37400',
@@ -69,6 +101,7 @@ export function getAccountGradient(accountIndex) {
 }
 
 export function buildEmailSrcDoc(rawHtml) {
+  ensureDOMPurifyHooks();
   const html = rawHtml || '<div style="padding:16px;color:#111;">(empty)</div>';
   const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['div','span','p','br','hr','h1','h2','h3','h4','h5','h6',
@@ -106,6 +139,7 @@ export function migrateLayoutStorage() {
 }
 
 export function sanitizeDocHtml(html) {
+  ensureDOMPurifyHooks();
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br', 'hr', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'u', 'a', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'img', 'blockquote', 'pre', 'code', 'sup', 'sub', 'div'],
     ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'class', 'colspan', 'rowspan'],
