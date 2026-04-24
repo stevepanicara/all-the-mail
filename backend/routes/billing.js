@@ -107,14 +107,23 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       .eq('id', req.userId)
       .single();
 
+    // Omit payment_method_types so Stripe uses every method enabled in the
+    // dashboard for this account — `card` includes Apple Pay and Google Pay
+    // automatically when the browser supports it, plus Link if enabled.
+    // Toggle other methods (Cash App Pay, Klarna, etc.) from the Stripe
+    // dashboard → Settings → Payment methods. Apple Pay domain verification
+    // is automatic for Stripe-hosted Checkout.
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${FRONTEND_URL}/app?billing=success`,
       cancel_url: `${FRONTEND_URL}/app?billing=canceled`,
       customer_email: user?.email,
-      metadata: { user_id: req.userId }
+      metadata: { user_id: req.userId },
+      // Surface the payment-method wallet UI as the primary flow so
+      // Apple Pay / Google Pay appear in-prominence instead of behind
+      // a collapsed "more options" row.
+      payment_method_collection: 'always',
     });
 
     res.json({ url: session.url });
