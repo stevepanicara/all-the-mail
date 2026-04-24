@@ -1,6 +1,7 @@
 {
   "name": "all-the-mail-main",
   "version": "1.0.0",
+  "private": true,
   "description": "All The Mail – unified email aggregation app (frontend + backend)",
   "main": "index.js",
   "scripts": {
