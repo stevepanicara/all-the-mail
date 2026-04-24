@@ -4,6 +4,7 @@ import multer from 'multer';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { safeLogError } from '../lib/log.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -384,7 +385,7 @@ router.get('/:accountId/:messageId/attachments/:attachmentId', authenticateToken
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(buffer);
   } catch (error) {
-    console.error('Download attachment error:', error);
+    safeLogError('emails download attachment', error, { accountId: req.params.accountId });
     res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
@@ -465,7 +466,7 @@ router.post('/:accountId/draft', authenticateToken, async (req, res) => {
 
     res.json({ success: true, draftId: result.data.id });
   } catch (error) {
-    console.error('Save draft error:', error);
+    safeLogError('emails save draft', error, { accountId: req.params.accountId });
     res.status(500).json({ error: 'Failed to save draft' });
   }
 });
@@ -518,7 +519,7 @@ router.post('/:accountId/send', authenticateToken, upload.array('attachments', 1
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Send email error:', error);
+    safeLogError('emails send', error, { accountId: req.params.accountId });
     res.status(500).json({ error: 'Failed to send email' });
   }
 });
