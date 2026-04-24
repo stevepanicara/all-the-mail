@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
-import { oauth2Client, ALL_SCOPES, encryptToken } from '../lib/google.js';
+import { oauth2Client, newOAuth2Client, ALL_SCOPES, encryptToken } from '../lib/google.js';
 import { JWT_SECRET, authenticateToken } from '../middleware/auth.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -27,12 +27,14 @@ router.get('/google/callback', async (req, res) => {
   }
 
   try {
+    // P1.9 — fresh OAuth client per callback. The exported singleton is
+    // mutated by setCredentials, which under concurrent callbacks can leak
+    // user A's tokens into user B's userinfo.get() call.
+    const callbackClient = newOAuth2Client();
+    const { tokens } = await callbackClient.getToken(code);
+    callbackClient.setCredentials(tokens);
 
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-
-
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const oauth2 = google.oauth2({ version: 'v2', auth: callbackClient });
     const { data: userInfo } = await oauth2.userinfo.get();
 
     // If state contains a signed userId, this is an "add account" flow — verify signature
