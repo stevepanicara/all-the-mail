@@ -186,7 +186,9 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
   try {
     const { accountId } = req.params;
     const category = req.query.category || 'primary';
-    const maxResults = parseInt(req.query.maxResults) || 50;
+    // P2 — clamp maxResults. Without a cap a user could request 10000 and
+    // fan out 10000 metadata.get calls → blows our Gmail quota.
+    const maxResults = Math.min(Math.max(parseInt(req.query.maxResults) || 50, 1), 100);
     const searchQuery = req.query.q || '';
 
     const account = await verifyAccountOwnership(accountId, req.userId);
