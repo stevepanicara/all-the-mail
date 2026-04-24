@@ -9,7 +9,7 @@ import { API_BASE, FILE_TYPES } from './utils/constants';
 import {
   getAccountGradient, buildEmailSrcDoc, stripName, ensurePrefix,
   getEmailOnly, splitList, uniqLower, migrateLayoutStorage,
-  sanitizeDocHtml, formatRelativeEdit, getShortLabel,
+  formatRelativeEdit, getShortLabel,
   getDocEditUrl, getDocIcon, getDocEditorLabel, getRelativeTime, formatTime,
 } from './utils/helpers';
 
@@ -412,24 +412,42 @@ const AllTheMail = () => {
     } catch (e) { console.error('Remove account error:', e); setError('Failed to remove account'); setRemovingAccountId(null); }
   }, [removingAccountId, connectedAccounts, activeView]);
 
+  // P1.17 — only redirect to a Stripe-controlled host. Server-controlled
+  // value should always be one of these, but if the response is ever tampered
+  // with (compromised backend, MITM on a custom domain, dev who accidentally
+  // hardcodes a different URL) we refuse instead of opening an arbitrary URL.
+  const STRIPE_REDIRECT_RE = /^https:\/\/(checkout|billing)\.stripe\.com\//i;
+  const safeStripeRedirect = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    if (!STRIPE_REDIRECT_RE.test(url)) {
+      console.error('Refusing non-Stripe billing redirect:', url);
+      setError('Billing redirect blocked.');
+      return false;
+    }
+    window.location.href = url;
+    return true;
+  };
+
   const handleUpgrade = useCallback(async (interval = 'monthly') => {
     setBillingLoading(true);
     try {
       const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval }) });
-      if (r.ok) { const d = await r.json(); if (d.url) window.location.href = d.url; }
+      if (r.ok) { const d = await r.json(); if (d.url) safeStripeRedirect(d.url); }
       else { const d = await r.json(); setError(d.error || 'Failed to start checkout'); }
     } catch (e) { console.error('Checkout error:', e); setError('Failed to start checkout'); }
     finally { setBillingLoading(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleManageBilling = useCallback(async () => {
     setBillingLoading(true);
     try {
       const r = await fetch(`${API_BASE}/billing/portal`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
-      if (r.ok) { const d = await r.json(); if (d.url) window.location.href = d.url; }
+      if (r.ok) { const d = await r.json(); if (d.url) safeStripeRedirect(d.url); }
       else { const d = await r.json(); setError(d.error || 'Failed to open billing portal'); }
     } catch (e) { console.error('Portal error:', e); setError('Failed to open billing portal'); }
     finally { setBillingLoading(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const evFilteredEmails = useMemo(() => {
@@ -1579,17 +1597,34 @@ const AllTheMail = () => {
                   </div>
                   {editUrl && (<button className="btn-ghost btn-edit-doc" onClick={() => window.open(editUrl, '_blank', 'noopener,noreferrer')} style={{ marginBottom: '24px', fontSize: '13px', gap: '6px' }}><ExternalLink size={14} strokeWidth={1.5} /> Edit in {editorLabel}</button>)}
                   {docPreviewLoading && (<div className="doc-preview-skeleton">{Array.from({ length: 5 }).map((_, i) => (<div key={i} className="skeleton-block" style={{ height: i === 0 ? 16 : 12, width: i === 4 ? '60%' : '100%' }} />))}</div>)}
-                  {!docPreviewLoading && docPreview?.type === 'embed' && (
-                    <div className="doc-preview-embed">
-                      <iframe
-                        src={docPreview.embedUrl}
-                        title={docPreview.name || 'Document preview'}
-                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-                  {!docPreviewLoading && docPreview?.type === 'html' && (<div className="doc-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeDocHtml(docPreview.content) }} />)}
+                  {!docPreviewLoading && docPreview?.type === 'embed' && (() => {
+                    // P1.16 — assert the embed URL is from a Google host before rendering.
+                    // The backend should always return a docs/drive URL, but a future bug
+                    // (or a compromised backend) must not be able to load arbitrary script
+                    // origins under our `allow-scripts allow-same-origin` sandbox combo.
+                    // Also dropped `allow-forms` (preview, no form interaction needed).
+                    const url = docPreview.embedUrl || '';
+                    const ok = /^https:\/\/(docs|drive)\.google\.com\//i.test(url);
+                    if (!ok) {
+                      console.error('Refusing non-Google doc preview URL:', url);
+                      return <p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>Preview unavailable</p>;
+                    }
+                    return (
+                      <div className="doc-preview-embed">
+                        <iframe
+                          src={url}
+                          title={docPreview.name || 'Document preview'}
+                          sandbox="allow-scripts allow-same-origin allow-popups"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          loading="lazy"
+                        />
+                      </div>
+                    );
+                  })()}
+                  {/* P1.15 — backend never returns docPreview.type === 'html'.
+                      The branch existed as live attack surface; if anyone added a
+                      backend html response, untrusted content would land in the app
+                      origin via dangerouslySetInnerHTML. Removed entirely. */}
                   {!docPreviewLoading && docPreview?.type === 'thumbnail' && (<div className="doc-preview-content"><img src={docPreview.url} alt={docPreview.name || slideOverDoc.title} style={{ maxWidth: '100%', borderRadius: '6px' }} /></div>)}
                   {!docPreviewLoading && docPreview?.type === 'none' && (<p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>Preview not available for this file type</p>)}
                   <div style={{ height: '1px', background: 'var(--line-0)', margin: '24px 0' }} />
