@@ -1065,8 +1065,21 @@ const AllTheMail = () => {
     shortcutsRef.current = { archiveEmail, trashEmail, openCompose, selectAllVisible };
   }, [archiveEmail, trashEmail, openCompose, selectAllVisible]);
 
-  // Persist scheduled sends to localStorage
-  useEffect(() => { localStorage.setItem('atm_scheduled_sends', JSON.stringify(scheduledSends)); }, [scheduledSends]);
+  // Persist scheduled sends to localStorage — P2: strip the full email body
+  // (and cc/bcc/subject) before writing. Supabase is the system of record
+  // for the payload; we only need minimal metadata to reconcile and to show
+  // "X scheduled" in the UI. If a post-XSS attacker dumps localStorage they
+  // now only get the scheduled timestamp + account + DB id, not the text of
+  // unsent mail.
+  useEffect(() => {
+    const slim = scheduledSends.map(s => ({
+      id: s.id,
+      scheduledFor: s.scheduledFor,
+      accountId: s.accountId,
+      status: s.status,
+    }));
+    localStorage.setItem('atm_scheduled_sends', JSON.stringify(slim));
+  }, [scheduledSends]);
 
   // Persist active mail tab
   useEffect(() => { localStorage.setItem('atm_mail_tab', activeMailTab); }, [activeMailTab]);
@@ -1078,7 +1091,13 @@ const AllTheMail = () => {
   useEffect(() => {
     const checkScheduled = async () => {
       const now = Date.now();
-      const due = scheduledSends.filter(s => new Date(s.scheduledFor).getTime() <= now);
+      // P2 — require full payload to fire. localStorage entries are slim
+      // (metadata-only), so on fresh page load we wait until sync hydrates
+      // the full body/subject from Supabase before attempting a send.
+      const due = scheduledSends.filter(s =>
+        new Date(s.scheduledFor).getTime() <= now &&
+        typeof s.body === 'string' && typeof s.to === 'string' && s.to.length > 0
+      );
       if (due.length === 0) return;
 
       for (const item of due) {
