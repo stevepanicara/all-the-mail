@@ -16,7 +16,10 @@ const SERVICE_SCOPES = {
     'https://www.googleapis.com/auth/drive.readonly',
   ],
   cals: [
-    'https://www.googleapis.com/auth/calendar',
+    // P2 — narrowed from 'calendar' (full r/w on all calendars incl. ACL
+    // and calendar settings) to 'calendar.events' (CRUD on events only).
+    // Fewer blast-radius on token theft; easier Google CASA review.
+    'https://www.googleapis.com/auth/calendar.events',
   ],
   profile: [
     'https://www.googleapis.com/auth/userinfo.email',
@@ -34,9 +37,19 @@ const oauth2Client = new google.auth.OAuth2(
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
+// P2 — fail closed in production. A missing ENCRYPTION_KEY in prod means
+// OAuth tokens are stored as plain base64 (reversible with zero effort)
+// which is functionally plaintext. Refuse to boot rather than silently
+// accept the downgrade. In dev we keep the base64 fallback + warning so
+// local loops don't require key setup.
+if (!ENCRYPTION_KEY && process.env.NODE_ENV === 'production') {
+  console.error('FATAL: ENCRYPTION_KEY is required in production');
+  process.exit(1);
+}
+
 function encryptToken(token) {
   if (!ENCRYPTION_KEY) {
-    // Fallback for dev without key — still base64 but log warning
+    // Dev-only fallback (prod is gated by the check above).
     console.warn('[SECURITY] No ENCRYPTION_KEY set — tokens stored as base64 only');
     return Buffer.from(JSON.stringify(token)).toString('base64');
   }
