@@ -26,6 +26,20 @@ const SERVICE_SCOPES = {
 
 const ALL_SCOPES = Object.values(SERVICE_SCOPES).flat();
 
+// P1.12 — minimum scopes for first login. Use this for new sign-ups so
+// users see a smaller consent screen and Google's restricted-scope review
+// is easier. Additional scopes (gmail.send/modify, drive, calendar) should
+// be requested incrementally when the user activates that feature.
+//
+// To migrate: switch routes/auth.js /google to MINIMUM_SCOPES, add an
+// /accounts/upgrade-scopes/{mail|docs|cals} endpoint that uses
+// SERVICE_SCOPES[group] + include_granted_scopes:true, and have the
+// frontend prompt when the user first hits a feature without the scope.
+const MINIMUM_SCOPES = [
+  ...SERVICE_SCOPES.profile,
+  'https://www.googleapis.com/auth/gmail.readonly',
+];
+
 const oauth2Client = new google.auth.OAuth2(
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
@@ -116,6 +130,7 @@ export {
   GOOGLE_REDIRECT_URI,
   SERVICE_SCOPES,
   ALL_SCOPES,
+  MINIMUM_SCOPES,
   oauth2Client,
   encryptToken,
   decryptToken,
