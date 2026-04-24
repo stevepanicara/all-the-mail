@@ -70,15 +70,12 @@ const authLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again later' },
 });
 
-const sendLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10, // 10 sends per minute
-  message: { error: 'Send rate limit reached' },
-});
+// Note: send-rate limiter lives inside routes/emails.js (P1.2) — the previous
+// app.use('/emails/*/send', ...) here was a no-op because Express's app.use
+// path matching does not glob-expand '*' the way route definitions do.
 
 app.use(apiLimiter);
 app.use('/auth', authLimiter);
-app.use('/emails/*/send', sendLimiter);
 
 // Mount routes
 app.use('/auth', authRoutes);
