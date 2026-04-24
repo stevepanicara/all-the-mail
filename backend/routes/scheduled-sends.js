@@ -4,6 +4,45 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
+// P1.10 — bounds and per-user cap on pending scheduled sends.
+const MAX_PENDING_PER_USER = 200;
+const MIN_LEAD_MS = 60 * 1000;             // sendAt must be >= now + 60s
+const MAX_LEAD_MS = 60 * 24 * 60 * 60 * 1000; // sendAt must be <= now + 60 days
+
+// Strip CR/LF and clamp length on values that ride into MIME headers downstream.
+function safeHeader(s) {
+  return String(s ?? '').replace(/[\r\n\u0000-\u0008\u000B-\u001F\u007F]/g, '').slice(0, 2000);
+}
+
+function validateScheduledSend(body) {
+  if (!body || typeof body !== 'object') return 'body required';
+  const { payload, sendAt } = body;
+  if (!payload || typeof payload !== 'object') return 'payload required';
+  if (typeof sendAt !== 'string') return 'sendAt must be ISO string';
+
+  const t = Date.parse(sendAt);
+  if (Number.isNaN(t)) return 'sendAt must be a valid ISO date';
+  const now = Date.now();
+  if (t < now + MIN_LEAD_MS) return 'sendAt must be at least 60 seconds in the future';
+  if (t > now + MAX_LEAD_MS) return 'sendAt cannot be more than 60 days out';
+
+  // Required + length-capped string fields.
+  if (typeof payload.to !== 'string' || !payload.to.trim()) return 'payload.to required';
+  if (typeof payload.accountId !== 'string' || !payload.accountId) return 'payload.accountId required';
+
+  // Reject control chars in any header-bound field. Sanitize and clamp inline.
+  const cleaned = {
+    accountId: String(payload.accountId).slice(0, 64),
+    to:        safeHeader(payload.to),
+    cc:        payload.cc ? safeHeader(payload.cc) : '',
+    bcc:       payload.bcc ? safeHeader(payload.bcc) : '',
+    subject:   safeHeader(payload.subject || ''),
+    body:      typeof payload.body === 'string' ? payload.body.slice(0, 1024 * 1024) : '', // 1MB body cap
+    threadId:  payload.threadId ? safeHeader(payload.threadId) : null,
+  };
+  return { ok: true, payload: cleaned, sendAtIso: new Date(t).toISOString() };
+}
+
 // GET /scheduled-sends?status=pending
 // Returns all scheduled sends for the current user filtered by status.
 // The payload JSONB is spread into the response object so the client
@@ -38,15 +77,34 @@ router.get('/', authenticateToken, async (req, res) => {
 // Creates a new pending scheduled send. Returns the DB-assigned id
 // so the client can tag the local entry for the CAS lock on execution.
 router.post('/', authenticateToken, async (req, res) => {
-  const { payload, sendAt } = req.body || {};
-  if (!payload || !sendAt) {
-    return res.status(400).json({ error: 'payload and sendAt are required' });
-  }
+  const v = validateScheduledSend(req.body);
+  if (!v.ok) return res.status(400).json({ error: v });
 
   try {
+    // P1.10 — verify the requested account belongs to this user before
+    // queueing a send. Otherwise a user could schedule sends "from" any
+    // account id they discover.
+    const { data: acct } = await supabase
+      .from('gmail_accounts')
+      .select('id')
+      .eq('id', v.payload.accountId)
+      .eq('user_id', req.userId)
+      .single();
+    if (!acct) return res.status(404).json({ error: 'account_not_found' });
+
+    // Cap pending count per user.
+    const { count } = await supabase
+      .from('scheduled_sends')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', req.userId)
+      .eq('status', 'pending');
+    if ((count || 0) >= MAX_PENDING_PER_USER) {
+      return res.status(429).json({ error: 'pending_cap', message: `You have ${count} pending scheduled sends — maximum is ${MAX_PENDING_PER_USER}.` });
+    }
+
     const { data, error } = await supabase
       .from('scheduled_sends')
-      .insert({ user_id: req.userId, payload, send_at: sendAt, status: 'pending' })
+      .insert({ user_id: req.userId, payload: v.payload, send_at: v.sendAtIso, status: 'pending' })
       .select('id')
       .single();
 
