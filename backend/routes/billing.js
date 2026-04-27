@@ -3,20 +3,33 @@ import Stripe from 'stripe';
 import supabase from '../lib/supabase.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { safeLogError } from '../lib/log.js';
+import { invalidatePlanCache } from '../middleware/plan.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-// New tiered pricing — set these in your env
+// Tiered pricing — set these in your env
 const STRIPE_PRICE_ID_PRO_MONTHLY = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
 const STRIPE_PRICE_ID_PRO_ANNUAL  = process.env.STRIPE_PRICE_ID_PRO_ANNUAL;
 // Legacy $9/mo price — kept for grandfathering existing subscribers
 const STRIPE_LEGACY_PRICE_ID = process.env.STRIPE_LEGACY_PRICE_ID;
 // Fallback: old single-price env var still works if the new ones aren't set
 const STRIPE_PRICE_ID_PRO = process.env.STRIPE_PRICE_ID_PRO;
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+// Pin Stripe SDK config — apiVersion locks the response payload shape so a
+// Stripe upgrade doesn't silently break the webhook handler. Retries cover
+// transient network blips. 10s timeout prevents hanging the request thread.
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: '2024-12-18.acacia',
+  maxNetworkRetries: 2,
+  timeout: 10_000,
+}) : null;
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 // Defensive accessor — Stripe moved current_period_end onto items.data[0]
 // in newer API versions. Fall back through known shapes; return null if
@@ -28,7 +41,167 @@ function periodEndIso(subscription) {
   return ts ? new Date(ts * 1000).toISOString() : null;
 }
 
-// Stripe webhook — must use express.raw() body, registered separately in server.js
+// Look up or create the Stripe Customer for a user. The cardinal invariant:
+// one user ↔ one Stripe customer, period.
+//
+// Three fallbacks, in order:
+//   1. Our DB mapping (fast path — typical case after first checkout)
+//   2. Stripe.customers.list({ email }) (recovers orphans after a DB loss
+//      or when migrating from a system that already created Stripe customers)
+//   3. Create new — with idempotencyKey as a third safety net so even a
+//      parallel-request race only ever produces one customer
+//
+// Always sets metadata.user_id on creation. That metadata is the lifeline
+// for reconciling Stripe-originated events back to the right user, and for
+// the daily reconciliation job.
+async function getOrCreateCustomer(userId) {
+  if (!stripe) throw new Error('Stripe not configured');
+
+  // 1. DB
+  const { data: mapped } = await supabase
+    .from('stripe_customers')
+    .select('stripe_customer_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (mapped?.stripe_customer_id) return mapped.stripe_customer_id;
+
+  // Pull email for the lookup + creation paths
+  const { data: user } = await supabase
+    .from('users')
+    .select('email')
+    .eq('id', userId)
+    .single();
+  if (!user?.email) throw new Error(`User ${userId} has no email`);
+
+  // 2. Stripe — search for an orphan customer by email
+  try {
+    const matches = await stripe.customers.list({ email: user.email, limit: 2 });
+    if (matches.data.length === 1) {
+      const cid = matches.data[0].id;
+      // Patch metadata so future reconciliation works
+      if (!matches.data[0].metadata?.user_id) {
+        try {
+          await stripe.customers.update(cid, { metadata: { user_id: userId } });
+        } catch { /* non-fatal */ }
+      }
+      await supabase
+        .from('stripe_customers')
+        .upsert({ user_id: userId, stripe_customer_id: cid }, { onConflict: 'user_id' });
+      return cid;
+    }
+    if (matches.data.length > 1) {
+      // Already duplicated — log and pick the oldest one. Operator should
+      // clean up via the Stripe Dashboard.
+      safeLogError('stripe duplicate customers detected', new Error('multiple matches'), {
+        userId, email: user.email, customerIds: matches.data.map(c => c.id),
+      });
+      const sorted = matches.data.slice().sort((a, b) => a.created - b.created);
+      const cid = sorted[0].id;
+      await supabase
+        .from('stripe_customers')
+        .upsert({ user_id: userId, stripe_customer_id: cid }, { onConflict: 'user_id' });
+      return cid;
+    }
+  } catch (err) {
+    safeLogError('stripe customers.list', err, { userId });
+    // fall through to create — better to create a (possibly duplicate) customer
+    // than to fail checkout entirely on a Stripe outage
+  }
+
+  // 3. Create — idempotency key prevents duplicates under race
+  const created = await stripe.customers.create(
+    { email: user.email, metadata: { user_id: userId } },
+    { idempotencyKey: `customer-create-${userId}` },
+  );
+  await supabase
+    .from('stripe_customers')
+    .upsert({ user_id: userId, stripe_customer_id: created.id }, { onConflict: 'user_id' });
+  return created.id;
+}
+
+// True if user has a subscription that should block a new Checkout. Includes
+// `incomplete` because Stripe creates that state during 3DS flows — letting
+// a user start a second checkout while one is mid-3DS would still produce
+// duplicate charges if they both succeed.
+async function hasBlockingSubscription(userId) {
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('status')
+    .eq('user_id', userId)
+    .in('status', ['active', 'trialing', 'past_due', 'incomplete'])
+    .maybeSingle();
+  return !!data;
+}
+
+// Centralized writer for subscription rows. Always upsert keyed on the Stripe
+// subscription id — handles out-of-order webhook delivery (subscription.updated
+// arriving before checkout.session.completed and similar). Status is the only
+// guaranteed field; everything else is best-effort.
+async function upsertSubscription({ userId, customerId, subscriptionId, status, plan, periodEnd, cancelAtPeriodEnd, itemId }) {
+  const row = {
+    stripe_subscription_id: subscriptionId,
+    status,
+  };
+  if (userId) row.user_id = userId;
+  if (customerId) row.stripe_customer_id = customerId;
+  if (plan !== undefined) row.plan = plan;
+  if (periodEnd) row.current_period_end = periodEnd;
+  if (cancelAtPeriodEnd !== undefined) row.cancel_at_period_end = !!cancelAtPeriodEnd;
+  if (itemId) row.stripe_item_id = itemId;
+
+  const { error } = await supabase
+    .from('subscriptions')
+    .upsert(row, { onConflict: 'stripe_subscription_id' });
+  if (error) throw error;
+}
+
+// Resolve userId from a Stripe customer id by looking through our mapping
+// table first (canonical), then falling back to the customer.metadata that
+// we set on create. Returns null if neither resolves.
+async function resolveUserIdFromCustomer(customerId) {
+  if (!customerId) return null;
+  const { data } = await supabase
+    .from('stripe_customers')
+    .select('user_id')
+    .eq('stripe_customer_id', customerId)
+    .maybeSingle();
+  if (data?.user_id) return data.user_id;
+  // Fallback: ask Stripe for the customer's metadata
+  if (stripe) {
+    try {
+      const c = await stripe.customers.retrieve(customerId);
+      const metaUserId = !c.deleted ? c?.metadata?.user_id : null;
+      if (metaUserId) {
+        // Backfill our mapping
+        await supabase
+          .from('stripe_customers')
+          .upsert({ user_id: metaUserId, stripe_customer_id: customerId }, { onConflict: 'user_id' });
+        return metaUserId;
+      }
+    } catch (err) {
+      safeLogError('stripe customers.retrieve', err, { customerId });
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Webhook
+// ---------------------------------------------------------------------------
+
+// Order: verify signature → check dedupe → run side effects → record event.
+//
+// Why "record event LAST" instead of FIRST:
+//   The original handler inserted the dedupe row up front (transactionally
+//   "claiming" the event) and then ran side effects in a separate try block.
+//   Without a transaction across both writes, a crash between them left the
+//   event recorded as "processed" while the side effect never ran — Stripe's
+//   retry would then dedupe and skip, silently losing the event.
+//
+//   By recording last, we get at-least-once delivery: a crash after side
+//   effects but before the dedupe write means Stripe replays, the side
+//   effect re-runs, and because all our handlers are idempotent (upsert
+//   keyed on stripe_subscription_id), the replay is a no-op. Safer.
 router.handleWebhook = async (req, res) => {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) {
     return res.status(501).json({ error: 'Stripe not configured' });
@@ -38,113 +211,225 @@ router.handleWebhook = async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error('Stripe webhook signature verification failed:', err.message);
+    safeLogError('stripe webhook signature verification', err);
     return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 
-  // P1.4 — idempotency. Stripe retries on any non-2xx. Without dedupe a
-  // duplicate delivery double-applies. We record event.id and return 200
-  // if we've seen it before.
+  // Dedupe: have we processed this event before?
   try {
-    const { error: dedupeErr } = await supabase
+    const { data: prior } = await supabase
       .from('stripe_events')
-      .insert({ event_id: event.id, type: event.type });
-    if (dedupeErr) {
-      // 23505 = unique violation on event_id PK → duplicate delivery; ack and skip.
-      if (dedupeErr.code === '23505') {
-        return res.json({ received: true, deduped: true });
-      }
-      // If the table is missing (migration not applied), log and continue
-      // so a brand-new deploy doesn't break the webhook entirely.
-      if (dedupeErr.code === 'PGRST205' || /relation .* does not exist/i.test(dedupeErr.message || '')) {
-        console.warn('[BILLING] stripe_events table missing — skipping idempotency check');
-      } else {
-        console.error('[BILLING] dedupe insert failed:', dedupeErr);
-      }
-    }
+      .select('event_id')
+      .eq('event_id', event.id)
+      .maybeSingle();
+    if (prior) return res.json({ received: true, deduped: true });
   } catch (err) {
-    console.error('[BILLING] dedupe error:', err);
+    // If the table is missing (migration not applied), log and continue —
+    // a brand-new deploy shouldn't have its webhook completely break.
+    if (err?.code === 'PGRST205' || /relation .* does not exist/i.test(err?.message || '')) {
+      console.warn('[BILLING] stripe_events table missing — skipping idempotency check');
+    } else {
+      safeLogError('stripe_events dedupe lookup', err, { eventId: event.id });
+    }
   }
 
+  // Side effects — wrapped so we can record the event AFTER they succeed.
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId = session.metadata?.user_id;
-        if (userId) {
-          // P1.5-style sanity: verify the metadata user_id matches a real user
-          // and that the customer_email Stripe sends is consistent with our
-          // stored email. Belt-and-suspenders against metadata tampering or
-          // a future code path that sets metadata.user_id from non-auth source.
-          const { data: u } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('id', userId)
-            .single();
-          if (!u) {
-            console.warn('[BILLING] checkout.session.completed for unknown user_id:', userId);
-            break;
-          }
-          if (session.customer_email && u.email && session.customer_email.toLowerCase() !== u.email.toLowerCase()) {
-            console.warn('[BILLING] customer_email mismatch — refusing upsert', {
-              userId, sessionEmail: session.customer_email, userEmail: u.email,
-            });
-            break;
-          }
-          await supabase.from('subscriptions').upsert({
-            user_id: userId,
-            stripe_customer_id: session.customer,
-            stripe_subscription_id: session.subscription,
-            plan: 'pro',
-            status: 'active'
-          }, { onConflict: 'user_id' });
+        if (!userId) {
+          safeLogError('checkout.session.completed missing user_id metadata', new Error('no metadata.user_id'), {
+            sessionId: session.id, customerId: session.customer,
+          });
+          break;
+        }
+
+        // Belt-and-suspenders: confirm this userId exists and the customer
+        // email Stripe reported matches our stored email.
+        const { data: u } = await supabase
+          .from('users')
+          .select('id, email')
+          .eq('id', userId)
+          .single();
+        if (!u) {
+          safeLogError('checkout.session.completed for unknown user', new Error('unknown user_id'), { userId });
+          break;
+        }
+        if (session.customer_email && u.email && session.customer_email.toLowerCase() !== u.email.toLowerCase()) {
+          safeLogError('checkout.session.completed email mismatch', new Error('email mismatch'), {
+            userId, sessionEmail: session.customer_email,
+          });
+          break;
+        }
+
+        // Backfill the customer mapping in case this user was created via
+        // a code path that didn't use getOrCreateCustomer.
+        if (session.customer) {
+          await supabase
+            .from('stripe_customers')
+            .upsert({ user_id: userId, stripe_customer_id: session.customer }, { onConflict: 'user_id' });
+        }
+
+        // Pull subscription details so we can capture stripe_item_id +
+        // current_period_end directly. checkout.session.completed itself
+        // doesn't include the subscription object.
+        let sub = null;
+        if (session.subscription) {
+          try { sub = await stripe.subscriptions.retrieve(session.subscription); } catch { /* fall through */ }
+        }
+        await upsertSubscription({
+          userId,
+          customerId: session.customer,
+          subscriptionId: session.subscription,
+          status: sub?.status || 'active',
+          plan: 'pro',
+          periodEnd: sub ? periodEndIso(sub) : null,
+          cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
+          itemId: sub?.items?.data?.[0]?.id || null,
+        });
+        invalidatePlanCache(userId);
+        break;
+      }
+
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const userId = sub.metadata?.user_id || await resolveUserIdFromCustomer(sub.customer);
+        if (!userId) {
+          safeLogError('subscription event without resolvable user', new Error('no user_id'), {
+            subscriptionId: sub.id, customerId: sub.customer, eventType: event.type,
+          });
+          break;
+        }
+        await upsertSubscription({
+          userId,
+          customerId: sub.customer,
+          subscriptionId: sub.id,
+          status: sub.status,
+          plan: sub.status === 'canceled' ? 'free' : 'pro',
+          periodEnd: periodEndIso(sub),
+          cancelAtPeriodEnd: sub.cancel_at_period_end,
+          itemId: sub.items?.data?.[0]?.id || null,
+        });
+        invalidatePlanCache(userId);
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        const userId = sub.metadata?.user_id || await resolveUserIdFromCustomer(sub.customer);
+        await upsertSubscription({
+          userId,
+          customerId: sub.customer,
+          subscriptionId: sub.id,
+          status: 'canceled',
+          plan: 'free',
+          periodEnd: periodEndIso(sub),
+          cancelAtPeriodEnd: false,
+        });
+        if (userId) invalidatePlanCache(userId);
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        // Invoice carries the subscription id — flip status to past_due so
+        // the UI can prompt the user to update their card. Access remains
+        // (isProActive treats past_due as active) so we get a grace window.
+        const inv = event.data.object;
+        const subscriptionId = inv.subscription;
+        if (subscriptionId) {
+          const { data: existing } = await supabase
+            .from('subscriptions')
+            .select('user_id')
+            .eq('stripe_subscription_id', subscriptionId)
+            .maybeSingle();
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'past_due' })
+            .eq('stripe_subscription_id', subscriptionId);
+          if (existing?.user_id) invalidatePlanCache(existing.user_id);
         }
         break;
       }
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object;
-        const periodEnd = periodEndIso(subscription);
-        const update = { status: subscription.status };
-        if (periodEnd) update.current_period_end = periodEnd;
-        await supabase.from('subscriptions')
-          .update(update)
-          .eq('stripe_subscription_id', subscription.id);
+
+      case 'invoice.payment_succeeded': {
+        // Renewal — extend current_period_end. Best-effort; the canonical
+        // update typically also arrives via subscription.updated.
+        const inv = event.data.object;
+        const subscriptionId = inv.subscription;
+        if (subscriptionId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            const userId = sub.metadata?.user_id || await resolveUserIdFromCustomer(sub.customer);
+            await upsertSubscription({
+              userId,
+              customerId: sub.customer,
+              subscriptionId: sub.id,
+              status: sub.status,
+              plan: sub.status === 'canceled' ? 'free' : 'pro',
+              periodEnd: periodEndIso(sub),
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+              itemId: sub.items?.data?.[0]?.id || null,
+            });
+            if (userId) invalidatePlanCache(userId);
+          } catch (err) {
+            safeLogError('invoice.payment_succeeded retrieve', err, { subscriptionId });
+          }
+        }
         break;
       }
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object;
-        await supabase.from('subscriptions')
-          .update({ plan: 'free', status: 'canceled' })
-          .eq('stripe_subscription_id', subscription.id);
+
+      // All other event types: ack and record (so retries don't pile up),
+      // but do not act.
+      default:
         break;
-      }
     }
-    res.json({ received: true });
   } catch (err) {
     safeLogError('stripe webhook handler', err, { eventType: event?.type, eventId: event?.id });
-    res.status(500).json({ error: 'Webhook handler failed' });
+    // Do NOT record the event — let Stripe retry. The side effect failed.
+    return res.status(500).json({ error: 'Webhook handler failed' });
   }
+
+  // Side effects succeeded. Record the event so future deliveries dedupe.
+  try {
+    await supabase.from('stripe_events').insert({ event_id: event.id, type: event.type });
+  } catch (err) {
+    // Non-fatal: a 23505 here means a parallel delivery already recorded it.
+    if (err?.code !== '23505') {
+      safeLogError('stripe_events insert post-handler', err, { eventId: event.id });
+    }
+  }
+
+  res.json({ received: true });
 };
 
-// Get billing status
+// ---------------------------------------------------------------------------
+// User-facing routes
+// ---------------------------------------------------------------------------
+
 router.get('/status', authenticateToken, async (req, res) => {
   try {
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('plan, status, current_period_end')
+      .select('plan, status, current_period_end, cancel_at_period_end')
       .eq('user_id', req.userId)
-      .single();
+      .maybeSingle();
 
-    res.json({ plan: sub?.plan || 'free', status: sub?.status || 'none', currentPeriodEnd: sub?.current_period_end || null });
+    res.json({
+      plan: sub?.plan || 'free',
+      status: sub?.status || 'none',
+      currentPeriodEnd: sub?.current_period_end || null,
+      cancelAtPeriodEnd: !!sub?.cancel_at_period_end,
+    });
   } catch (err) {
-    console.error('Get billing status error:', err);
-    res.json({ plan: 'free', status: 'none', currentPeriodEnd: null });
+    safeLogError('billing status', err, { userId: req.userId });
+    res.json({ plan: 'free', status: 'none', currentPeriodEnd: null, cancelAtPeriodEnd: false });
   }
 });
 
-// Create checkout session
 router.post('/checkout', authenticateToken, async (req, res) => {
-  // Resolve price ID: prefer new tiered prices, fall back to legacy env var
   const { interval = 'monthly' } = req.body || {};
   const priceId = interval === 'annual'
     ? (STRIPE_PRICE_ID_PRO_ANNUAL || STRIPE_PRICE_ID_PRO)
@@ -155,63 +440,77 @@ router.post('/checkout', authenticateToken, async (req, res) => {
   }
 
   try {
-    const { data: user } = await supabase
-      .from('users')
-      .select('email')
-      .eq('id', req.userId)
-      .single();
+    // Layer-3 guard: refuse if the user already has an active subscription.
+    // The Customer Portal handles plan changes; checkout is for new subs only.
+    if (await hasBlockingSubscription(req.userId)) {
+      return res.status(409).json({
+        error: 'already_subscribed',
+        message: 'You already have an active subscription. Manage it from the customer portal.',
+      });
+    }
 
-    // Omit payment_method_types so Stripe uses every method enabled in the
-    // dashboard for this account — `card` includes Apple Pay and Google Pay
-    // automatically when the browser supports it, plus Link if enabled.
-    // Toggle other methods (Cash App Pay, Klarna, etc.) from the Stripe
-    // dashboard → Settings → Payment methods. Apple Pay domain verification
-    // is automatic for Stripe-hosted Checkout.
+    const customerId = await getOrCreateCustomer(req.userId);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${FRONTEND_URL}/app?billing=success`,
       cancel_url: `${FRONTEND_URL}/app?billing=canceled`,
-      customer_email: user?.email,
+      customer: customerId,
+      // Both metadata locations:
+      //   session.metadata is read by checkout.session.completed
+      //   subscription_data.metadata propagates to the Subscription so
+      //   subsequent customer.subscription.* events carry user_id too.
       metadata: { user_id: req.userId },
-      // Surface the payment-method wallet UI as the primary flow so
-      // Apple Pay / Google Pay appear in-prominence instead of behind
-      // a collapsed "more options" row.
+      subscription_data: { metadata: { user_id: req.userId } },
       payment_method_collection: 'always',
     });
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error('Create checkout session error:', err);
+    safeLogError('create checkout session', err, { userId: req.userId });
+    if (err?.message === 'already_subscribed') {
+      return res.status(409).json({ error: 'already_subscribed' });
+    }
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
 
-// Create portal session
 router.post('/portal', authenticateToken, async (req, res) => {
-  if (!stripe) {
-    return res.status(501).json({ error: 'Stripe not configured' });
-  }
+  if (!stripe) return res.status(501).json({ error: 'Stripe not configured' });
 
   try {
-    const { data: sub } = await supabase
-      .from('subscriptions')
+    // Look up customer mapping first (preferred), fall back to subscriptions
+    // for users who pre-date the stripe_customers table.
+    let customerId = null;
+    const { data: mapped } = await supabase
+      .from('stripe_customers')
       .select('stripe_customer_id')
       .eq('user_id', req.userId)
-      .single();
+      .maybeSingle();
+    customerId = mapped?.stripe_customer_id || null;
 
-    if (!sub?.stripe_customer_id) {
-      return res.status(400).json({ error: 'No active subscription found' });
+    if (!customerId) {
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('stripe_customer_id')
+        .eq('user_id', req.userId)
+        .maybeSingle();
+      customerId = sub?.stripe_customer_id || null;
+    }
+
+    if (!customerId) {
+      return res.status(400).json({ error: 'No Stripe customer found for this account' });
     }
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: sub.stripe_customer_id,
-      return_url: `${FRONTEND_URL}/app`
+      customer: customerId,
+      return_url: `${FRONTEND_URL}/app`,
     });
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error('Create portal session error:', err);
+    safeLogError('create portal session', err, { userId: req.userId });
     res.status(500).json({ error: 'Failed to create portal session' });
   }
 });
