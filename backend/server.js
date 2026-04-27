@@ -34,7 +34,18 @@ if (process.env.VERCEL_URL) ALLOWED_ORIGINS.push(`https://${process.env.VERCEL_U
 
 // Security headers
 app.use(helmet({
-  contentSecurityPolicy: false, // CSP handled by frontend
+  // P2 — minimal CSP for API responses. This is a JSON API so script-src
+  // 'none' is safe; frame-ancestors 'none' blocks the API being iframed
+  // (defense-in-depth). Frontend ships its own richer CSP via vercel.json.
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      'default-src': ["'none'"],
+      'frame-ancestors': ["'none'"],
+      'base-uri': ["'none'"],
+      'form-action': ["'self'"],
+    },
+  },
   crossOriginEmbedderPolicy: false, // needed for Google OAuth redirects
 }));
 
@@ -57,8 +68,12 @@ app.use(cors({
 // Stripe webhook must be registered before express.json() for raw body access
 app.post('/billing/webhook', express.raw({ type: 'application/json' }), billingRoutes.handleWebhook);
 
-// Body parsing
-app.use(express.json());
+// Body parsing — P2 — explicit 1 MB cap on JSON bodies. The send path
+// with attachments uses multer (separately capped) so this limit only
+// affects JSON (draft saves, metadata updates, billing calls). Compose
+// bodies that embed base64 inline images are capped client-side at 5 MB
+// but server-side we reject >1 MB here to avoid RAM bloat on Render Starter.
+app.use(express.json({ limit: '1mb' }));
 // Compress responses — email HTML bodies can be 50–200 KB uncompressed
 app.use(compression());
 app.use(cookieParser());
