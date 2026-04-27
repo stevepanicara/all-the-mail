@@ -791,8 +791,50 @@ const AllTheMail = () => {
 
   useEffect(()=>{loadAccounts();}, [loadAccounts]);
 
+  // Keep loadAccountsRef in sync so the popup-message listener (defined
+  // earlier — before loadAccounts existed in scope) can fire it without
+  // pulling it into deps and re-registering the message listener every
+  // time loadAccounts changes identity.
+  useEffect(() => { loadAccountsRef.current = loadAccounts; }, [loadAccounts]);
+
   const handleGoogleLogin = useCallback(()=>{window.location.href=`${API_BASE}/auth/google`;}, []);
-  const handleAddAccount = useCallback(()=>{window.location.href=`${API_BASE}/accounts/connect`;}, []);
+
+  // Open Google's OAuth in a popup window so the main app never navigates
+  // away. The backend renders a self-closing HTML page on success that
+  // postMessages our origin; the listener below picks it up and reloads
+  // the account list. Falls back to full-page redirect if the popup is
+  // blocked (Safari can block window.open from inside async callbacks).
+  const handleAddAccount = useCallback(() => {
+    const url = `${API_BASE}/accounts/connect?popup=1`;
+    const w = 520, h = 700;
+    const left = (window.screen.availWidth - w) / 2;
+    const top = (window.screen.availHeight - h) / 2;
+    const popup = window.open(url, 'atm-add-account', `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`);
+    if (!popup) {
+      // Popup blocked — fall back to full-page redirect (no popup flag)
+      window.location.href = `${API_BASE}/accounts/connect`;
+    }
+  }, []);
+
+  // Listen for the popup's "I linked successfully" message and reload
+  // the account list. Origin-checked: only accept from the same origin
+  // we're served from (or the API origin in case of cross-origin setup).
+  useEffect(() => {
+    const apiOrigin = (() => {
+      try { return new URL(API_BASE).origin; } catch { return null; }
+    })();
+    const onMessage = (e) => {
+      if (e.origin !== window.location.origin && e.origin !== apiOrigin) return;
+      if (e.data?.type === 'atm-account-linked') {
+        // Refresh the account list — loadAccounts is defined below; access
+        // through a ref to avoid pulling it into deps and re-binding.
+        loadAccountsRef.current?.();
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  const loadAccountsRef = useRef(null);
 
   const openEventEdit = useCallback((ev) => {
     setEventEditFields({

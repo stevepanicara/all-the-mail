@@ -24,12 +24,18 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 router.get('/connect', authenticateToken, enforceAccountLimit, (req, res) => {
+  // popup=1 lets the frontend open a small window for OAuth instead of
+  // navigating away from the app. The flag rides along in the state token
+  // so the OAuth callback (which runs on Google's redirect, not under our
+  // direct control) knows whether to render a popup-close HTML response
+  // or do the legacy full-page redirect to /app.
+  const isPopup = req.query.popup === '1';
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ALL_SCOPES,
     prompt: 'consent',
     include_granted_scopes: true,
-    state: issueOAuthState({ purpose: 'link', userId: req.userId })
+    state: issueOAuthState({ purpose: 'link', userId: req.userId, popup: isPopup }),
   });
   res.redirect(authUrl);
 });

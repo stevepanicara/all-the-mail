@@ -41,11 +41,15 @@ router.get('/google/callback', async (req, res) => {
     // P0.2: state token is single-use, random 32-byte, server-issued, 10-min TTL.
     // For an "add account" flow, the payload contains { userId, purpose:'link' }.
     // For a fresh login, state may be absent or be a login-purpose token (not required).
+    // popup=true means the frontend opened a popup window — we should respond
+    // with a self-closing HTML page that pings the opener instead of redirecting.
     let linkToUserId = null;
+    let isPopup = false;
     if (state) {
       const payload = consumeOAuthState(state);
       if (payload && payload.purpose === 'link' && payload.userId) {
         linkToUserId = payload.userId;
+        isPopup = !!payload.popup;
       } else if (payload === null) {
         console.warn('[AUTH] OAuth state token invalid or expired — treating as fresh login');
       }
@@ -214,6 +218,29 @@ router.get('/google/callback', async (req, res) => {
       domain: isProduction ? '.allthemail.io' : undefined,
     });
 
+    // Popup link flow: render a tiny HTML page that pings the opener and
+    // closes itself. The opener page (App.js) listens for the message and
+    // refreshes the account list. This avoids the full-page redirect dance
+    // that makes "Add account" feel slow (≥1s of blank navigation).
+    if (isPopup) {
+      const frontendOrigin = (() => {
+        try { return new URL(FRONTEND_URL).origin; } catch { return FRONTEND_URL; }
+      })();
+      // Override the API-default helmet CSP for this one response. The default
+      // `default-src 'none'` blocks our inline script; we need to allow inline
+      // for the self-closing popup. Tightened to script-src 'unsafe-inline'
+      // only (no external sources, no eval).
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      );
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      // We tightly target the message at our frontend origin so a hostile
+      // opener can't intercept. window.close() is silent if the popup was
+      // navigated cross-site, so we also fall back to a plain "you can close
+      // this window" message.
+      return res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Account linked</title><style>body{font:14px/1.5 -apple-system,sans-serif;color:#0a0a0a;background:#fafaf7;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.box{text-align:center}.box h1{font-size:18px;margin:0 0 6px}.box p{margin:0;color:#555}</style></head><body><div class="box"><h1>Account linked</h1><p>You can close this window.</p></div><script>(function(){try{if(window.opener){window.opener.postMessage({type:'atm-account-linked'}, ${JSON.stringify(frontendOrigin)});}}catch(e){}try{window.close();}catch(e){}})();</script></body></html>`);
+    }
     res.redirect(`${FRONTEND_URL}/app?auth=success`);
   } catch (error) {
     safeLogError('[AUTH] callback', error);
