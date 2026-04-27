@@ -37,13 +37,20 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // needed for Google OAuth redirects
 }));
 
-// CORS
+// CORS — exact-host check, not endsWith(). evilallthemail.io must NOT match.
+const VERCEL_TEAM_SUFFIX = process.env.VERCEL_TEAM_SUFFIX || ''; // e.g. "-rangerandfox.vercel.app"
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // same-origin / curl / native
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  let host;
+  try { host = new URL(origin).hostname; } catch { return false; }
+  if (host === 'allthemail.io' || host.endsWith('.allthemail.io')) return true;
+  if (VERCEL_TEAM_SUFFIX && host.endsWith(VERCEL_TEAM_SUFFIX)) return true;
+  return false;
+}
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.some(o => origin === o || origin.endsWith('.vercel.app') || origin.endsWith('allthemail.io'))) cb(null, true);
-    else cb(null, false);
-  },
-  credentials: true
+  origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+  credentials: true,
 }));
 
 // Stripe webhook must be registered before express.json() for raw body access
