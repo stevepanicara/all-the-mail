@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/components/Meta';
+import { ClarityPageType } from '@/components/ClarityPageType';
 
 export const metadata = buildMetadata({
   title: 'Pricing',
@@ -8,5 +9,10 @@ export const metadata = buildMetadata({
 
 // Pricing page. Content TBD.
 export default function PricingPage() {
-  return <main className="p-8"><h1 className="text-2xl">Pricing placeholder</h1></main>;
+  return (
+    <>
+      <ClarityPageType type="pricing" />
+      <main className="p-8"><h1 className="text-2xl">Pricing placeholder</h1></main>
+    </>
+  );
 }

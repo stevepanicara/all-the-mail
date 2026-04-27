@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import { buildMetadata } from '@/components/Meta';
+import { ClarityPageType } from '@/components/ClarityPageType';
 import { getAllPosts, getPostBySlug } from '@/lib/blog';
 
 // Pre-render every blog slug at build time. New posts require a redeploy
@@ -48,6 +49,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
   return (
     <main className="p-8 max-w-prose mx-auto">
+      <ClarityPageType type="blog" />
       <article className="prose">
         <h1>{post.meta.title}</h1>
         <p className="text-xs opacity-60">
