@@ -37,17 +37,50 @@ const ComposeModal = ({
   const lastAutoLinkAtRef = useRef(0);
 
   // Insert a local image inline as a base64 data URL at the current cursor position.
+  // P1.13 — hard 5 MB cap to keep the editor responsive and the outgoing
+  // request small. Larger images should ride as attachments, not inline base64
+  // (base64 inflates by 33%; Gmail may strip oversize inline images anyway).
+  // P1.13 — also re-validate the magic bytes since file.type is client-reported
+  // and trivially spoofed (renaming malware.exe to .png passes the type check).
+  const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+  const IMAGE_MAGIC = [
+    [0x89, 0x50, 0x4e, 0x47],            // PNG
+    [0xff, 0xd8, 0xff],                   // JPEG
+    [0x47, 0x49, 0x46, 0x38],             // GIF
+    [0x52, 0x49, 0x46, 0x46],             // RIFF (WebP container; further check below)
+    [0x3c, 0x73, 0x76, 0x67],             // <svg
+    [0x3c, 0x3f, 0x78, 0x6d, 0x6c],       // <?xml (SVG also valid)
+  ];
+  function looksLikeImage(bytes) {
+    return IMAGE_MAGIC.some(sig => sig.every((b, i) => bytes[i] === b));
+  }
   const insertInlineImageFile = useCallback((file) => {
     if (!file || !file.type?.startsWith('image/')) return;
+    if (file.size > INLINE_IMAGE_MAX_BYTES) {
+      try { window.alert('Image too large for inline insert (max 5 MB). Attach it instead.'); } catch (_) {}
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const quill = quillRef.current?.getEditor?.();
       if (!quill) return;
+      // Check magic bytes — file.type is client-reported and not trustworthy.
+      try {
+        const dataUrl = reader.result || '';
+        const b64 = String(dataUrl).split(',')[1] || '';
+        const head = atob(b64.slice(0, 16));
+        const bytes = Array.from(head).map(c => c.charCodeAt(0));
+        if (!looksLikeImage(bytes)) {
+          try { window.alert('That file is not a valid image.'); } catch (_) {}
+          return;
+        }
+      } catch (_) { return; }
       const range = quill.getSelection(true);
       quill.insertEmbed(range ? range.index : quill.getLength(), 'image', reader.result, 'user');
       quill.setSelection((range ? range.index : quill.getLength()) + 1, 0);
     };
     reader.readAsDataURL(file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleImageButtonClick = useCallback(() => { imageInputRef.current?.click(); }, []);

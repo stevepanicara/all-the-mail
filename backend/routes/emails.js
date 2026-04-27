@@ -1,14 +1,90 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
 
+// P1.7 — multer hardening.
+// - fileFilter blocks MIME types that browsers/clients commonly auto-execute
+//   (executables, scripts, .lnk). All other types still allowed.
+// - per-file 25 MB, max 10 files, total 50 MB across the request.
+// - filename/originalname is sanitized at consume time (see sanitizeFilename).
+const BLOCKED_MIME_PREFIXES = [
+  'application/x-msdownload',          // .exe
+  'application/x-msdos-program',
+  'application/x-ms-shortcut',         // .lnk
+  'application/x-msi',                 // .msi
+  'application/x-bat',
+  'application/x-sh',
+  'application/x-csh',
+  'application/x-perl',
+  'application/x-python',
+  'application/javascript',
+  'application/x-javascript',
+  'application/vnd.microsoft.portable-executable',
+];
+const BLOCKED_EXT_RE = /\.(exe|msi|bat|cmd|com|scr|pif|cpl|vbs|vbe|js|jse|wsf|wsh|ps1|psm1|jar|lnk|dll|sys|hta|inf|reg|app)$/i;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }
+  limits: {
+    fileSize: 25 * 1024 * 1024,    // 25 MB per file
+    files: 10,                      // max 10 files
+    fields: 30,                     // limit form-field count
+  },
+  fileFilter: (req, file, cb) => {
+    const mt = (file.mimetype || '').toLowerCase();
+    const name = file.originalname || '';
+    if (BLOCKED_MIME_PREFIXES.some(p => mt.startsWith(p)) || BLOCKED_EXT_RE.test(name)) {
+      return cb(new Error('File type not allowed'), false);
+    }
+    cb(null, true);
+  },
 });
+
+// P1.2 — send rate limiter, applied INSIDE the route. The previous
+// app.use('/emails/*/send', sendLimiter) in server.js never matched
+// because Express's app.use treats '*' as a literal, not a glob —
+// the limiter was effectively a no-op. 10 sends/min/IP is intentionally
+// generous for legitimate burst (e.g., a user reply-all-storming a
+// thread) but blocks a runaway script or compromised account.
+const sendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Send rate limit reached — slow down a bit' },
+  keyGenerator: (req) => `${ipKeyGenerator(req)}:${req.userId || 'anon'}`,
+});
+
+// P0.3 — strip CR/LF (and other control chars) from any value that ends
+// up in a MIME header. Without this, a "subject" like "Hi\r\nBcc: evil"
+// silently injects a Bcc header and exfiltrates outgoing mail. Same for
+// To/Cc/Bcc/filename. Keep tab as it's legitimate header folding.
+function sanitizeMimeHeaderValue(s) {
+  if (s == null) return '';
+  return String(s).replace(/[\r\n\u0000-\u0008\u000B-\u001F\u007F]/g, '').slice(0, 2000);
+}
+
+// Quote and escape an attachment filename for Content-Disposition.
+// Strips path separators, control chars, and the quote+backslash that
+// would break out of the quoted-string form. Falls back to "download" if empty.
+function sanitizeFilename(name) {
+  const cleaned = String(name || '')
+    .replace(/[\r\n\u0000-\u001F\u007F]/g, '')
+    .replace(/[\\/]/g, '_')
+    .replace(/["]/g, '_')
+    .slice(0, 255)
+    .trim();
+  return cleaned || 'download';
+}
+
+// Wrap base64 at 76 columns per RFC 2045.
+function wrapBase64(s) {
+  return s.replace(/(.{76})/g, '$1\r\n');
+}
 
 const router = Router();
 
@@ -78,19 +154,26 @@ function extractAttachmentMetadata(payload) {
 function buildMimeEmail(to, subject, htmlBody, options = {}) {
   const { cc, bcc, threadId, attachments = [] } = options;
 
+  // P0.3 — sanitize every value that lands in a header line.
+  const safeTo = sanitizeMimeHeaderValue(to);
+  const safeSubject = sanitizeMimeHeaderValue(subject);
+  const safeCc = sanitizeMimeHeaderValue(cc);
+  const safeBcc = sanitizeMimeHeaderValue(bcc);
+  const safeThread = sanitizeMimeHeaderValue(threadId);
+
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
   let headers = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
+    `To: ${safeTo}`,
+    `Subject: ${safeSubject}`,
     'MIME-Version: 1.0',
   ];
 
-  if (cc) headers.push(`Cc: ${cc}`);
-  if (bcc) headers.push(`Bcc: ${bcc}`);
-  if (threadId) {
-    headers.push(`In-Reply-To: ${threadId}`);
-    headers.push(`References: ${threadId}`);
+  if (safeCc) headers.push(`Cc: ${safeCc}`);
+  if (safeBcc) headers.push(`Bcc: ${safeBcc}`);
+  if (safeThread) {
+    headers.push(`In-Reply-To: ${safeThread}`);
+    headers.push(`References: ${safeThread}`);
   }
 
   const styledHtmlBody = `
@@ -135,12 +218,14 @@ function buildMimeEmail(to, subject, htmlBody, options = {}) {
     headers.push('');
 
     for (const att of attachments) {
+      const safeAttName = sanitizeFilename(att.filename);
+      const safeAttMime = sanitizeMimeHeaderValue(att.mimeType) || 'application/octet-stream';
       headers.push(`--${boundary}`);
-      headers.push(`Content-Type: ${att.mimeType}`);
+      headers.push(`Content-Type: ${safeAttMime}`);
       headers.push('Content-Transfer-Encoding: base64');
-      headers.push(`Content-Disposition: attachment; filename="${att.filename}"`);
+      headers.push(`Content-Disposition: attachment; filename="${safeAttName}"`);
       headers.push('');
-      headers.push(att.data);
+      headers.push(wrapBase64(att.data));
       headers.push('');
     }
 
@@ -378,9 +463,9 @@ router.get('/:accountId/:messageId/attachments/:attachmentId', authenticateToken
 
     const buffer = Buffer.from(attachment.data.data, 'base64');
 
-    // Sanitize filename to prevent header injection
-    const safeName = (filename || 'download').replace(/["\r\n\\]/g, '_');
-    res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+    // Sanitize filename to prevent header injection (now centralized).
+    const safeName = sanitizeFilename(filename);
+    res.setHeader('Content-Type', sanitizeMimeHeaderValue(mimeType) || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(buffer);
   } catch (error) {
@@ -470,8 +555,9 @@ router.post('/:accountId/draft', authenticateToken, async (req, res) => {
   }
 });
 
-// Send email
-router.post('/:accountId/send', authenticateToken, upload.array('attachments', 10), async (req, res) => {
+// Send email — sendLimiter goes BEFORE multer so a flooded sender is rejected
+// without buffering up to 250 MB into memory.
+router.post('/:accountId/send', authenticateToken, sendLimiter, upload.array('attachments', 10), async (req, res) => {
   try {
     const { accountId } = req.params;
 
