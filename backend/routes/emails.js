@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -56,7 +56,7 @@ const sendLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Send rate limit reached — slow down a bit' },
-  keyGenerator: (req) => `${req.ip}:${req.userId || 'anon'}`,
+  keyGenerator: (req) => `${ipKeyGenerator(req)}:${req.userId || 'anon'}`,
 });
 
 // P0.3 — strip CR/LF (and other control chars) from any value that ends
