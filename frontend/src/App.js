@@ -17,6 +17,7 @@ import { attributionPayload } from './utils/attribution';
 import * as analytics from './utils/analytics';
 
 import EventEditModal from './components/common/EventEditModal';
+import OnboardingModal from './components/common/OnboardingModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Avatar from './components/Avatar';
 import AccountMenu from './components/common/AccountMenu';
@@ -134,8 +135,15 @@ const AllTheMail = () => {
 
   const [error, setError] = useState(null);
   const [successToast, setSuccessToast] = useState(null); // { message, undoFn? }
-  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('atm_onboarded'));
-  const [onboardingStep, setOnboardingStep] = useState(0);
+  // Forced onboarding: shown when user is authed, has at least one
+  // connected account, and has not yet completed (or abandoned) the
+  // onboarding flow. The atm_onboarding_completed key is set by
+  // OnboardingModal.js when the flow ends — either to 'true' (full
+  // completion) or 'abandoned' (escape link clicked at step 1). Either
+  // value blocks re-show.
+  const [onboardingDoneFlag, setOnboardingDoneFlag] = useState(
+    () => (typeof window !== 'undefined' ? localStorage.getItem('atm_onboarding_completed') : 'true')
+  );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
   const [paletteIndex, setPaletteIndex] = useState(0);
@@ -1745,36 +1753,22 @@ const AllTheMail = () => {
         </div>
       )}
 
-      {/* Onboarding */}
-      {showOnboarding && isAuthed && connectedAccounts.length > 0 && (
-        <div className="onboarding-overlay">
-          <div className="onboarding-card">
-            {onboardingStep === 0 && (<>
-              <LayoutGrid size={40} strokeWidth={1.5} className="onboarding-icon" />
-              <h2 className="onboarding-title">Welcome to All The Mail</h2>
-              <p className="onboarding-body">Your accounts are connected. The Everything View shows mail, docs, and calendar from all accounts in one place — with color-coded source chips so you always know which account each item belongs to.</p>
-            </>)}
-            {onboardingStep === 1 && (<>
-              <Users size={40} strokeWidth={1.5} className="onboarding-icon" />
-              <h2 className="onboarding-title">Add more accounts</h2>
-              <p className="onboarding-body">Click the + button in the account rail to connect additional Gmail accounts. Each gets its own color gradient for instant recognition across all views.</p>
-            </>)}
-            {onboardingStep === 2 && (<>
-              <Mail size={40} strokeWidth={1.5} className="onboarding-icon" />
-              <h2 className="onboarding-title">You're all set</h2>
-              <p className="onboarding-body">Use keyboard shortcuts for speed: <strong>e</strong> archive, <strong>r</strong> reply, <strong>c</strong> compose, <strong>/</strong> search. Switch between Mail, Docs, and Cals in the top bar.</p>
-            </>)}
-            <div className="onboarding-steps">
-              {[0,1,2].map(i => <span key={i} className={`onboarding-dot${onboardingStep === i ? ' active' : ''}`} />)}
-            </div>
-            {onboardingStep < 2 ? (
-              <button className="btn btn-primary" onClick={() => setOnboardingStep(s => s + 1)} style={{ width: '100%' }}>Next</button>
-            ) : (
-              <button className="btn btn-primary" onClick={() => { setShowOnboarding(false); localStorage.setItem('atm_onboarded', 'true'); }} style={{ width: '100%' }}>Get started</button>
-            )}
-            <button className="btn-ghost" onClick={() => { setShowOnboarding(false); localStorage.setItem('atm_onboarded', 'true'); }} style={{ width: '100%', marginTop: 8, fontSize: 12, color: 'var(--text-3)' }}>Skip</button>
-          </div>
-        </div>
+      {/* Forced onboarding — see OnboardingModal.js for the full flow.
+          Mounts only when user is authed, has ≥1 account, and hasn't
+          completed/abandoned. Cannot be dismissed by Escape or overlay
+          click; only by completing all 3 steps or the step-1 escape link. */}
+      {!onboardingDoneFlag && isAuthed && connectedAccounts.length >= 1 && (
+        <OnboardingModal
+          connectedAccounts={connectedAccounts}
+          handleAddAccount={handleAddAccount}
+          onComplete={(state) => {
+            setOnboardingDoneFlag(state);
+            // Drop the user into the Everything view on full completion —
+            // matches the "Open All The Mail →" CTA copy. Abandon path
+            // leaves the current view alone (they only have 1 account).
+            if (state === 'true') setActiveView('everything');
+          }}
+        />
       )}
 
       {/* Command Palette (Cmd+K) */}
