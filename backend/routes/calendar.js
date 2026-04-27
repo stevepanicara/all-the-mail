@@ -122,7 +122,16 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
     const events = items.map(ev => {
       const start = ev.start?.dateTime || ev.start?.date;
       const end = ev.end?.dateTime || ev.end?.date;
-      const startDate = new Date(start);
+      const allDay = !ev.start?.dateTime;
+
+      // All-day events come back from Google as a date-only string like
+      // "2026-04-28" with NO timezone. `new Date("2026-04-28")` parses as
+      // UTC midnight, which in any timezone west of UTC lands the event
+      // on the PREVIOUS day. Force-parse as local midnight so the event
+      // shows on its true day.
+      const startDate = allDay
+        ? new Date(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10)))
+        : new Date(start);
 
       const today = new Date(); today.setHours(0,0,0,0);
       const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -157,7 +166,8 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
         htmlLink: ev.htmlLink,
         description: ev.description || '',
         startISO: start,
-        endISO: end
+        endISO: end,
+        allDay,
       };
     });
 

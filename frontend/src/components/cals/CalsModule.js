@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, X, Calendar, Clock, MapPin, ExternalLink,
 } from 'lucide-react';
+import { parseEventStart } from '../../utils/helpers';
 
 const CalsModule = ({
   connectedAccounts,
@@ -62,7 +63,7 @@ const CalsModule = ({
             {days.map(day => {
               const hourEvents = day.events.filter(ev => {
                 if (ev.time === 'All day') return false;
-                const evDate = new Date(ev.startISO || 0);
+                const evDate = parseEventStart(ev);
                 return evDate.getHours() === h;
               });
               return (
@@ -150,7 +151,7 @@ const CalsModule = ({
               const monthDate = new Date(calDate.getFullYear(), mi, 1);
               const monthName = monthDate.toLocaleDateString(undefined, { month: 'long' });
               const monthEvents = filteredAllEvents.filter(ev => {
-                const d = new Date(ev.startISO || 0);
+                const d = parseEventStart(ev);
                 return d.getFullYear() === calDate.getFullYear() && d.getMonth() === mi;
               });
               return (

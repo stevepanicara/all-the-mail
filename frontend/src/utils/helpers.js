@@ -118,6 +118,19 @@ export function buildEmailSrcDoc(rawHtml) {
   return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>html,body{margin:0;padding:24px;background:#F5F7FA;color:#111;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:14px;line-height:1.5}img{max-width:100%;height:auto}table{max-width:100%!important}a{color:#0b57d0}body{overflow:hidden}</style></head><body>${clean}</body></html>`;
 }
 
+// All-day calendar events come down as { startISO: "YYYY-MM-DD", allDay: true }.
+// `new Date("YYYY-MM-DD")` parses as UTC midnight — in any timezone west of
+// UTC the local clock reads the previous day. Force local midnight so the
+// event lands on its true day for filter/bucket logic.
+export function parseEventStart(ev) {
+  const iso = ev?.startISO;
+  if (!iso) return new Date(0);
+  if (ev.allDay && typeof iso === 'string' && iso.length === 10) {
+    return new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+  }
+  return new Date(iso);
+}
+
 export function stripName(s = '') { return (s || '').replace(/<.*?>/g, '').trim(); }
 export function ensurePrefix(subject = '', prefix = 'Re:') {
   const s = (subject || '').trim();
