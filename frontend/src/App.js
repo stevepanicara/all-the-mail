@@ -14,6 +14,7 @@ import {
   parseEventStart,
 } from './utils/helpers';
 import { attributionPayload } from './utils/attribution';
+import * as analytics from './utils/analytics';
 
 import EventEditModal from './components/common/EventEditModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -191,6 +192,16 @@ const AllTheMail = () => {
     if (p.get('auth')==='error'||window.location.pathname==='/auth/error') { setAuthError('Authentication failed. Please try again.'); window.history.replaceState({},document.title,window.location.pathname); }
     if (p.get('connect')==='error') { setAuthError('Account connection failed. Please try again.'); window.history.replaceState({},document.title,window.location.pathname); }
     if (p.get('upgrade')==='required') { setPaywallOpen(true); window.history.replaceState({},document.title,window.location.pathname); }
+
+    // GA4: trial_started — fires exactly once, the first time a user
+    // completes Google OAuth and lands in the app. The localStorage flag
+    // prevents re-fire on reload / new tab. Detection is ?auth=success
+    // because that's the redirect target on a successful OAuth callback.
+    if (p.get('auth') === 'success' && localStorage.getItem('atm_first_session_logged') !== 'true') {
+      localStorage.setItem('atm_first_session_logged', 'true');
+      localStorage.setItem('atm_first_session_at', new Date().toISOString());
+      analytics.event('trial_started', { accounts_connected: 1 });
+    }
   }, []);
 
   useEffect(() => { const t = setTimeout(()=>setIntroActive(false),900); return ()=>clearTimeout(t); }, []);
@@ -432,14 +443,22 @@ const AllTheMail = () => {
     return true;
   };
 
-  const handleUpgrade = useCallback(async (interval = 'monthly') => {
+  const handleUpgrade = useCallback(async (interval = 'monthly', location = 'unknown') => {
+    // GA4: upgrade_clicked — fired BEFORE the network call so we capture
+    // intent regardless of whether checkout succeeds (e.g., 409 already
+    // subscribed, or a server outage that prevents redirect).
+    analytics.event('upgrade_clicked', { location, plan: interval });
+
     setBillingLoading(true);
     try {
       // Forward first-touch UTM/referrer data captured by the marketing
       // site cookie so the resulting Stripe subscription carries it in
       // metadata. attributionPayload() returns {} when no cookie is set,
       // so this is safe even for users who came in via direct/organic.
-      const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval, ...attributionPayload() }) });
+      // ga_client_id stitches the server-side trial_converted MP event
+      // to the same GA session the client was tracking.
+      const ga_client_id = analytics.readGaClientId();
+      const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval, ga_client_id, ...attributionPayload() }) });
       if (r.ok) { const d = await r.json(); if (d.url) safeStripeRedirect(d.url); }
       else if (r.status === 409) {
         // Backend refused because the user is already subscribed — open the
@@ -790,6 +809,20 @@ const AllTheMail = () => {
     document.addEventListener('visibilitychange',h);
     return ()=>{if(pollingIntervalRef.current)clearInterval(pollingIntervalRef.current);document.removeEventListener('visibilitychange',h);};
   }, [isAuthed, connectedAccounts.length, refreshEmails]);
+
+  // GA4: account_connected — fires when the user adds an additional Google
+  // account (count grows from N≥1 to N+1). The first-account case (0→1)
+  // is covered by trial_started, so we explicitly skip it here. Tracks the
+  // previous count in a ref so we can detect transitions across renders.
+  const prevAccountCountRef = useRef(0);
+  useEffect(() => {
+    const curr = connectedAccounts.length;
+    const prev = prevAccountCountRef.current;
+    if (prev >= 1 && curr > prev) {
+      analytics.event('account_connected', { total_accounts: curr });
+    }
+    prevAccountCountRef.current = curr;
+  }, [connectedAccounts.length]);
 
   const handleFileSelect = useCallback((e)=>{setComposeAttachments(p=>[...p,...Array.from(e.target.files||[])]);}, []);
   const removeAttachment = useCallback((i)=>{setComposeAttachments(p=>p.filter((_,j)=>j!==i));}, []);
@@ -1832,7 +1865,7 @@ const AllTheMail = () => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 24px 20px' }}>
               <button className="btn-ghost" onClick={() => setPaywallOpen(false)} style={{ padding: '8px 16px' }}>Maybe later</button>
-              <button className="btn btn-primary" onClick={() => { setPaywallOpen(false); handleUpgrade('monthly'); }} style={{ padding: '8px 18px' }}>Upgrade to Pro</button>
+              <button className="btn btn-primary" onClick={() => { setPaywallOpen(false); handleUpgrade('monthly', 'gate'); }} style={{ padding: '8px 18px' }}>Upgrade to Pro</button>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import supabase from '../lib/supabase.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { safeLogError } from '../lib/log.js';
 import { invalidatePlanCache } from '../middleware/plan.js';
+import { sendMpEvent } from '../lib/ga.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -290,6 +291,20 @@ router.handleWebhook = async (req, res) => {
           itemId: sub?.items?.data?.[0]?.id || null,
         });
         invalidatePlanCache(userId);
+
+        // GA4: trial_converted — server-side via Measurement Protocol.
+        // Stitched to the same GA session via the ga_client_id we stashed
+        // in metadata at checkout time. Plan/value derived from the
+        // Subscription (interval saved in metadata.plan_interval). Fire-
+        // and-forget; the webhook response should not block on analytics.
+        const gaCid = session.metadata?.ga_client_id || sub?.metadata?.ga_client_id || null;
+        const planInterval = session.metadata?.plan_interval || sub?.metadata?.plan_interval || 'monthly';
+        const value = planInterval === 'annual' ? 144 : 15;
+        sendMpEvent({
+          clientId: gaCid,
+          name: 'trial_converted',
+          params: { plan: planInterval, value, currency: 'USD' },
+        }).catch(() => {});
         break;
       }
 
@@ -450,7 +465,11 @@ function sanitizeAttribution(raw) {
 }
 
 router.post('/checkout', authenticateToken, async (req, res) => {
-  const { interval = 'monthly', attribution: rawAttribution } = req.body || {};
+  const { interval = 'monthly', attribution: rawAttribution, ga_client_id: rawGaCid } = req.body || {};
+  // GA4 client_id format: <random>.<timestamp>, both numeric. Defensively
+  // sanitize so a malicious client can't stuff anything else into the
+  // metadata field. Reject if it doesn't fit the shape.
+  const gaClientId = typeof rawGaCid === 'string' && /^\d+\.\d+$/.test(rawGaCid) ? rawGaCid : null;
   const priceId = interval === 'annual'
     ? (STRIPE_PRICE_ID_PRO_ANNUAL || STRIPE_PRICE_ID_PRO)
     : (STRIPE_PRICE_ID_PRO_MONTHLY || STRIPE_PRICE_ID_PRO);
@@ -478,7 +497,15 @@ router.post('/checkout', authenticateToken, async (req, res) => {
     // checkout.session.completed handler sees it; Subscription so it's
     // visible in the Stripe Dashboard for the entire lifecycle (and
     // searchable via metadata['utm_source']:'google' etc.).
+    //
+    // ga_client_id is also stored so the trial_converted MP event we fire
+    // server-side from the webhook can stitch to the same GA session.
     const attribution = sanitizeAttribution(rawAttribution);
+    const metaCommon = { user_id: req.userId, ...attribution };
+    if (gaClientId) {
+      metaCommon.ga_client_id = gaClientId;
+      metaCommon.plan_interval = interval;
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -490,8 +517,8 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       //   session.metadata is read by checkout.session.completed
       //   subscription_data.metadata propagates to the Subscription so
       //   subsequent customer.subscription.* events carry user_id too.
-      metadata: { user_id: req.userId, ...attribution },
-      subscription_data: { metadata: { user_id: req.userId, ...attribution } },
+      metadata: metaCommon,
+      subscription_data: { metadata: metaCommon },
       payment_method_collection: 'always',
     });
 
