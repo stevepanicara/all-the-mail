@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/components/Meta';
+import { ClarityPageType } from '@/components/ClarityPageType';
 import { getAllPosts } from '@/lib/blog';
 
 export const metadata = buildMetadata({
@@ -15,6 +16,7 @@ export default function BlogIndexPage() {
   const posts = getAllPosts();
   return (
     <main className="p-8">
+      <ClarityPageType type="blog" />
       <h1 className="text-2xl mb-6">Blog</h1>
       {posts.length === 0 ? (
         <p className="text-sm opacity-60">No posts yet.</p>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Analytics } from '@/components/Analytics';
 import { AttributionTracker } from '@/components/AttributionTracker';
+import { Clarity } from '@/components/Clarity';
 import { SITE_URL, SITE_NAME, SITE_TAGLINE } from '@/lib/site';
 import './globals.css';
 
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AttributionTracker />
         {children}
         <Analytics />
+        <Clarity />
       </body>
     </html>
   );
