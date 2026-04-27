@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { isJtiRevoked } from '../lib/security.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -13,8 +14,14 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // Pin algorithm to block alg-confusion / alg=none forgery.
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    if (decoded.jti && isJtiRevoked(decoded.jti)) {
+      return res.status(401).json({ error: 'Session revoked' });
+    }
     req.userId = decoded.userId;
+    req.jti = decoded.jti || null;
+    req.tokenExp = decoded.exp || null;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });

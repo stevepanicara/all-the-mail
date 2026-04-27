@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
+import { requireCsrfHeader } from './middleware/csrf.js';
 
 // Route modules
 import authRoutes from './routes/auth.js';
@@ -86,6 +87,12 @@ const sendLimiter = rateLimit({
 app.use(apiLimiter);
 app.use('/auth', authLimiter);
 app.use('/emails/*/send', sendLimiter);
+
+// P1.6 — CSRF defense. Must run after cookieParser + body parsing but
+// before route handlers. Exempts safe methods, Stripe webhook, OAuth
+// callbacks. Frontend wrapper sends X-Requested-By: allthemail on every
+// state-changing call.
+app.use(requireCsrfHeader);
 
 // Mount routes
 app.use('/auth', authRoutes);
