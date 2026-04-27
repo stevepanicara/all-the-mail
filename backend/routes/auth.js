@@ -5,6 +5,7 @@ import supabase from '../lib/supabase.js';
 import { oauth2Client, newOAuth2Client, ALL_SCOPES, encryptToken } from '../lib/google.js';
 import { JWT_SECRET, authenticateToken } from '../middleware/auth.js';
 import { issueOAuthState, consumeOAuthState, revokeJti, newJti } from '../lib/security.js';
+import { safeLogError } from '../lib/log.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 
@@ -215,7 +216,7 @@ router.get('/google/callback', async (req, res) => {
 
     res.redirect(`${FRONTEND_URL}/app?auth=success`);
   } catch (error) {
-    console.error('[AUTH] Auth error:', error.message || 'Unknown error');
+    safeLogError('[AUTH] callback', error);
     res.redirect(`${FRONTEND_URL}?auth=error`);
   }
 });

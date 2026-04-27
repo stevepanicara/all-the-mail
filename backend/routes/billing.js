@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Stripe from 'stripe';
 import supabase from '../lib/supabase.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { safeLogError } from '../lib/log.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -120,7 +121,7 @@ router.handleWebhook = async (req, res) => {
     }
     res.json({ received: true });
   } catch (err) {
-    console.error('Stripe webhook handler error:', err);
+    safeLogError('stripe webhook handler', err, { eventType: event?.type, eventId: event?.id });
     res.status(500).json({ error: 'Webhook handler failed' });
   }
 };

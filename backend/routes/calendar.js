@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { safeLogError } from '../lib/log.js';
 
 const router = Router();
 
@@ -100,7 +101,9 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
             _calendarColor: cal.backgroundColor || null,
           }));
         } catch (err) {
-          console.warn(`Failed to fetch events from calendar "${cal.summary}":`, err.message);
+          // P3 — log calendar id (identifier), not summary (user-facing name,
+          // may be PII: "Chemotherapy", "AA meetings", "Legal — divorce").
+          safeLogError('cals events fetch one', err, { calendarId: cal.id });
           return [];
         }
       })
