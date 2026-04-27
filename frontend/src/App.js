@@ -436,6 +436,13 @@ const AllTheMail = () => {
     try {
       const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval }) });
       if (r.ok) { const d = await r.json(); if (d.url) safeStripeRedirect(d.url); }
+      else if (r.status === 409) {
+        // Backend refused because the user is already subscribed — open the
+        // portal instead so they can manage/upgrade rather than double-charge.
+        const portal = await fetch(`${API_BASE}/billing/portal`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+        if (portal.ok) { const d = await portal.json(); if (d.url) safeStripeRedirect(d.url); }
+        else { setError('You already have an active subscription.'); }
+      }
       else { const d = await r.json(); setError(d.error || 'Failed to start checkout'); }
     } catch (e) { console.error('Checkout error:', e); setError('Failed to start checkout'); }
     finally { setBillingLoading(false); }
