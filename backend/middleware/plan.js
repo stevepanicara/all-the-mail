@@ -46,6 +46,11 @@ export function isProActive({ plan, status }) {
 
 // Express middleware: enforce account-count limit for free users. Use on
 // routes that ADD a connected Google account.
+//
+// /accounts/connect is a top-level browser navigation (not a fetch), so
+// returning a JSON body just dumps "{error:plan_limit,...}" to the page.
+// Instead, redirect back to the frontend with an upgrade-required flag
+// so the SPA can show a styled modal.
 export async function enforceAccountLimit(req, res, next) {
   try {
     const tier = await getPlan(req.userId);
@@ -57,14 +62,13 @@ export async function enforceAccountLimit(req, res, next) {
       .eq('user_id', req.userId);
     if (error) throw error;
     if ((count || 0) >= 1) {
-      return res.status(402).json({
-        error: 'plan_limit',
-        message: 'Free plan supports 1 connected account. Upgrade to Pro for unlimited accounts.',
-      });
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      return res.redirect(`${frontendUrl}/app?upgrade=required`);
     }
     next();
   } catch (err) {
     console.error('enforceAccountLimit error:', err?.message || err);
-    res.status(500).json({ error: 'plan check failed' });
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/app?error=plan_check_failed`);
   }
 }

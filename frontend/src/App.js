@@ -11,6 +11,7 @@ import {
   getEmailOnly, splitList, uniqLower, migrateLayoutStorage,
   formatRelativeEdit, getShortLabel,
   getDocEditUrl, getDocIcon, getDocEditorLabel, getRelativeTime, formatTime,
+  parseEventStart,
 } from './utils/helpers';
 
 import EventEditModal from './components/common/EventEditModal';
@@ -137,6 +138,7 @@ const AllTheMail = () => {
   const [paletteQuery, setPaletteQuery] = useState('');
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
 
@@ -187,6 +189,7 @@ const AllTheMail = () => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('auth')==='error'||window.location.pathname==='/auth/error') { setAuthError('Authentication failed. Please try again.'); window.history.replaceState({},document.title,window.location.pathname); }
     if (p.get('connect')==='error') { setAuthError('Account connection failed. Please try again.'); window.history.replaceState({},document.title,window.location.pathname); }
+    if (p.get('upgrade')==='required') { setPaywallOpen(true); window.history.replaceState({},document.title,window.location.pathname); }
   }, []);
 
   useEffect(() => { const t = setTimeout(()=>setIntroActive(false),900); return ()=>clearTimeout(t); }, []);
@@ -515,7 +518,7 @@ const AllTheMail = () => {
       dayEnd.setHours(23, 59, 59, 999);
 
       const dayEvents = filteredAllEvents.filter(ev => {
-        const evDate = new Date(ev.startISO || 0);
+        const evDate = parseEventStart(ev);
         return evDate >= d && evDate <= dayEnd;
       });
 
@@ -549,7 +552,7 @@ const AllTheMail = () => {
         date.setDate(startDate.getDate() + w * 7 + d);
         const dayEnd = new Date(date); dayEnd.setHours(23, 59, 59, 999);
         const dayEvents = filteredAllEvents.filter(ev => {
-          const evDate = new Date(ev.startISO || 0);
+          const evDate = parseEventStart(ev);
           return evDate >= date && evDate <= dayEnd;
         });
         week.push({
@@ -1795,6 +1798,33 @@ const AllTheMail = () => {
           </div>
         );
       })()}
+
+      {/* Paywall — shown when backend redirects with ?upgrade=required */}
+      {paywallOpen && (
+        <div className="modal-overlay" onClick={() => setPaywallOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <span className="modal-header-title">Pro plan required</span>
+              <button className="btn-icon" onClick={() => setPaywallOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px 24px 8px' }}>
+              <p style={{ margin: '0 0 12px', color: 'var(--text-1)', fontSize: '14px', lineHeight: 1.5 }}>
+                Free plan supports a single connected account. Upgrade to Pro to add unlimited Gmail accounts, plus everything else Pro unlocks.
+              </p>
+              <ul style={{ margin: '0 0 8px', padding: '0 0 0 18px', color: 'var(--text-2)', fontSize: '13px', lineHeight: 1.7 }}>
+                <li>Unlimited connected accounts</li>
+                <li>Unified inbox across every mailbox</li>
+                <li>Schedule send, snooze, drafts autosave</li>
+                <li>Priority support</li>
+              </ul>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 24px 20px' }}>
+              <button className="btn-ghost" onClick={() => setPaywallOpen(false)} style={{ padding: '8px 16px' }}>Maybe later</button>
+              <button className="btn btn-primary" onClick={() => { setPaywallOpen(false); handleUpgrade('monthly'); }} style={{ padding: '8px 18px' }}>Upgrade to Pro</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Keyboard shortcuts cheatsheet */}
       {shortcutsOpen && (
