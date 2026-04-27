@@ -1,46 +1,83 @@
-// P1.3 — plan tier enforcement.
+// Plan-tier enforcement.
 //
-// Reads the user's subscription tier and decides whether a feature is
+// Reads the user's subscription state and decides whether a feature is
 // allowed. Cached short-term to avoid hitting Supabase on every request.
 //
-// The differentiator the public pricing page promises is "Pro = unlimited
-// connected accounts; Free = 1". That's the gate we enforce today. Other
-// features (scheduled-sends, snoozed, calendar edit) stay open to all
-// authenticated users to avoid surprising existing pre-paywall users.
+// Admin bypass: any email matching ADMIN_EMAILS env var is treated as Pro
+// active indefinitely, regardless of subscription state. This exists so we
+// (the operator) can keep using the app while testing a paywall that would
+// otherwise lock us out, and to provide unlimited access to specific users
+// without going through Stripe. The list is comma-separated — set on Render
+// like ADMIN_EMAILS=steve@rangerandfox.tv,other@example.com
 
 import supabase from '../lib/supabase.js';
 
 const PLAN_CACHE_TTL_MS = 60 * 1000;
 const _planCache = new Map(); // userId -> { plan, status, expiresAt }
 
+const ADMIN_EMAILS = new Set(
+  (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+function isAdminEmail(email) {
+  if (!email) return false;
+  return ADMIN_EMAILS.has(String(email).trim().toLowerCase());
+}
+
 export function invalidatePlanCache(userId) {
   _planCache.delete(userId);
 }
 
+// Used by /billing/status and the access-gating middleware. Returns the
+// effective plan + status for a user. Admin emails are short-circuited to
+// {plan:'pro', status:'active'} unconditionally.
 export async function getPlan(userId) {
   if (!userId) return { plan: 'free', status: 'none' };
   const cached = _planCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) return cached;
 
-  let plan = 'free', status = 'none';
+  // Admin bypass — read user email and short-circuit if it's on the list.
+  // Cached the same way so we don't hit Supabase on every gated route.
+  let plan = 'free';
+  let status = 'none';
+  let isAdmin = false;
   try {
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('plan, status')
-      .eq('user_id', userId)
+    const { data: user } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
       .single();
-    if (data) {
-      plan = data.plan || 'free';
-      status = data.status || 'none';
+    if (user?.email && isAdminEmail(user.email)) {
+      isAdmin = true;
+      plan = 'pro';
+      status = 'active';
     }
-  } catch (_) { /* missing row is fine; default to free */ }
+  } catch (_) { /* fall through */ }
 
-  const entry = { plan, status, expiresAt: Date.now() + PLAN_CACHE_TTL_MS };
+  if (!isAdmin) {
+    try {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('plan, status')
+        .eq('user_id', userId)
+        .single();
+      if (data) {
+        plan = data.plan || 'free';
+        status = data.status || 'none';
+      }
+    } catch (_) { /* missing row is fine; default to free */ }
+  }
+
+  const entry = { plan, status, isAdmin, expiresAt: Date.now() + PLAN_CACHE_TTL_MS };
   _planCache.set(userId, entry);
   return entry;
 }
 
-export function isProActive({ plan, status }) {
+export function isProActive({ plan, status, isAdmin }) {
+  if (isAdmin) return true;
   return plan === 'pro' && (status === 'active' || status === 'trialing' || status === 'past_due');
 }
 
