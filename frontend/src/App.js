@@ -139,6 +139,10 @@ const AllTheMail = () => {
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  // accessGate: when truthy, the paywall is in BLOCKING mode (user has no
+  // active subscription/trial — must subscribe to use the app). The detail
+  // shape comes from the backend 403: { state, trialAvailable }.
+  const [accessGate, setAccessGate] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
 
@@ -190,6 +194,19 @@ const AllTheMail = () => {
     if (p.get('auth')==='error'||window.location.pathname==='/auth/error') { setAuthError('Authentication failed. Please try again.'); window.history.replaceState({},document.title,window.location.pathname); }
     if (p.get('connect')==='error') { setAuthError('Account connection failed. Please try again.'); window.history.replaceState({},document.title,window.location.pathname); }
     if (p.get('upgrade')==='required') { setPaywallOpen(true); window.history.replaceState({},document.title,window.location.pathname); }
+  }, []);
+
+  // Trial-gating bridge: index.js dispatches atm-access-required whenever
+  // any fetch returns 403 { error: 'access_required' }. We surface a
+  // BLOCKING paywall — no "maybe later" button, no dismiss-on-overlay-click —
+  // because the user genuinely cannot use the app without subscribing.
+  useEffect(() => {
+    const handler = (e) => {
+      setAccessGate(e.detail || { state: 'no_subscription', trialAvailable: true });
+      setPaywallOpen(true);
+    };
+    window.addEventListener('atm-access-required', handler);
+    return () => window.removeEventListener('atm-access-required', handler);
   }, []);
 
   useEffect(() => { const t = setTimeout(()=>setIntroActive(false),900); return ()=>clearTimeout(t); }, []);
@@ -1806,32 +1823,57 @@ const AllTheMail = () => {
         );
       })()}
 
-      {/* Paywall — shown when backend redirects with ?upgrade=required */}
-      {paywallOpen && (
-        <div className="modal-overlay" onClick={() => setPaywallOpen(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div className="modal-header">
-              <span className="modal-header-title">Pro plan required</span>
-              <button className="btn-icon" onClick={() => setPaywallOpen(false)}><X size={16} /></button>
-            </div>
-            <div className="modal-body" style={{ padding: '20px 24px 8px' }}>
-              <p style={{ margin: '0 0 12px', color: 'var(--text-1)', fontSize: '14px', lineHeight: 1.5 }}>
-                Free plan supports a single connected account. Upgrade to Pro to add unlimited Gmail accounts, plus everything else Pro unlocks.
-              </p>
-              <ul style={{ margin: '0 0 8px', padding: '0 0 0 18px', color: 'var(--text-2)', fontSize: '13px', lineHeight: 1.7 }}>
-                <li>Unlimited connected accounts</li>
-                <li>Unified inbox across every mailbox</li>
-                <li>Schedule send, snooze, drafts autosave</li>
-                <li>Priority support</li>
-              </ul>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 24px 20px' }}>
-              <button className="btn-ghost" onClick={() => setPaywallOpen(false)} style={{ padding: '8px 16px' }}>Maybe later</button>
-              <button className="btn btn-primary" onClick={() => { setPaywallOpen(false); handleUpgrade('monthly'); }} style={{ padding: '8px 18px' }}>Upgrade to Pro</button>
+      {/* Paywall — two modes:
+            BLOCKING (accessGate set): backend gating us out; no dismiss path.
+            DISMISSIBLE (?upgrade=required only): legacy path; keep "Maybe later".
+       */}
+      {paywallOpen && (() => {
+        const blocking = !!accessGate;
+        const trialAvailable = blocking ? !!accessGate.trialAvailable : false;
+        const expired = blocking && accessGate.state === 'expired';
+        const title = blocking
+          ? (trialAvailable ? 'Start your free trial' : (expired ? 'Subscription expired' : 'Subscribe to continue'))
+          : 'Pro plan required';
+        const body = blocking && trialAvailable
+          ? "7 days of full access. Card required up front — you won't be charged until the trial ends, and you can cancel anytime before then."
+          : blocking && expired
+            ? 'Your subscription has expired. Resubscribe to restore access to your inbox and connected accounts.'
+            : blocking
+              ? 'Subscribe to continue using your inbox and connected accounts.'
+              : 'Free plan supports a single connected account. Upgrade to Pro to add unlimited Gmail accounts, plus everything else Pro unlocks.';
+        const cta = blocking
+          ? (trialAvailable ? 'Start free trial' : 'Subscribe')
+          : 'Upgrade to Pro';
+        return (
+          <div className="modal-overlay" onClick={blocking ? undefined : () => setPaywallOpen(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+              <div className="modal-header">
+                <span className="modal-header-title">{title}</span>
+                {!blocking && (
+                  <button className="btn-icon" onClick={() => setPaywallOpen(false)}><X size={16} /></button>
+                )}
+              </div>
+              <div className="modal-body" style={{ padding: '20px 24px 8px' }}>
+                <p style={{ margin: '0 0 12px', color: 'var(--text-1)', fontSize: '14px', lineHeight: 1.5 }}>{body}</p>
+                <ul style={{ margin: '0 0 8px', padding: '0 0 0 18px', color: 'var(--text-2)', fontSize: '13px', lineHeight: 1.7 }}>
+                  <li>Unlimited connected accounts</li>
+                  <li>Unified inbox across every mailbox</li>
+                  <li>Schedule send, snooze, drafts autosave</li>
+                  <li>Priority support</li>
+                </ul>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 24px 20px' }}>
+                {!blocking && (
+                  <button className="btn-ghost" onClick={() => setPaywallOpen(false)} style={{ padding: '8px 16px' }}>Maybe later</button>
+                )}
+                <button className="btn btn-primary" onClick={() => { handleUpgrade('monthly'); }} style={{ padding: '8px 18px' }} disabled={billingLoading}>
+                  {billingLoading ? '…' : cta}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Keyboard shortcuts cheatsheet */}
       {shortcutsOpen && (

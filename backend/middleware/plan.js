@@ -81,31 +81,66 @@ export function isProActive({ plan, status, isAdmin }) {
   return plan === 'pro' && (status === 'active' || status === 'trialing' || status === 'past_due');
 }
 
-// Express middleware: enforce account-count limit for free users. Use on
-// routes that ADD a connected Google account.
+// Express middleware — gate any feature route on the user having access
+// (admin / Pro / trialing / past_due grace). Returns a structured 403 the
+// frontend can branch on:
 //
-// /accounts/connect is a top-level browser navigation (not a fetch), so
-// returning a JSON body just dumps "{error:plan_limit,...}" to the page.
-// Instead, redirect back to the frontend with an upgrade-required flag
-// so the SPA can show a styled modal.
-export async function enforceAccountLimit(req, res, next) {
+//   { error: 'access_required', state: 'no_subscription' | 'expired',
+//     trialAvailable: <bool> }
+//
+// state semantics:
+//   no_subscription — user has never started a trial; signup CTA shows
+//                     "Start 7-day free trial".
+//   expired         — user had a subscription that's now canceled or
+//                     unpaid past the grace window; CTA shows
+//                     "Subscribe to continue".
+//
+// The grace handling for Stripe-managed trials is built-in: past_due is
+// treated as active by isProActive, so users get Stripe's natural dunning
+// window (≈3 retries / ~3 weeks) before the subscription transitions to
+// canceled. That replaces the app-side "24-48h grace" we'd have needed
+// for an app-side trial.
+export async function requireActiveAccess(req, res, next) {
   try {
     const tier = await getPlan(req.userId);
     if (isProActive(tier)) return next();
 
-    const { count, error } = await supabase
-      .from('gmail_accounts')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', req.userId);
-    if (error) throw error;
-    if ((count || 0) >= 1) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-      return res.redirect(`${frontendUrl}/app?upgrade=required`);
-    }
-    next();
+    // Decide which CTA to surface. If user has never had a trial, they're
+    // eligible for the 7-day trial. Otherwise (canceled, never converted)
+    // they need to subscribe directly.
+    let trialAvailable = false;
+    try {
+      const { data: u } = await supabase
+        .from('users')
+        .select('trial_consumed')
+        .eq('id', req.userId)
+        .single();
+      trialAvailable = !u?.trial_consumed;
+    } catch { /* default false */ }
+
+    return res.status(403).json({
+      error: 'access_required',
+      state: trialAvailable ? 'no_subscription' : 'expired',
+      trialAvailable,
+    });
   } catch (err) {
-    console.error('enforceAccountLimit error:', err?.message || err);
+    console.error('requireActiveAccess error:', err?.message || err);
+    res.status(500).json({ error: 'access_check_failed' });
+  }
+}
+
+// Same logic but for top-level browser navigations (e.g. /accounts/connect
+// initiates a Google OAuth redirect, so it can't return JSON cleanly).
+// Redirects to /app with a flag the SPA reads.
+export async function requireActiveAccessOrRedirect(req, res, next) {
+  try {
+    const tier = await getPlan(req.userId);
+    if (isProActive(tier)) return next();
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/app?error=plan_check_failed`);
+    return res.redirect(`${frontendUrl}/app?upgrade=required`);
+  } catch (err) {
+    console.error('requireActiveAccessOrRedirect error:', err?.message || err);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/app?error=access_check_failed`);
   }
 }
