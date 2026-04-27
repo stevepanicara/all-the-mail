@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { API_BASE } from '../utils/constants';
 import { stripName } from '../utils/helpers';
+import { getCached, setCached, setManyCached, hydrateForIds, maybeEvict } from '../utils/emailCache';
 
 export function useEmail({
   connectedAccounts,
@@ -155,17 +156,34 @@ export function useEmail({
     if (!email?.id) return;
     const eid = email.id;
     if (emailBodiesRef.current[eid] && emailHeadersRef.current[eid]) return;
-    setIsLoadingBody(true);
+    const aid = email.accountId || connectedAccounts[0]?.id;
+    if (!aid) return;
+
+    // Stale-while-revalidate: if we have a persisted copy, render it
+    // instantly so the reader pane never blanks. The network refresh
+    // below will overwrite if Gmail returns something newer.
+    let cacheHit = false;
     try {
-      const aid = email.accountId || connectedAccounts[0]?.id;
-      if (!aid) return;
+      const cached = await getCached(aid, eid);
+      if (cached?.body) {
+        cacheHit = true;
+        setEmailBodies(p => p[eid] === cached.body ? p : { ...p, [eid]: cached.body });
+        if (cached.headers) setEmailHeaders(p => p[eid] ? p : { ...p, [eid]: cached.headers });
+        if (cached.attachments?.length) setEmailAttachments(p => p[eid] ? p : { ...p, [eid]: cached.attachments });
+      }
+    } catch { /* ignore */ }
+
+    if (!cacheHit) setIsLoadingBody(true);
+    try {
       const r = await fetch(`${API_BASE}/emails/${aid}/${eid}`, { credentials: 'include' });
       if (r.ok) {
         setIsAuthed(true);
         const d = await r.json();
-        setEmailBodies(p => { const u = { ...p, [eid]: d.body }; const k = Object.keys(u); if (k.length > 100) k.slice(0, k.length - 100).forEach(x => delete u[x]); return u; });
-        if (d.headers) setEmailHeaders(p => { const u = { ...p, [eid]: d.headers }; const k = Object.keys(u); if (k.length > 100) k.slice(0, k.length - 100).forEach(x => delete u[x]); return u; });
-        if (d.attachments) setEmailAttachments(p => { const u = { ...p, [eid]: d.attachments }; const k = Object.keys(u); if (k.length > 100) k.slice(0, k.length - 100).forEach(x => delete u[x]); return u; });
+        setEmailBodies(p => { const u = { ...p, [eid]: d.body }; const k = Object.keys(u); if (k.length > 500) k.slice(0, k.length - 500).forEach(x => delete u[x]); return u; });
+        if (d.headers) setEmailHeaders(p => { const u = { ...p, [eid]: d.headers }; const k = Object.keys(u); if (k.length > 500) k.slice(0, k.length - 500).forEach(x => delete u[x]); return u; });
+        if (d.attachments) setEmailAttachments(p => { const u = { ...p, [eid]: d.attachments }; const k = Object.keys(u); if (k.length > 500) k.slice(0, k.length - 500).forEach(x => delete u[x]); return u; });
+        // Persist to IDB so the next session is instant.
+        setCached(aid, eid, d.body, d.headers, d.attachments).catch(() => {});
         if (!email.isRead) {
           setEmails(p => { const n = { ...p }; Object.keys(n).forEach(ai => { Object.keys(n[ai]).forEach(c => { if (n[ai][c]) n[ai][c] = n[ai][c].map(e => e.id === eid ? { ...e, isRead: true } : e); }); }); return n; });
           fetch(`${API_BASE}/emails/${aid}/${eid}/read`, { method: 'POST', credentials: 'include' }).catch(() => {});
@@ -183,7 +201,7 @@ export function useEmail({
         return;
       }
     } catch (err) { console.error('Error loading email body:', err); }
-    finally { setIsLoadingBody(false); }
+    finally { if (!cacheHit) setIsLoadingBody(false); }
   }, [connectedAccounts, setIsAuthed]);
 
   const downloadAttachment = useCallback(async (accountId, messageId, attachmentId, filename, mimeType) => {
@@ -481,7 +499,7 @@ export function useEmail({
       setSelectedEmail(p);
       if (setShowMetadata) setShowMetadata(false);
       loadEmailDetails(p); loadThread(p);
-      filteredEmails.slice(Math.max(0, i - 5), i - 1).forEach((e, j) => setTimeout(() => loadEmailDetails(e), (j + 1) * 100));
+      filteredEmails.slice(Math.max(0, i - 15), i - 1).forEach((e, j) => setTimeout(() => loadEmailDetails(e), (j + 1) * 50));
     }
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, setShowMetadata]);
 
@@ -493,7 +511,7 @@ export function useEmail({
       setSelectedEmail(n);
       if (setShowMetadata) setShowMetadata(false);
       loadEmailDetails(n); loadThread(n);
-      filteredEmails.slice(i + 2, i + 6).forEach((e, j) => setTimeout(() => loadEmailDetails(e), (j + 1) * 100));
+      filteredEmails.slice(i + 2, i + 17).forEach((e, j) => setTimeout(() => loadEmailDetails(e), (j + 1) * 50));
     }
   }, [selectedEmail, filteredEmails, loadEmailDetails, loadThread, setShowMetadata]);
 
@@ -504,20 +522,49 @@ export function useEmail({
     loadEmailDetails(email); loadThread(email); setSelectedThreadActiveMessageId(email.id);
     if (splitMode === 'none' && setFullPageReaderOpen) setFullPageReaderOpen(true);
     const idx = filteredEmails.findIndex(e => e.id === email.id);
-    if (idx >= 0) filteredEmails.slice(idx + 1, idx + 11).forEach((e, i) => setTimeout(() => loadEmailDetails(e), (i + 1) * 80));
+    if (idx >= 0) filteredEmails.slice(idx + 1, idx + 26).forEach((e, i) => setTimeout(() => loadEmailDetails(e), (i + 1) * 50));
   }, [loadEmailDetails, loadThread, splitMode, filteredEmails, setShowMetadata, setReaderCompact, setFullPageReaderOpen]);
 
-  // Batch-prefetch visible inbox
+  // Batch-prefetch visible inbox.
+  //
+  // Two-stage:
+  //   1. Hydrate from IndexedDB (instant, no network) — anything we've
+  //      seen in a past session is in state before the network even fires.
+  //   2. Network batch-fetch the rest from /batch-bodies, in 25-id chunks.
+  //
+  // Window is 200 (was 50) — at ~30 KB body avg that's ~6 MB on initial load,
+  // worth it because every click into the first 200 lands instant.
   useEffect(() => {
     if (filteredEmails.length === 0) return;
+
+    const PREFETCH_WINDOW = 200;
+    const window = filteredEmails.slice(0, PREFETCH_WINDOW);
+
+    // Stage 1 — IDB hydration. Done immediately, doesn't block the network stage.
+    const hydrationTargets = window
+      .filter(e => !emailBodiesRef.current[e.id])
+      .map(e => ({ accountId: e.accountId, messageId: e.id }));
+    if (hydrationTargets.length) {
+      hydrateForIds(hydrationTargets).then(({ bodies, headers, attachments }) => {
+        if (Object.keys(bodies).length) {
+          setEmailBodies(p => ({ ...bodies, ...p })); // existing state wins (newest)
+          setEmailHeaders(p => ({ ...headers, ...p }));
+          setEmailAttachments(p => ({ ...attachments, ...p }));
+        }
+      }).catch(() => {});
+    }
+
+    // Stage 2 — network for the gaps. Use a slightly delayed timer so
+    // hydration races to fill the cache before we ask the network.
     const byAccount = {};
-    filteredEmails.slice(0, 50).forEach(email => {
+    window.forEach(email => {
       if (emailBodiesRef.current[email.id] && emailHeadersRef.current[email.id]) return;
       const aid = email.accountId; if (!aid) return;
       if (!byAccount[aid]) byAccount[aid] = [];
       byAccount[aid].push(email.id);
     });
     if (Object.keys(byAccount).length === 0) return;
+
     const timer = setTimeout(() => {
       Object.entries(byAccount).forEach(([accountId, ids]) => {
         const chunks = [];
@@ -531,18 +578,26 @@ export function useEmail({
           .then(d => {
             if (!d?.bodies) return;
             const bodyMap = {}, headerMap = {}, attachMap = {};
+            const idbItems = [];
             Object.entries(d.bodies).forEach(([id, data]) => {
               bodyMap[id] = data.body;
               headerMap[id] = data.headers;
               attachMap[id] = data.attachments || [];
+              idbItems.push({ accountId, messageId: id, body: data.body, headers: data.headers, attachments: data.attachments || [] });
             });
             setEmailBodies(p => ({ ...p, ...bodyMap }));
             setEmailHeaders(p => ({ ...p, ...headerMap }));
             setEmailAttachments(p => ({ ...p, ...attachMap }));
+            // Persist the freshly fetched batch so next session is instant.
+            if (idbItems.length) setManyCached(idbItems).catch(() => {});
           })
           .catch(() => {}));
       });
-    }, 100);
+    }, 200);
+
+    // Periodic eviction so the IDB store doesn't grow without bound.
+    maybeEvict().catch(() => {});
+
     return () => clearTimeout(timer);
   }, [filteredEmails]);
 

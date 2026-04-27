@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   Mail, Search, X, Archive, Trash2, CheckSquare, MinusSquare,
   Paperclip, Download, ArrowLeft, Star, Clock,
@@ -71,6 +71,18 @@ const MailModule = ({
   setSelectedThreadActiveMessageId,
 }) => {
   const rowHeight = { default: 56, comfortable: 64, compact: 46 }[densityMode] || 56;
+
+  // Debounced hover prefetch — fires loadEmailDetails 150 ms after the
+  // mouse settles on a row, so casually scrolling past doesn't trigger
+  // a flood of fetches but a real "I'm about to click" hover does.
+  const hoverTimerRef = useRef(null);
+  const handleHoverEnter = useCallback((email) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => { loadEmailDetails(email); }, 150);
+  }, [loadEmailDetails]);
+  const handleHoverLeave = useCallback(() => {
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+  }, []);
 
   const goBackToList = () => {
     setSelectedEmail(null);
@@ -231,7 +243,8 @@ const MailModule = ({
 
           return (
             <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
-              onMouseLeave={() => {}}
+              onMouseEnter={() => handleHoverEnter(email)}
+              onMouseLeave={handleHoverLeave}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}
               onTouchStart={(e) => { const t = e.touches[0]; swipeRef.current = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, emailId: email.id }; e.currentTarget.dataset.swipe = ''; }}
               onTouchMove={(e) => { if (swipeRef.current.emailId === email.id) { swipeRef.current.currentX = e.touches[0].clientX; const d = e.touches[0].clientX - swipeRef.current.startX; if (d < -15) e.currentTarget.dataset.swipe = 'left'; else if (d > 15) e.currentTarget.dataset.swipe = 'right'; else e.currentTarget.dataset.swipe = ''; } }}
@@ -258,8 +271,7 @@ const MailModule = ({
                   <span className="row-time">{formatTime(email.date)}</span>
                 </div>
               ) : (
-                <div className="email-row-grid"
-                  onMouseEnter={() => { loadEmailDetails(email); loadThread(email); }}>
+                <div className="email-row-grid">
                   {/* Checkbox */}
                   <button className={`email-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => { e.stopPropagation(); toggleSelectId(email.id); }} title={isSelected ? 'Deselect' : 'Select'}>
                     <span className="checkbox-box" />
