@@ -7,6 +7,12 @@ export const SITE_URL =
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || 'https://app.allthemail.io';
 
+// Backend API URL — landing-page CTAs link directly to /auth/google here
+// because OAuth start lives on the backend, not the React app. Set on
+// Vercel for the marketing project; defaults to the production API.
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://api.allthemail.io';
+
 export const SITE_NAME = 'All The Mail';
 
 export const SITE_TAGLINE = 'Every account. One inbox.';
