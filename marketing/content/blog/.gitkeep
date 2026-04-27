@@ -1,0 +1,12 @@
+# Blog posts directory.
+# Author posts as .mdx files with frontmatter:
+#
+#   ---
+#   title: "Why we built All The Mail"
+#   description: "The story of unifying multiple Gmail inboxes."
+#   date: 2026-04-27
+#   ogImage: /og/launch.png
+#   draft: false
+#   ---
+#
+# Filename becomes the URL slug: 2026-04-27-launch.mdx → /blog/2026-04-27-launch
