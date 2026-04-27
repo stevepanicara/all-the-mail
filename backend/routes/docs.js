@@ -34,7 +34,7 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'missing_scope', message: 'This account has not granted Drive access', service: 'docs' });
     }
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const drive = google.drive({ version: 'v3', auth: client });
 
     let q = "mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet' or mimeType='application/vnd.google-apps.presentation'";
@@ -89,7 +89,7 @@ router.get('/:accountId/:fileId', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'missing_scope', message: 'This account has not granted Drive access', service: 'docs' });
     }
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const drive = google.drive({ version: 'v3', auth: client });
 
     const response = await drive.files.get({
@@ -141,7 +141,7 @@ router.get('/:accountId/:fileId/preview', authenticateToken, async (req, res) =>
       return res.json(_previewCached.data);
     }
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const drive = google.drive({ version: 'v3', auth: client });
 
     const { data: file } = await drive.files.get({

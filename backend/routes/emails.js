@@ -277,7 +277,7 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     const listParams = { userId: 'me', maxResults };
@@ -362,7 +362,7 @@ router.post('/:accountId/batch-bodies', authenticateToken, async (req, res) => {
     }
 
     if (uncachedIds.length > 0) {
-      const client = await getOAuth2ClientForAccount(accountId);
+      const client = await getOAuth2ClientForAccount(accountId, req.userId);
       const gmail = google.gmail({ version: 'v1', auth: client });
 
       await Promise.all(uncachedIds.map(async (msgId) => {
@@ -410,7 +410,7 @@ router.get('/:accountId/:messageId', authenticateToken, async (req, res) => {
       return res.json(_cached.data);
     }
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     const message = await gmail.users.messages.get({
@@ -452,7 +452,7 @@ router.get('/:accountId/:messageId/attachments/:attachmentId', authenticateToken
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     const attachment = await gmail.users.messages.attachments.get({
@@ -482,7 +482,7 @@ router.get('/:accountId/:threadId/thread', authenticateToken, async (req, res) =
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     const thread = await gmail.users.threads.get({
@@ -526,7 +526,7 @@ router.post('/:accountId/draft', authenticateToken, async (req, res) => {
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     let { to, cc, bcc, subject, body, draftId } = req.body;
@@ -564,7 +564,7 @@ router.post('/:accountId/send', authenticateToken, sendLimiter, upload.array('at
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     let { to, cc, bcc, subject, body, threadId, draftId } = req.body;
@@ -618,7 +618,7 @@ router.post('/:accountId/drafts', authenticateToken, async (req, res) => {
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     const raw = buildMimeEmail(to, subject, body, { cc, bcc, threadId });
@@ -658,7 +658,7 @@ router.delete('/:accountId/drafts/:draftId', authenticateToken, async (req, res)
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.drafts.delete({ userId: 'me', id: draftId });
@@ -678,7 +678,7 @@ router.post('/:accountId/:messageId/archive', authenticateToken, async (req, res
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.messages.modify({
@@ -702,7 +702,7 @@ router.post('/:accountId/:messageId/read', authenticateToken, async (req, res) =
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.messages.modify({
@@ -726,7 +726,7 @@ router.post('/:accountId/:messageId/trash', authenticateToken, async (req, res) 
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.messages.trash({ userId: 'me', id: messageId });
@@ -747,7 +747,7 @@ router.post('/:accountId/:messageId/star', authenticateToken, async (req, res) =
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.messages.modify({
@@ -774,7 +774,7 @@ router.post('/:accountId/:messageId/labels', authenticateToken, async (req, res)
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.messages.modify({
@@ -798,7 +798,7 @@ router.post('/:accountId/:messageId/unread', authenticateToken, async (req, res)
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     await gmail.users.messages.modify({
@@ -823,7 +823,7 @@ router.post('/:accountId/batch', authenticateToken, async (req, res) => {
     const account = await verifyAccountOwnership(accountId, req.userId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const client = await getOAuth2ClientForAccount(accountId);
+    const client = await getOAuth2ClientForAccount(accountId, req.userId);
     const gmail = google.gmail({ version: 'v1', auth: client });
 
     if (action === 'archive') {

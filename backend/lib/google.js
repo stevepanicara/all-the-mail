@@ -70,8 +70,17 @@ function invalidateClientCache(accountId) {
   _clientCache.delete(accountId);
 }
 
-async function getOAuth2ClientForAccount(accountId) {
-  const cached = _clientCache.get(accountId);
+// P1.8 — userId is REQUIRED. Every caller must pass it; the function refuses
+// to load a client for an account that does not belong to the authenticated
+// user. This turns a previously per-route-honor-system check into an
+// invariant the lib enforces — a future route that forgets to call
+// verifyAccountOwnership() now fails closed instead of leaking access.
+async function getOAuth2ClientForAccount(accountId, userId) {
+  if (!userId) {
+    throw new Error('getOAuth2ClientForAccount: userId is required');
+  }
+  const cacheKey = `${accountId}:${userId}`;
+  const cached = _clientCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.client;
   }
@@ -80,6 +89,7 @@ async function getOAuth2ClientForAccount(accountId) {
     .from('gmail_accounts')
     .select('*')
     .eq('id', accountId)
+    .eq('user_id', userId)
     .single();
 
   if (error || !account) throw new Error('Account not found');
@@ -99,15 +109,26 @@ async function getOAuth2ClientForAccount(accountId) {
     tokens.access_token = newTokens.access_token;
     tokens.expiry_date = newTokens.expiry_date;
     // Extend cache TTL on refresh
-    _clientCache.set(accountId, { client, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+    _clientCache.set(cacheKey, { client, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
     await supabase
       .from('gmail_accounts')
       .update({ encrypted_tokens: encryptToken(tokens) })
       .eq('id', accountId);
   });
 
-  _clientCache.set(accountId, { client, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+  _clientCache.set(cacheKey, { client, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
   return client;
+}
+
+// P1.9 — fresh OAuth2 client per OAuth callback. The exported `oauth2Client`
+// is a singleton; `setCredentials` mutates it. Two concurrent callbacks
+// could read the wrong user's tokens. Use this for the callback path.
+function newOAuth2Client() {
+  return new google.auth.OAuth2(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI
+  );
 }
 
 export {
@@ -117,6 +138,7 @@ export {
   SERVICE_SCOPES,
   ALL_SCOPES,
   oauth2Client,
+  newOAuth2Client,
   encryptToken,
   decryptToken,
   getOAuth2ClientForAccount,
