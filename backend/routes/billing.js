@@ -17,6 +17,16 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 const router = Router();
 
+// Defensive accessor — Stripe moved current_period_end onto items.data[0]
+// in newer API versions. Fall back through known shapes; return null if
+// neither is present so we don't throw on a benign field-shape change.
+function periodEndIso(subscription) {
+  const ts = subscription?.current_period_end
+    ?? subscription?.items?.data?.[0]?.current_period_end
+    ?? null;
+  return ts ? new Date(ts * 1000).toISOString() : null;
+}
+
 // Stripe webhook — must use express.raw() body, registered separately in server.js
 router.handleWebhook = async (req, res) => {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) {
@@ -31,12 +41,55 @@ router.handleWebhook = async (req, res) => {
     return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 
+  // P1.4 — idempotency. Stripe retries on any non-2xx. Without dedupe a
+  // duplicate delivery double-applies. We record event.id and return 200
+  // if we've seen it before.
+  try {
+    const { error: dedupeErr } = await supabase
+      .from('stripe_events')
+      .insert({ event_id: event.id, type: event.type });
+    if (dedupeErr) {
+      // 23505 = unique violation on event_id PK → duplicate delivery; ack and skip.
+      if (dedupeErr.code === '23505') {
+        return res.json({ received: true, deduped: true });
+      }
+      // If the table is missing (migration not applied), log and continue
+      // so a brand-new deploy doesn't break the webhook entirely.
+      if (dedupeErr.code === 'PGRST205' || /relation .* does not exist/i.test(dedupeErr.message || '')) {
+        console.warn('[BILLING] stripe_events table missing — skipping idempotency check');
+      } else {
+        console.error('[BILLING] dedupe insert failed:', dedupeErr);
+      }
+    }
+  } catch (err) {
+    console.error('[BILLING] dedupe error:', err);
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId = session.metadata?.user_id;
         if (userId) {
+          // P1.5-style sanity: verify the metadata user_id matches a real user
+          // and that the customer_email Stripe sends is consistent with our
+          // stored email. Belt-and-suspenders against metadata tampering or
+          // a future code path that sets metadata.user_id from non-auth source.
+          const { data: u } = await supabase
+            .from('users')
+            .select('id, email')
+            .eq('id', userId)
+            .single();
+          if (!u) {
+            console.warn('[BILLING] checkout.session.completed for unknown user_id:', userId);
+            break;
+          }
+          if (session.customer_email && u.email && session.customer_email.toLowerCase() !== u.email.toLowerCase()) {
+            console.warn('[BILLING] customer_email mismatch — refusing upsert', {
+              userId, sessionEmail: session.customer_email, userEmail: u.email,
+            });
+            break;
+          }
           await supabase.from('subscriptions').upsert({
             user_id: userId,
             stripe_customer_id: session.customer,
@@ -49,11 +102,11 @@ router.handleWebhook = async (req, res) => {
       }
       case 'customer.subscription.updated': {
         const subscription = event.data.object;
+        const periodEnd = periodEndIso(subscription);
+        const update = { status: subscription.status };
+        if (periodEnd) update.current_period_end = periodEnd;
         await supabase.from('subscriptions')
-          .update({
-            status: subscription.status,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
-          })
+          .update(update)
           .eq('stripe_subscription_id', subscription.id);
         break;
       }

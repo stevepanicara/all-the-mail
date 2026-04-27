@@ -4,6 +4,7 @@ import supabase from '../lib/supabase.js';
 import { oauth2Client, ALL_SCOPES, getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { issueOAuthState } from '../lib/security.js';
+import { enforceAccountLimit } from '../middleware/plan.js';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/connect', authenticateToken, (req, res) => {
+router.get('/connect', authenticateToken, enforceAccountLimit, (req, res) => {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ALL_SCOPES,
