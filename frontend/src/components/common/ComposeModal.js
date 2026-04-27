@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Minus, Maximize2, Paperclip, Clock, Image as ImageIcon } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import RecipientAutocomplete from './RecipientAutocomplete';
 
 // Match bare URLs in body. Matches http(s)://..., www...., and common TLDs.
 // P2 — /u flag + \p{C} (control/format) exclusion. Without them, Unicode
@@ -26,6 +27,7 @@ const ComposeModal = ({
   composeShowCcBcc, setComposeShowCcBcc,
   composeAttachments, handleFileSelect, removeAttachment,
   connectedAccounts,
+  contacts = [],
   closeCompose, sendCompose,
   scheduleSend,
   saveDraft,
@@ -193,11 +195,12 @@ const ComposeModal = ({
           <div className="docked-field-row">
             <span className="docked-field-label">To</span>
             <div style={{ flex: 1 }}>
-              <input
+              <RecipientAutocomplete
                 className="docked-field-input"
                 value={composeTo}
-                onChange={e => { setComposeTo(e.target.value); if (toError) validateTo(e.target.value); }}
+                onChange={(v) => { setComposeTo(v); if (toError) validateTo(v); }}
                 onBlur={() => validateTo(composeTo)}
+                contacts={contacts}
                 placeholder="Recipients"
               />
               {toError && <span style={{ color: 'var(--danger)', fontSize: '11px' }}>Check email addresses</span>}
@@ -212,11 +215,23 @@ const ComposeModal = ({
             <>
               <div className="docked-field-row">
                 <span className="docked-field-label">Cc</span>
-                <input className="docked-field-input" value={composeCc} onChange={e => setComposeCc(e.target.value)} placeholder="Cc" />
+                <RecipientAutocomplete
+                  className="docked-field-input"
+                  value={composeCc}
+                  onChange={setComposeCc}
+                  contacts={contacts}
+                  placeholder="Cc"
+                />
               </div>
               <div className="docked-field-row">
                 <span className="docked-field-label">Bcc</span>
-                <input className="docked-field-input" value={composeBcc} onChange={e => setComposeBcc(e.target.value)} placeholder="Bcc" />
+                <RecipientAutocomplete
+                  className="docked-field-input"
+                  value={composeBcc}
+                  onChange={setComposeBcc}
+                  contacts={contacts}
+                  placeholder="Bcc"
+                />
               </div>
             </>
           )}
