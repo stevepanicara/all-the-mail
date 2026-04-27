@@ -429,8 +429,28 @@ router.get('/status', authenticateToken, async (req, res) => {
   }
 });
 
+// Allowlist of attribution metadata keys we accept from the client. Anything
+// else gets dropped — prevents a malicious user from stuffing arbitrary
+// metadata onto their own Stripe subscription. Stripe enforces 50 keys × 40
+// chars × 500 chars per value; ours are well within those limits.
+const ATTRIBUTION_KEYS = [
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'referrer', 'landing_path', 'first_seen_at',
+];
+function sanitizeAttribution(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const out = {};
+  for (const k of ATTRIBUTION_KEYS) {
+    if (raw[k] != null) {
+      const s = String(raw[k]).slice(0, 500);
+      if (s) out[k] = s;
+    }
+  }
+  return out;
+}
+
 router.post('/checkout', authenticateToken, async (req, res) => {
-  const { interval = 'monthly' } = req.body || {};
+  const { interval = 'monthly', attribution: rawAttribution } = req.body || {};
   const priceId = interval === 'annual'
     ? (STRIPE_PRICE_ID_PRO_ANNUAL || STRIPE_PRICE_ID_PRO)
     : (STRIPE_PRICE_ID_PRO_MONTHLY || STRIPE_PRICE_ID_PRO);
@@ -451,6 +471,15 @@ router.post('/checkout', authenticateToken, async (req, res) => {
 
     const customerId = await getOrCreateCustomer(req.userId);
 
+    // Marketing attribution — first-touch UTMs/referrer captured by the
+    // marketing site cookie and forwarded by the React app. Sanitized
+    // through an allowlist so the client can't stuff arbitrary metadata.
+    // Attached to BOTH the Session and the Subscription: Session so the
+    // checkout.session.completed handler sees it; Subscription so it's
+    // visible in the Stripe Dashboard for the entire lifecycle (and
+    // searchable via metadata['utm_source']:'google' etc.).
+    const attribution = sanitizeAttribution(rawAttribution);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
@@ -461,8 +490,8 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       //   session.metadata is read by checkout.session.completed
       //   subscription_data.metadata propagates to the Subscription so
       //   subsequent customer.subscription.* events carry user_id too.
-      metadata: { user_id: req.userId },
-      subscription_data: { metadata: { user_id: req.userId } },
+      metadata: { user_id: req.userId, ...attribution },
+      subscription_data: { metadata: { user_id: req.userId, ...attribution } },
       payment_method_collection: 'always',
     });
 

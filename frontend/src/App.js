@@ -13,6 +13,7 @@ import {
   getDocEditUrl, getDocIcon, getDocEditorLabel, getRelativeTime, formatTime,
   parseEventStart,
 } from './utils/helpers';
+import { attributionPayload } from './utils/attribution';
 
 import EventEditModal from './components/common/EventEditModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -434,7 +435,11 @@ const AllTheMail = () => {
   const handleUpgrade = useCallback(async (interval = 'monthly') => {
     setBillingLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval }) });
+      // Forward first-touch UTM/referrer data captured by the marketing
+      // site cookie so the resulting Stripe subscription carries it in
+      // metadata. attributionPayload() returns {} when no cookie is set,
+      // so this is safe even for users who came in via direct/organic.
+      const r = await fetch(`${API_BASE}/billing/checkout`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval, ...attributionPayload() }) });
       if (r.ok) { const d = await r.json(); if (d.url) safeStripeRedirect(d.url); }
       else if (r.status === 409) {
         // Backend refused because the user is already subscribed — open the
