@@ -1702,6 +1702,22 @@ const AllTheMail = () => {
                       origin via dangerouslySetInnerHTML. Removed entirely. */}
                   {!docPreviewLoading && docPreview?.type === 'thumbnail' && (<div className="doc-preview-content"><img src={docPreview.url} alt={docPreview.name || slideOverDoc.title} style={{ maxWidth: '100%', borderRadius: '6px' }} /></div>)}
                   {!docPreviewLoading && docPreview?.type === 'none' && (<p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>Preview not available for this file type</p>)}
+                  {/* Defensive fallback: if the backend returned a shape we
+                      don't recognize (network error, future schema change,
+                      or docPreview is null after fetch), show a brief
+                      explanation and let the user click through to Drive
+                      directly. Without this, the panel renders empty and
+                      looks broken. */}
+                  {!docPreviewLoading && docPreview && !['embed', 'thumbnail', 'none'].includes(docPreview.type) && (
+                    <p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>
+                      Preview unavailable. Use the &quot;Edit in {editorLabel}&quot; button above to view this file.
+                    </p>
+                  )}
+                  {!docPreviewLoading && !docPreview && (
+                    <p style={{ color: 'var(--text-3)', fontSize: '13px', margin: '0 0 20px' }}>
+                      Couldn&apos;t load preview. Use the &quot;Edit in {editorLabel}&quot; button above to view this file.
+                    </p>
+                  )}
                   <div style={{ height: '1px', background: 'var(--line-0)', margin: '24px 0' }} />
                   <div style={{ background: 'var(--bg-3)', borderRadius: '8px', padding: '20px', border: '1px solid var(--line-0)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
