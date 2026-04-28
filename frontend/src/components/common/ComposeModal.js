@@ -131,15 +131,56 @@ const ComposeModal = ({
     } catch (_) {}
   }, [setComposeBody]);
 
+  // Email shape check. Accepts:
+  //   user@domain.tld
+  //   "Display Name" <user@domain.tld>
+  //   Display Name <user@domain.tld>
+  // Rejects: empty, missing @, missing TLD, trailing @ ("foo@"), bare
+  // domain ("allthemail.io"). The actual deliverability check still
+  // happens server-side at Gmail; this is a pre-flight to catch the
+  // common typo cases before a 400 Invalid To round-trip.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function extractAngleEmail(token) {
+    const m = String(token || '').match(/<([^>]+)>/);
+    return m ? m[1].trim() : String(token || '').trim();
+  }
+  function tokenIsValidAddress(tok) {
+    return EMAIL_RE.test(extractAngleEmail(tok));
+  }
+  function findInvalidAddresses(val) {
+    return (val || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .filter(t => !tokenIsValidAddress(t));
+  }
   const validateTo = useCallback((val) => {
     const addresses = (val || '').split(',').map(s => s.trim()).filter(Boolean);
     if (addresses.length === 0) { setToError(false); return; }
-    setToError(addresses.some(a => !a.includes('@') || a.endsWith('@')));
+    setToError(addresses.some(t => !tokenIsValidAddress(t)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!composeOpen) return null;
 
   const handleSendClick = () => {
+    // Pre-flight validation — block obviously-bad recipients before
+    // we hit the backend. Gmail will return 400 "Invalid To header" for
+    // anything malformed, but the round-trip is wasteful and the error
+    // surfaces as a generic "Failed to send" toast. Catching here lets
+    // us point at the specific address.
+    const invalidTo = findInvalidAddresses(composeTo);
+    const invalidCc = findInvalidAddresses(composeCc);
+    const invalidBcc = findInvalidAddresses(composeBcc);
+    const allInvalid = [...invalidTo, ...invalidCc, ...invalidBcc];
+    if (!composeTo.trim()) {
+      setToError(true);
+      return;
+    }
+    if (allInvalid.length > 0) {
+      setToError(true);
+      return;
+    }
     if (!composeSubject.trim()) {
       setConfirmingEmptySubject(true);
       return;
