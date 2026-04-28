@@ -488,6 +488,17 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       });
     }
 
+    // Trial eligibility — one trial per user, ever. We track this on the
+    // user record. The first time someone hits checkout we mark
+    // trial_consumed=true. Future checkout calls for the same user skip
+    // trial_period_days entirely (full immediate charge).
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('trial_consumed, email')
+      .eq('id', req.userId)
+      .single();
+    const trialEligible = !userRow?.trial_consumed;
+
     const customerId = await getOrCreateCustomer(req.userId);
 
     // Marketing attribution — first-touch UTMs/referrer captured by the
@@ -507,6 +518,21 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       metaCommon.plan_interval = interval;
     }
 
+    // Build subscription_data: metadata propagates to the Subscription
+    // object so customer.subscription.* webhooks carry attribution +
+    // user_id. When the user is trial-eligible, layer the 7-day trial
+    // and the cancel-on-missing-PM end_behavior on top.
+    const subscriptionData = { metadata: metaCommon };
+    if (trialEligible) {
+      subscriptionData.trial_period_days = 7;
+      // If the trial ends without a successful charge (card declined,
+      // removed PM), Stripe should cancel the subscription rather than
+      // send the user to past_due forever. Keeps the lockout clean.
+      subscriptionData.trial_settings = {
+        end_behavior: { missing_payment_method: 'cancel' },
+      };
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
@@ -517,8 +543,8 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       //   session.metadata is read by checkout.session.completed
       //   subscription_data.metadata propagates to the Subscription so
       //   subsequent customer.subscription.* events carry user_id too.
-      metadata: metaCommon,
-      subscription_data: { metadata: metaCommon },
+      metadata: { ...metaCommon, trial_eligible: String(trialEligible) },
+      subscription_data: subscriptionData,
       // DO NOT set payment_method_types — when omitted on a subscription-
       // mode Checkout Session, Stripe surfaces every method enabled in the
       // dashboard (card, Apple Pay, Google Pay, Link, etc.). Hard-coding
@@ -527,6 +553,17 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       // valid CheckoutSession parameter.
       payment_method_collection: 'always',
     });
+
+    // Mark trial as consumed at session creation, not at completion. If we
+    // waited for completion, a user could open a checkout, abandon it, and
+    // open another — getting unlimited trial periods. Marking on session
+    // creation closes that loop.
+    if (trialEligible) {
+      await supabase
+        .from('users')
+        .update({ trial_consumed: true })
+        .eq('id', req.userId);
+    }
 
     res.json({ url: session.url });
   } catch (err) {

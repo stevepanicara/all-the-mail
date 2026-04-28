@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { requireCsrfHeader } from './middleware/csrf.js';
+import { authenticateToken } from './middleware/auth.js';
+import { requireActiveAccess } from './middleware/plan.js';
 
 // Route modules
 import authRoutes from './routes/auth.js';
@@ -106,15 +108,26 @@ app.use('/auth', authLimiter);
 // state-changing call.
 app.use(requireCsrfHeader);
 
-// Mount routes
+// Mount routes.
+//
+// Auth + billing are NOT gated — billing/status and billing/checkout must be
+// reachable by users without an active subscription so they can subscribe.
+// Auth is the entry point for everyone. Everything else (feature routes)
+// runs through requireActiveAccess: only admins, Pro subscribers, and users
+// in trial/grace can hit them. Unsubscribed users get a structured 403 that
+// the frontend converts into a hard-lockout paywall.
+//
+// authenticateToken is mounted here at the route group level so it runs
+// before requireActiveAccess (which needs req.userId). The per-handler
+// authenticateToken inside each route file is now redundant but harmless.
 app.use('/auth', authRoutes);
-app.use('/accounts', accountRoutes);
-app.use('/emails', emailRoutes);
-app.use('/docs', docsRoutes);
-app.use('/cals', calendarRoutes);
 app.use('/billing', billingRoutes);
-app.use('/snoozed', snoozedRoutes);
-app.use('/scheduled-sends', scheduledSendsRoutes);
+app.use('/accounts', authenticateToken, requireActiveAccess, accountRoutes);
+app.use('/emails', authenticateToken, requireActiveAccess, emailRoutes);
+app.use('/docs', authenticateToken, requireActiveAccess, docsRoutes);
+app.use('/cals', authenticateToken, requireActiveAccess, calendarRoutes);
+app.use('/snoozed', authenticateToken, requireActiveAccess, snoozedRoutes);
+app.use('/scheduled-sends', authenticateToken, requireActiveAccess, scheduledSendsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

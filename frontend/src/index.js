@@ -13,9 +13,13 @@ import Terms from './Terms';
 // requests that lack this header. A cross-site <form>/<img>/<a>/etc. cannot
 // set custom request headers, and a same-site fetch from a third-party page
 // would trigger a CORS preflight which our tightened allowlist now rejects.
+//
+// Trial-gating bridge: when the backend returns 403 { error:'access_required' }
+// from any endpoint, dispatch a custom event so App.js can pop the blocking
+// onboarding paywall regardless of which network call surfaced the gate.
 const _origFetch = window.fetch.bind(window);
 const _SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-window.fetch = function patchedFetch(input, init = {}) {
+window.fetch = async function patchedFetch(input, init = {}) {
   const method = (init.method || (typeof input !== 'string' && input.method) || 'GET').toUpperCase();
   const credentials = init.credentials || (typeof input !== 'string' && input.credentials);
   if (!_SAFE_METHODS.has(method) && credentials === 'include') {
@@ -23,7 +27,16 @@ window.fetch = function patchedFetch(input, init = {}) {
     if (!headers.has('X-Requested-By')) headers.set('X-Requested-By', 'allthemail');
     init = { ...init, headers };
   }
-  return _origFetch(input, init);
+  const response = await _origFetch(input, init);
+  if (response.status === 403) {
+    try {
+      const peek = await response.clone().json();
+      if (peek?.error === 'access_required') {
+        window.dispatchEvent(new CustomEvent('atm-access-required', { detail: peek }));
+      }
+    } catch { /* response wasn't JSON; ignore */ }
+  }
+  return response;
 };
 
 // Suppress benign ResizeObserver loop errors from react-resizable-panels
