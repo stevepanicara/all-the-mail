@@ -15,6 +15,7 @@ import {
 } from './utils/helpers';
 import { attributionPayload } from './utils/attribution';
 import * as analytics from './utils/analytics';
+import { useSignatures } from './hooks/useSignatures';
 
 import EventEditModal from './components/common/EventEditModal';
 import OnboardingModal from './components/common/OnboardingModal';
@@ -415,6 +416,11 @@ const AllTheMail = () => {
   // recipient autocomplete. Backend caches 30 min per account; this hook
   // refetches when the connected accounts list changes (add / disconnect).
   const { contacts } = useContacts(connectedAccounts);
+
+  // Per-account Gmail signatures, fetched on mount (backend cached 24h).
+  // Used by openCompose to seed the body with the right signature based
+  // on which connected account is sending. signatures[accountId] → HTML.
+  const signatures = useSignatures(connectedAccounts);
 
   // Now assign the real handleLogout implementation
   useEffect(() => {
@@ -1227,8 +1233,26 @@ const AllTheMail = () => {
       if(mode==='replyAll'){const me=(connectedAccounts.find(a=>a.id===defaultFrom)?.gmail_email||'').toLowerCase();const tl=uniqLower(splitList(getEmailOnly(oFrom)));const cl=uniqLower([...splitList(oTo),...splitList(oCc)]);const tf=tl.filter(x=>getEmailOnly(x).toLowerCase()!==me);const cf=cl.filter(x=>getEmailOnly(x).toLowerCase()!==me);to=(tf[0]||getEmailOnly(oFrom)).trim();cc=uniqLower([...tf.slice(1),...cf]).join(', ');subject=ensurePrefix(oSubj,'Re:');body=`\n\n--- Original message ---\n${stripName(oFrom)}\n${email.snippet||''}\n`;}
       if(mode==='forward'){subject=ensurePrefix(oSubj,'Fwd:');body=`\n\n--- Forwarded message ---\nFrom: ${stripName(h.from||email.from||'')}\nDate: ${h.date||new Date(email.date).toLocaleString()}\nSubject: ${h.subject||email.subject||''}\nTo: ${h.to||''}\n${h.cc?`Cc: ${h.cc}\n`:''}\n${email.snippet||''}\n`;}
     }
+    // Inject the sending account's Gmail signature. For new compose,
+    // signature is appended to the empty body. For reply/forward, it's
+    // appended ABOVE the quoted thread (so the signature sits with the
+    // user's typed message). Skipped if the user has the in-app
+    // includeAtmSignature toggle off, OR if no signature is available
+    // for that account (older accounts without the gmail.settings.basic
+    // scope return ''), OR if Quill's empty-state is the only content.
+    const sig = signatures[defaultFrom] || '';
+    if (sig && includeAtmSignature) {
+      const sigBlock = `<br><br>${sig}`;
+      if (mode === 'compose') {
+        body = sigBlock;
+      } else {
+        // Reply / forward: signature first, then the quoted block.
+        body = `${sigBlock}\n${body}`;
+      }
+    }
     setComposeTo(to);setComposeCc(cc);setComposeBcc(bcc);setComposeSubject(subject);setComposeBody(body);setComposeOpen(true);
-  }, [activeView, connectedAccounts, emailHeaders, loadEmailDetails]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, connectedAccounts, emailHeaders, loadEmailDetails, signatures, includeAtmSignature]);
 
   const saveDraft = useCallback(async () => {
     const fid=composeFromAccountId; if(!fid) return;

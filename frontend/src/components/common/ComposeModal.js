@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Minus, Maximize2, Paperclip, Clock, Image as ImageIcon } from 'lucide-react';
+import { X, Minus, Maximize2, Paperclip, Clock, Image as ImageIcon, MoreHorizontal } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import RecipientAutocomplete from './RecipientAutocomplete';
@@ -67,6 +67,20 @@ const ComposeModal = ({
 }) => {
   const [panelState, setPanelState] = useState('full'); // 'full' | 'minimized'
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
+  // Three-dot ⋯ overflow menu in the footer. Collapses what was a row of
+  // utility buttons (image / attach / schedule) into a single click target,
+  // so the footer reads as one clean line — Send + status on the left,
+  // ⋯ on the right. Matches the Gmail compose pattern.
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const onDown = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [moreMenuOpen]);
   const [confirmingEmptySubject, setConfirmingEmptySubject] = useState(false);
   const [toError, setToError] = useState(false);
   const fileInputRef = useRef(null);
@@ -187,6 +201,15 @@ const ComposeModal = ({
     : 'Forward';
 
   const isMinimized = panelState === 'minimized';
+
+  const menuItemStyle = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    width: '100%', padding: '8px 10px',
+    background: 'transparent', border: 'none',
+    fontSize: 13, color: 'var(--text-0)',
+    textAlign: 'left', cursor: 'pointer',
+    borderRadius: 4, fontFamily: 'inherit',
+  };
 
   return (
     <div className="docked-compose" data-state={panelState}>
@@ -352,50 +375,63 @@ const ComposeModal = ({
                   not have it competing with the Send button. */}
               <DraftStatus state={draftSavingState} lastSavedAt={draftLastSavedAt} />
             </div>
-            <div className="docked-footer-right">
+            <div className="docked-footer-right" ref={moreMenuRef} style={{ position: 'relative' }}>
               <input type="file" multiple onChange={handleFileSelect} ref={fileInputRef} style={{ display: 'none' }} />
               <input type="file" accept="image/*" onChange={handleImageFileChosen} ref={imageInputRef} style={{ display: 'none' }} />
               <button
                 className="docked-toolbar-btn"
-                onClick={handleImageButtonClick}
-                title="Insert image inline"
-                aria-label="Insert image inline"
+                onClick={() => setMoreMenuOpen(o => !o)}
+                title="More options"
+                aria-label="More options"
+                aria-haspopup="menu"
+                aria-expanded={moreMenuOpen}
                 type="button"
               >
-                <ImageIcon size={15} strokeWidth={1.5} />
+                <MoreHorizontal size={16} strokeWidth={1.5} />
               </button>
-              <button
-                className="docked-toolbar-btn"
-                onClick={() => fileInputRef.current?.click()}
-                title="Attach files"
-                aria-label="Attach files"
-                type="button"
-              >
-                <Paperclip size={15} strokeWidth={1.5} />
-              </button>
-              <div className="docked-schedule-wrap">
-                <button
-                  className="docked-toolbar-btn docked-schedule-btn"
-                  onClick={() => setSendLaterOpen(o => !o)}
-                  disabled={composeSending}
-                  title="Schedule send"
-                  aria-label="Schedule send"
-                  aria-expanded={sendLaterOpen}
-                  type="button"
-                >
-                  <Clock size={15} strokeWidth={1.5} />
-                </button>
-                {sendLaterOpen && (
-                  <div className="docked-send-later-popup">
-                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 6 }}>Schedule send</div>
-                    <input type="datetime-local"
-                      style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)' }}
-                      min={new Date().toISOString().slice(0, 16)}
-                      onChange={e => { if (e.target.value && scheduleSend) { scheduleSend(new Date(e.target.value)); setSendLaterOpen(false); } }}
-                    />
-                  </div>
-                )}
-              </div>
+              {moreMenuOpen && (
+                <div role="menu" style={{
+                  position: 'absolute', bottom: 'calc(100% + 6px)', right: 0,
+                  background: 'var(--bg-0)', border: '1px solid var(--line-0)',
+                  borderRadius: 'var(--r-xs, 6px)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,.18)',
+                  minWidth: 200, padding: 4, zIndex: 'var(--z-dropdown, 100)',
+                }}>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setMoreMenuOpen(false); handleImageButtonClick(); }}
+                    style={menuItemStyle}
+                  >
+                    <ImageIcon size={14} strokeWidth={1.5} /> Insert image
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setMoreMenuOpen(false); fileInputRef.current?.click(); }}
+                    style={menuItemStyle}
+                  >
+                    <Paperclip size={14} strokeWidth={1.5} /> Attach files
+                  </button>
+                  <button
+                    role="menuitem"
+                    disabled={composeSending}
+                    onClick={() => { setMoreMenuOpen(false); setSendLaterOpen(true); }}
+                    style={{ ...menuItemStyle, opacity: composeSending ? 0.5 : 1 }}
+                  >
+                    <Clock size={14} strokeWidth={1.5} /> Schedule send…
+                  </button>
+                </div>
+              )}
+              {sendLaterOpen && (
+                <div className="docked-send-later-popup" style={{ position: 'absolute', bottom: 'calc(100% + 6px)', right: 0, background: 'var(--bg-0)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs, 6px)', padding: 10, minWidth: 240, boxShadow: '0 8px 24px rgba(0,0,0,.18)', zIndex: 'var(--z-dropdown, 100)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 6 }}>Schedule send</div>
+                  <input type="datetime-local"
+                    style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', background: 'var(--bg-0)', color: 'var(--text-0)', border: '1px solid var(--line-0)', borderRadius: 'var(--r-xs)' }}
+                    min={new Date().toISOString().slice(0, 16)}
+                    onChange={e => { if (e.target.value && scheduleSend) { scheduleSend(new Date(e.target.value)); setSendLaterOpen(false); } }}
+                  />
+                  <button onClick={() => setSendLaterOpen(false)} style={{ marginTop: 6, fontSize: 11, background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>Cancel</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
