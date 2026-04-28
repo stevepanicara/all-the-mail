@@ -18,6 +18,7 @@ import * as analytics from './utils/analytics';
 
 import EventEditModal from './components/common/EventEditModal';
 import OnboardingModal from './components/common/OnboardingModal';
+import { useContacts } from './hooks/useContacts';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Avatar from './components/Avatar';
 import AccountMenu from './components/common/AccountMenu';
@@ -399,6 +400,11 @@ const AllTheMail = () => {
     setShowMetadata,
     setReaderCompact,
   });
+
+  // Aggregate contacts across every connected account for the compose
+  // recipient autocomplete. Backend caches 30 min per account; this hook
+  // refetches when the connected accounts list changes (add / disconnect).
+  const { contacts } = useContacts(connectedAccounts);
 
   // Now assign the real handleLogout implementation
   useEffect(() => {
@@ -1647,6 +1653,7 @@ const AllTheMail = () => {
           composeShowCcBcc={composeShowCcBcc} setComposeShowCcBcc={setComposeShowCcBcc}
           composeAttachments={composeAttachments} handleFileSelect={handleFileSelect} removeAttachment={removeAttachment}
           connectedAccounts={connectedAccounts}
+          contacts={contacts}
           closeCompose={closeCompose} sendCompose={sendComposeWithDelay}
           scheduleSend={scheduleSend}
           saveDraft={saveDraft}
