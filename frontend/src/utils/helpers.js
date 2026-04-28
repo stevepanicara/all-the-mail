@@ -193,11 +193,32 @@ export function getShortLabel(account, allAccounts = []) {
   return prefix.length > 14 ? prefix.slice(0, 13) + '\u2026' : prefix;
 }
 
-export function getDocEditUrl(doc) {
-  if (doc.webViewLink) return doc.webViewLink;
-  const ft = FILE_TYPES[doc.mimeType];
-  if (ft?.editor) return `https://docs.google.com/${ft.editor}/d/${doc.id}/edit`;
-  return null;
+// Build the URL the user clicks through to view/edit a Google Doc.
+//
+// Multi-account note: by default Google opens the document in whichever
+// Google account the browser session shows as "default" — typically the
+// FIRST one the user signed into Chrome with. For a doc owned by a
+// non-default account, that means a "you don't have access" page and
+// the user has to manually account-switch.
+//
+// Fix: append ?authuser=<email>. Google accepts the email form (not just
+// numeric index) and switches the session to that account before loading
+// the doc. Pass the email of the connected Gmail account this doc belongs
+// to. If accountEmail is omitted (legacy callers), URL is unchanged and
+// behavior is the old default-account behavior.
+export function getDocEditUrl(doc, accountEmail) {
+  let base;
+  if (doc.webViewLink) {
+    base = doc.webViewLink;
+  } else {
+    const ft = FILE_TYPES[doc.mimeType];
+    if (!ft?.editor) return null;
+    base = `https://docs.google.com/${ft.editor}/d/${doc.id}/edit`;
+  }
+  if (!accountEmail) return base;
+  // Append or insert authuser param without trampling existing query.
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}authuser=${encodeURIComponent(accountEmail)}`;
 }
 
 export function getDocIcon(mimeType) {

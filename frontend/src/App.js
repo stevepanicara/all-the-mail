@@ -18,6 +18,7 @@ import * as analytics from './utils/analytics';
 
 import EventEditModal from './components/common/EventEditModal';
 import OnboardingModal from './components/common/OnboardingModal';
+import ScheduledSendsModal from './components/common/ScheduledSendsModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Avatar from './components/Avatar';
 import AccountMenu from './components/common/AccountMenu';
@@ -118,6 +119,9 @@ const AllTheMail = () => {
   const [composeError, setComposeError] = useState(null);
   const [composeAttachments, setComposeAttachments] = useState([]);
   const [composeDraftId, setComposeDraftId] = useState(null);
+  // Scheduled-sends list view — opens from the "X scheduled" pill in
+  // the top bar so users can see what's queued and cancel any of them.
+  const [scheduledListOpen, setScheduledListOpen] = useState(false);
   const [includeAtmSignature, setIncludeAtmSignature] = useState(() => localStorage.getItem('atm_signature') !== 'false');
 
   // Scheduled sends state
@@ -1380,10 +1384,14 @@ const AllTheMail = () => {
         </div>
         <div className="top-bar-controls">
           {scheduledSends.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginRight: '8px', padding: '3px 10px', background: 'var(--bg-1)', border: '1px solid var(--line-0)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
+            <button
+              onClick={() => setScheduledListOpen(true)}
+              title="View scheduled emails"
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', marginRight: '8px', padding: '3px 10px', background: 'var(--bg-1)', border: '1px solid var(--line-0)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-2)', whiteSpace: 'nowrap', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
               <Send size={12} strokeWidth={1.5} />
               {scheduledSends.length} scheduled
-            </div>
+            </button>
           )}
           {activeModule === 'mail' && lastSyncTime && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
@@ -1654,7 +1662,11 @@ const AllTheMail = () => {
             })()}
             {slideOverDoc && (() => {
               const DocPreviewIcon = getDocIcon(slideOverDoc.mimeType);
-              const editUrl = getDocEditUrl(slideOverDoc);
+              // Pass the doc's owning-account email to getDocEditUrl so
+              // ?authuser= switches Google's session to the right account
+              // — without it, multi-account users land on "no access."
+              const ownerAccount = connectedAccounts.find(a => a.id === slideOverDoc.accountId);
+              const editUrl = getDocEditUrl(slideOverDoc, ownerAccount?.gmail_email);
               const editorLabel = getDocEditorLabel(slideOverDoc.mimeType);
               const fileType = FILE_TYPES[slideOverDoc.mimeType];
               const accountIndex = connectedAccounts.findIndex(a => a.id === slideOverDoc.accountId);
@@ -1770,6 +1782,27 @@ const AllTheMail = () => {
           }}
         />
       )}
+
+      {/* Scheduled-sends list view — opened from the "X scheduled" pill in
+          the top bar. Cancel removes from local state + Supabase. */}
+      <ScheduledSendsModal
+        open={scheduledListOpen}
+        onClose={() => setScheduledListOpen(false)}
+        scheduledSends={scheduledSends}
+        connectedAccounts={connectedAccounts}
+        onCancelSend={(item) => {
+          // Remove locally for immediate feedback
+          setScheduledSends(prev => prev.filter(s => s.id !== item.id));
+          // Best-effort delete from Supabase. Items without an id are
+          // localStorage-only (older entries) — nothing to delete server-side.
+          if (item.id) {
+            fetch(`${API_BASE}/scheduled-sends/${item.id}`, {
+              method: 'DELETE',
+              credentials: 'include',
+            }).catch(() => {});
+          }
+        }}
+      />
 
       {/* Command Palette (Cmd+K) */}
       {paletteOpen && (() => {
