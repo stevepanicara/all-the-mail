@@ -118,6 +118,12 @@ const AllTheMail = () => {
   const [composeError, setComposeError] = useState(null);
   const [composeAttachments, setComposeAttachments] = useState([]);
   const [composeDraftId, setComposeDraftId] = useState(null);
+  // Auto-save indicator state for the compose footer.
+  //   draftSavingState — 'idle' | 'saving' | 'saved'
+  //   draftLastSavedAt — Date.now() of last successful save, used to
+  //                      render "Saved 12s ago"-style relative timestamps
+  const [draftSavingState, setDraftSavingState] = useState('idle');
+  const [draftLastSavedAt, setDraftLastSavedAt] = useState(null);
   const [includeAtmSignature, setIncludeAtmSignature] = useState(() => localStorage.getItem('atm_signature') !== 'false');
 
   // Scheduled sends state
@@ -976,12 +982,42 @@ const AllTheMail = () => {
     return () => document.removeEventListener('keydown', handleKey);
   }, [slideOverEmail, slideOverDoc, slideOverIndex, evFilteredEmails, evFilteredDocs, closeSlideOver, loadEmailDetails, loadDocPreview]);
 
+  // Auto-save the draft on changes. Two cadences:
+  //   - First save is fast (1.2 s after compose opens or after the first
+  //     keystroke) so the user sees "Saved" within ~1 turn-around — the
+  //     "creating a new message should immediately save to drafts" ask.
+  //   - Subsequent saves debounce to 1.5 s of typing-stop so we don't
+  //     thrash the backend on every keystroke during a long compose.
+  // composeDraftId is the indicator that we've saved at least once;
+  // when null → use fast first-save delay; when set → use steady debounce.
   useEffect(() => {
-    if(!composeOpen) return;
-    if(draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
-    draftSaveTimeoutRef.current=setTimeout(()=>{if(saveDraftRef.current)saveDraftRef.current();},3000);
-    return ()=>{if(draftSaveTimeoutRef.current)clearTimeout(draftSaveTimeoutRef.current);};
+    if (!composeOpen) return;
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    const delay = composeDraftId ? 1500 : 1200;
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      if (saveDraftRef.current) {
+        setDraftSavingState('saving');
+        Promise.resolve(saveDraftRef.current())
+          .then(() => {
+            setDraftSavingState('saved');
+            setDraftLastSavedAt(Date.now());
+          })
+          .catch(() => setDraftSavingState('idle'));
+      }
+    }, delay);
+    return () => { if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composeOpen, composeTo, composeCc, composeBcc, composeSubject, composeBody]);
+
+  // Reset save-state indicators when compose closes/opens. Without this,
+  // a previous compose's "Saved 3 min ago" string could briefly flash on
+  // the next compose modal before the first auto-save fires.
+  useEffect(() => {
+    if (!composeOpen) {
+      setDraftSavingState('idle');
+      setDraftLastSavedAt(null);
+    }
+  }, [composeOpen]);
 
   // ==================== ACTIONS ====================
 
@@ -1591,6 +1627,8 @@ const AllTheMail = () => {
           closeCompose={closeCompose} sendCompose={sendComposeWithDelay}
           scheduleSend={scheduleSend}
           saveDraft={saveDraft}
+          draftSavingState={draftSavingState}
+          draftLastSavedAt={draftLastSavedAt}
           includeSignature={includeAtmSignature} setIncludeSignature={setIncludeAtmSignature}
         />
       </React.Suspense>

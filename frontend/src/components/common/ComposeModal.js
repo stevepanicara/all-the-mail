@@ -10,6 +10,36 @@ import 'react-quill/dist/quill.snow.css';
 // be auto-linked to evil.com while visually reading as good.com.
 const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"'\p{C}]+[^\s<>"'\p{C}.,;:!?()])/giu;
 
+// Compact draft-save indicator. Re-renders every 15 s (via a local
+// counter) so the "Saved Xs ago" timestamp stays accurate while the
+// user is in the middle of composing without retyping.
+function DraftStatus({ state, lastSavedAt }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!lastSavedAt) return;
+    const t = setInterval(() => setTick(x => x + 1), 15000);
+    return () => clearInterval(t);
+  }, [lastSavedAt]);
+
+  if (state === 'idle' && !lastSavedAt) return null;
+
+  let label;
+  if (state === 'saving') {
+    label = 'Saving…';
+  } else if (lastSavedAt) {
+    const ageS = Math.max(0, Math.round((Date.now() - lastSavedAt) / 1000));
+    if (ageS < 5) label = 'Saved';
+    else if (ageS < 60) label = `Saved ${ageS}s ago`;
+    else label = `Saved ${Math.round(ageS / 60)}m ago`;
+  } else return null;
+
+  return (
+    <span style={{ fontSize: 11, color: 'var(--text-3)', userSelect: 'none' }}>
+      {label}
+    </span>
+  );
+}
+
 /**
  * Docked compose panel — Phase 7.
  * Renders as a floating panel docked bottom-right (not a modal overlay).
@@ -26,6 +56,8 @@ const ComposeModal = ({
   composeShowCcBcc, setComposeShowCcBcc,
   composeAttachments, handleFileSelect, removeAttachment,
   connectedAccounts,
+  draftSavingState = 'idle',
+  draftLastSavedAt = null,
   closeCompose, sendCompose,
   scheduleSend,
   saveDraft,
@@ -294,10 +326,16 @@ const ComposeModal = ({
 
           {/* Footer toolbar */}
           <div className="docked-compose-footer">
-            <div className="docked-footer-left">
+            <div className="docked-footer-left" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button className="btn btn-primary docked-send-btn" onClick={handleSendClick} disabled={composeSending}>
                 {composeSending ? 'Sending…' : 'Send'}
               </button>
+              {/* Auto-save status. "saving" only flashes briefly during
+                  the in-flight POST; "saved" persists with a relative
+                  timestamp until the next save. The label is intentionally
+                  small + low-contrast — users want to know it's working,
+                  not have it competing with the Send button. */}
+              <DraftStatus state={draftSavingState} lastSavedAt={draftLastSavedAt} />
             </div>
             <div className="docked-footer-right">
               <input type="file" multiple onChange={handleFileSelect} ref={fileInputRef} style={{ display: 'none' }} />
