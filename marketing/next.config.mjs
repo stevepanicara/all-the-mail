@@ -30,6 +30,18 @@ const nextConfig = {
   // Strict React mode catches effect double-firing in dev — same posture
   // as the CRA app at /frontend.
   reactStrictMode: true,
+
+    // Catch existing /app/* bookmarks on the apex after the marketing
+    // cutover and forward them to the app on its new subdomain.
+    async redirects() {
+          return [
+            {
+                      source: '/app/:path*',
+                      destination: 'https://app.allthemail.io/app/:path*',
+                      permanent: true,
+            },
+                ];
+    },
 };
 
 export default withMDX(nextConfig);
