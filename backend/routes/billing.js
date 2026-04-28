@@ -519,6 +519,12 @@ router.post('/checkout', authenticateToken, async (req, res) => {
       //   subsequent customer.subscription.* events carry user_id too.
       metadata: metaCommon,
       subscription_data: { metadata: metaCommon },
+      // DO NOT set payment_method_types — when omitted on a subscription-
+      // mode Checkout Session, Stripe surfaces every method enabled in the
+      // dashboard (card, Apple Pay, Google Pay, Link, etc.). Hard-coding
+      // payment_method_types: ['card'] silently disables wallets and Link.
+      // automatic_payment_methods is for PaymentIntents only — it is not a
+      // valid CheckoutSession parameter.
       payment_method_collection: 'always',
     });
 
