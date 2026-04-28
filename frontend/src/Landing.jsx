@@ -90,7 +90,7 @@ function Landing() {
             </div>
             <div className="atm-h1-cell">
               <div className="atm-h1-k">Price</div>
-              <div className="atm-h1-v">$7 / month. Unlimited accounts. 14-day trial, no card.</div>
+              <div className="atm-h1-v">$15 / month. Unlimited accounts. 14-day free trial.</div>
             </div>
           </div>
         </div>
@@ -262,50 +262,26 @@ function Landing() {
         <div className="atm-wrap">
           <div className="atm-pricing-head">
             <div>
-              <div className="atm-pricing-sup">Pricing &middot; Pre-launch &middot; R1</div>
-              <h2 className="atm-pricing-h">Seven dollars.</h2>
+              <div className="atm-pricing-sup">Pricing &middot; One plan</div>
+              <h2 className="atm-pricing-h">Fifteen dollars.</h2>
             </div>
-            <p className="atm-pricing-p">Every account. One window. Less than a sandwich.</p>
+            <p className="atm-pricing-p">Every account. One window. 14-day free trial, then $15 a month.</p>
           </div>
-          <div className="atm-prices">
-            <div className="atm-price">
-              <div className="atm-price-label"><span>Free</span></div>
-              <div className="atm-price-amount"><sup>$</sup>0</div>
-              <div className="atm-price-period">Forever</div>
-              <ul className="atm-price-list">
-                <li>1 connected account</li>
-                <li>Unified mail view</li>
-                <li>Encrypted OAuth</li>
-                <li>Mobile web</li>
-              </ul>
-              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Get started</button>
-            </div>
+          <div className="atm-prices atm-prices-single">
             <div className="atm-price atm-price-ft">
-              <div className="atm-price-label"><span>Pro</span><span className="atm-price-tag">R1 launch</span></div>
-              <div className="atm-price-amount"><sup>$</sup>7</div>
+              <div className="atm-price-label"><span>All The Mail</span></div>
+              <div className="atm-price-amount"><sup>$</sup>15</div>
               <div className="atm-price-period">/ month</div>
               <ul className="atm-price-list">
-                <li>Unlimited accounts</li>
+                <li>Unlimited Google accounts</li>
                 <li>Mail &middot; Docs &middot; Cals unified</li>
                 <li>Cross-account search</li>
                 <li>Source chips everywhere</li>
                 <li>Send-as / RSVP-as</li>
                 <li>Priority sync</li>
               </ul>
-              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Start 14-day trial</button>
-            </div>
-            <div className="atm-price">
-              <div className="atm-price-label"><span>Team</span></div>
-              <div className="atm-price-amount"><sup>$</sup>12</div>
-              <div className="atm-price-period">/ user / month</div>
-              <ul className="atm-price-list">
-                <li>Everything in Pro</li>
-                <li>SAML SSO</li>
-                <li>Centralized billing</li>
-                <li>Admin console</li>
-                <li>Priority support</li>
-              </ul>
-              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Contact sales</button>
+              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Start 14-day free trial</button>
+              <div className="atm-price-fine">Card required. Cancel anytime before the trial ends.</div>
             </div>
           </div>
         </div>

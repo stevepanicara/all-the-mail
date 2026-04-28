@@ -90,7 +90,7 @@ export function isProActive({ plan, status, isAdmin }) {
 //
 // state semantics:
 //   no_subscription — user has never started a trial; signup CTA shows
-//                     "Start 7-day free trial".
+//                     "Start 14-day free trial".
 //   expired         — user had a subscription that's now canceled or
 //                     unpaid past the grace window; CTA shows
 //                     "Subscribe to continue".
@@ -106,7 +106,7 @@ export async function requireActiveAccess(req, res, next) {
     if (isProActive(tier)) return next();
 
     // Decide which CTA to surface. If user has never had a trial, they're
-    // eligible for the 7-day trial. Otherwise (canceled, never converted)
+    // eligible for the 14-day trial. Otherwise (canceled, never converted)
     // they need to subscribe directly.
     let trialAvailable = false;
     try {

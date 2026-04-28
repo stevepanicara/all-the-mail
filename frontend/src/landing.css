@@ -636,6 +636,20 @@
 }
 .atm-price button:disabled { opacity: 0.55; cursor: default; }
 
+.atm-prices-single {
+  grid-template-columns: 1fr;
+  max-width: 460px;
+  margin: 0 auto;
+}
+.atm-prices-single .atm-price { border-right: none; }
+.atm-price-fine {
+  font: 400 12px/1.4 var(--font-ui);
+  color: var(--paper-3);
+  margin-top: 12px;
+  text-align: center;
+  opacity: 0.75;
+}
+
 @media (max-width: 900px) {
   .atm-prices { grid-template-columns: 1fr; }
   .atm-price { border-right: none; border-bottom: 1px solid var(--ink-1); }

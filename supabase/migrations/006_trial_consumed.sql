@@ -1,6 +1,6 @@
 -- Migration 006: trial_consumed flag on users
 --
--- Tracks whether a user has ever started a 7-day trial. Stripe enforces the
+-- Tracks whether a user has ever started a 14-day trial. Stripe enforces the
 -- trial period itself (subscription_data.trial_period_days), but the trial
 -- count enforcement lives here so the same user can't open a checkout, abandon
 -- it, and open another to get unlimited trial periods.
