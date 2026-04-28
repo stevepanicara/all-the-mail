@@ -79,7 +79,10 @@ const DocsModule = ({
         <div style={{ height: '100%', background: 'var(--surface-detail)', overflow: 'auto' }}>
           {selectedDoc ? (() => {
             const DetailIcon = getDocIcon(selectedDoc.mimeType);
-            const editUrl = getDocEditUrl(selectedDoc);
+            // Pass owning-account email so ?authuser= switches Google to
+            // the right account when multi-account users open the doc.
+            const ownerAccount = connectedAccounts.find(a => a.id === selectedDoc.accountId);
+            const editUrl = getDocEditUrl(selectedDoc, ownerAccount?.gmail_email);
             const editorLabel = getDocEditorLabel(selectedDoc.mimeType);
             const fileType = FILE_TYPES[selectedDoc.mimeType];
             return (
