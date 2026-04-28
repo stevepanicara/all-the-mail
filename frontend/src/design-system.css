@@ -2828,7 +2828,12 @@ select:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Embedded Drive iframe preview */
+/* Embedded Drive iframe preview.
+   min-height is the safety net — when the slide-over panel mounts mid-
+   animation, parent width can briefly be 0, which makes aspect-ratio
+   collapse the height to 0 and the iframe fails to lay out. The fixed
+   min-height guarantees the iframe is visible regardless. aspect-ratio
+   still kicks in for wider panels and keeps the doc-page proportion. */
 .doc-preview-embed {
   position: relative;
   width: 100%;
@@ -2838,6 +2843,7 @@ select:focus-visible {
   border-radius: var(--r-sm);
   overflow: hidden;
   aspect-ratio: 8.5 / 11;
+  min-height: 520px;
   max-height: 70vh;
 }
 
