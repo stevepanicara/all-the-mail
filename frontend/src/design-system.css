@@ -4090,35 +4090,39 @@ select:focus-visible {
 .docked-compose {
   position: fixed;
   bottom: 0;
-  right: 24px;
-  width: 500px;
-  max-width: calc(100vw - 48px);
-  background: var(--bg-1);
+  right: 32px;
+  width: 720px;
+  max-width: calc(100vw - 64px);
+  height: 640px;
+  max-height: calc(100vh - 80px);
+  background: var(--bg-0);
   border: 1px solid var(--line-0);
   border-bottom: none;
-  border-radius: 12px 12px 0 0;
-  box-shadow: 0 -4px 32px rgba(0,0,0,0.28);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -8px 48px rgba(0,0,0,0.22), 0 -2px 8px rgba(0,0,0,0.08);
   z-index: 500;
   display: flex;
   flex-direction: column;
 }
+.docked-compose[data-state="minimized"] { height: auto; }
 
 .docked-compose-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 12px 18px;
   background: var(--bg-2);
-  border-radius: 12px 12px 0 0;
+  border-radius: 14px 14px 0 0;
   cursor: pointer;
   user-select: none;
   border-bottom: 1px solid var(--line-0);
 }
 
 .docked-compose-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-0);
+  letter-spacing: -0.01em;
 }
 
 .docked-compose-controls {
@@ -4149,17 +4153,20 @@ select:focus-visible {
 .docked-field-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 10px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line-0);
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .docked-field-label {
   font-size: 12px;
   color: var(--text-3);
-  width: 28px;
+  width: 32px;
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
 }
 
 .docked-field-input {
@@ -4206,27 +4213,34 @@ select:focus-visible {
 
 .docked-compose-editor {
   flex: 1;
-  min-height: 200px;
+  min-height: 280px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .docked-compose-editor .ql-toolbar {
   border: none;
   border-bottom: 1px solid var(--line-0);
-  padding: 6px 8px;
-  background: var(--bg-2);
+  padding: 8px 14px;
+  background: var(--bg-1);
 }
 
 .docked-compose-editor .ql-container {
   border: none;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .docked-compose-editor .ql-editor {
-  min-height: 160px;
-  padding: 12px;
+  min-height: 240px;
+  flex: 1;
+  padding: 18px 22px;
   color: var(--text-0);
+  line-height: 1.55;
 }
 
 .docked-attachments {
