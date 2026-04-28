@@ -150,53 +150,42 @@ const MailModule = ({
           </div>
         )}
 
-        {/* Batch action bar */}
-        {selectedCount > 0 && (
-          <div style={{ padding: '4px 16px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => { if (selectedCount === filteredEmails.length) clearSelection(); else selectAllVisible(); }} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}>
-              {selectedCount === filteredEmails.length ? <CheckSquare size={15} /> : <MinusSquare size={15} />}
-            </button>
-            <span style={{ fontSize: '11px', color: 'var(--text-3)', flex: 1 }}>{selectedCount} selected</span>
-            <button className="btn-ghost" disabled={batchWorking} onClick={() => batchAction('archive')} style={{ padding: '4px 10px', fontSize: 11 }}><Archive size={12} /> Archive</button>
-            <button className="btn-ghost danger" disabled={batchWorking} onClick={() => batchAction('trash')} style={{ padding: '4px 10px', fontSize: 11 }}><Trash2 size={12} /> Delete</button>
-          </div>
-        )}
-
-        {/* Category tabs */}
-        {['primary','social','promotions','updates'].includes(activeCategory) || activeCategory === 'primary' ? (
-          <div className="mail-category-tabs">
-            {[
-              { key: 'primary', label: 'Primary' },
-              { key: 'promotions', label: 'Promotions' },
-              { key: 'social', label: 'Social' },
-              { key: 'updates', label: 'Updates' },
-            ].map(tab => {
-              const unreadCount = (() => {
-                if (activeView === 'everything') {
-                  return connectedAccounts.reduce((sum, a) => {
-                    const catEmails = emails[a.id]?.[tab.key] || [];
-                    return sum + catEmails.filter(e => !e.isRead).length;
-                  }, 0);
-                }
-                return (emails[activeView]?.[tab.key] || []).filter(e => !e.isRead).length;
-              })();
-              return (
-                <button
-                  key={tab.key}
-                  className={`mail-cat-tab${activeMailTab === tab.key ? ' active' : ''}`}
-                  onClick={() => { setActiveMailTab(tab.key); setActiveCategory(tab.key); }}
-                >
-                  {tab.label}
-                  {unreadCount > 0 && <span className="mail-cat-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={{ padding: '4px 16px 2px', fontSize: '12px', color: 'var(--text-2)', fontWeight: 500 }}>
-            {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}
-          </div>
-        )}
+        {/* Persistent list toolbar — always present so selecting an email
+            doesn't push the list down with a new row. Replaced the old
+            Primary/Social/Promotions/Updates tabs (Gmail's category split
+            isn't useful when you've got 4 accounts feeding one view) and
+            the conditional batch-action bar (which appeared/disappeared
+            and shifted the layout). */}
+        <div style={{ padding: '6px 16px 6px', display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
+          <button
+            onClick={() => { if (selectedCount === filteredEmails.length && selectedCount > 0) clearSelection(); else selectAllVisible(); }}
+            title={selectedCount === filteredEmails.length && selectedCount > 0 ? 'Deselect all' : 'Select all'}
+            style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-2)' }}
+          >
+            {selectedCount > 0 && selectedCount === filteredEmails.length ? <CheckSquare size={15} /> : <MinusSquare size={15} />}
+          </button>
+          <span style={{ fontSize: '11px', color: 'var(--text-3)', flex: 1 }}>
+            {selectedCount > 0
+              ? `${selectedCount} selected`
+              : (activeCategory === 'primary' ? 'Inbox' : activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1))}
+          </span>
+          <button
+            className="btn-ghost"
+            disabled={batchWorking || selectedCount === 0}
+            onClick={() => batchAction('archive')}
+            style={{ padding: '4px 10px', fontSize: 11, opacity: selectedCount === 0 ? 0.4 : 1 }}
+          >
+            <Archive size={12} /> Archive
+          </button>
+          <button
+            className="btn-ghost danger"
+            disabled={batchWorking || selectedCount === 0}
+            onClick={() => batchAction('trash')}
+            style={{ padding: '4px 10px', fontSize: 11, opacity: selectedCount === 0 ? 0.4 : 1 }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
       </div>
       {isLoadingEmails && filteredEmails.length === 0 ? (
         Array.from({ length: 8 }).map((_, i) => (
@@ -242,7 +231,7 @@ const MailModule = ({
           const acct = connectedAccounts[accountIndex];
 
           return (
-            <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${cc}`}
+            <div key={`${email.accountId||'a'}:${email.id}:${cascadeKey}`} className={`email-item${isActive ? ' active' : ''}${!email.isRead ? ' unread' : ''}${cc}`}
               onMouseEnter={() => handleHoverEnter(email)}
               onMouseLeave={handleHoverLeave}
               onClick={() => { if (editMode) { toggleSelectId(email.id); return; } onSelectEmail(email); }}

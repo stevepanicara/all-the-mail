@@ -1142,8 +1142,43 @@ body {
   background: var(--hover-bg);
 }
 
+/* Current-row indicator — stronger than hover so the user always knows
+   which row is open in the reader pane. Left-edge accent stripe + a
+   slightly tinted background that wins over hover. The accent uses the
+   signal red so it reads as a deliberate UI state, not just hover. */
 .email-item.active {
-  background: var(--hover-bg);
+  background: var(--bg-2, var(--hover-bg));
+}
+.email-item.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--signal, #FF3A1D);
+  pointer-events: none;
+}
+
+/* Unread vs read distinction. Read rows fade slightly so unread rows
+   read as the actionable items in the list. The left-edge color marker
+   already exists for unread (account gradient), so this is the row-fill
+   layer. */
+.email-item:not(.unread):not(.active) {
+  background: transparent;
+}
+.email-item.unread {
+  background: var(--bg-1, var(--paper));
+}
+.email-item.unread .row-subject,
+.email-item.unread .row-sender {
+  font-weight: 600;
+  color: var(--text-0);
+}
+.email-item:not(.unread) .row-subject,
+.email-item:not(.unread) .row-sender {
+  font-weight: 400;
+  color: var(--text-2);
 }
 
 /* Checkbox */
