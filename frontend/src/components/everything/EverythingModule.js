@@ -45,6 +45,15 @@ const EverythingModule = ({
               <div className="ev-col-filters">
                 <button className={`ev-filter-btn${evMailFilter==='all'?' active':''}`} aria-pressed={evMailFilter==='all'} onClick={()=>setEvMailFilter('all')}>All</button>
                 <button className={`ev-filter-btn${evMailFilter==='unread'?' active':''}`} aria-pressed={evMailFilter==='unread'} onClick={()=>setEvMailFilter('unread')}>Unread</button>
+                <button
+                  className="ev-filter-btn"
+                  onClick={() => openCompose('compose')}
+                  title="Compose new message"
+                  aria-label="Compose new message"
+                  style={{ marginLeft: 4, color: 'var(--signal, #FF3A1D)', fontWeight: 500 }}
+                >
+                  <Plus size={12} strokeWidth={2} style={{ verticalAlign: '-1px' }} /> New
+                </button>
               </div>
             </div>
             <div className="ev-col-body">
