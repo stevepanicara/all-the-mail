@@ -520,11 +520,11 @@ router.post('/checkout', authenticateToken, async (req, res) => {
 
     // Build subscription_data: metadata propagates to the Subscription
     // object so customer.subscription.* webhooks carry attribution +
-    // user_id. When the user is trial-eligible, layer the 7-day trial
+    // user_id. When the user is trial-eligible, layer the 14-day trial
     // and the cancel-on-missing-PM end_behavior on top.
     const subscriptionData = { metadata: metaCommon };
     if (trialEligible) {
-      subscriptionData.trial_period_days = 7;
+      subscriptionData.trial_period_days = 14;
       // If the trial ends without a successful charge (card declined,
       // removed PM), Stripe should cancel the subscription rather than
       // send the user to past_due forever. Keeps the lockout clean.

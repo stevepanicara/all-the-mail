@@ -2027,7 +2027,7 @@ const AllTheMail = () => {
           ? (trialAvailable ? 'Start your free trial' : (expired ? 'Subscription expired' : 'Subscribe to continue'))
           : 'Pro plan required';
         const body = blocking && trialAvailable
-          ? "7 days of full access. Card required up front — you won't be charged until the trial ends, and you can cancel anytime before then."
+          ? "14 days of full access. Card required up front — you won't be charged until the trial ends, and you can cancel anytime before then."
           : blocking && expired
             ? 'Your subscription has expired. Resubscribe to restore access to your inbox and connected accounts.'
             : blocking

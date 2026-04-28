@@ -3,7 +3,7 @@ import { ClarityPageType } from '@/components/ClarityPageType';
 
 export const metadata = buildMetadata({
   title: 'Pricing',
-  description: 'Multi-account Gmail at $15/mo. 7-day free trial.',
+  description: 'Multi-account Gmail at $15/mo. 14-day free trial.',
   canonical: '/pricing',
 });
 

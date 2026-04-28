@@ -2,7 +2,7 @@ import { API_URL } from '@/lib/site';
 
 // The only call-to-action on a paid-ad landing page. Single button,
 // single destination: the backend OAuth start endpoint, which kicks
-// off the 7-day card-upfront trial. Any visitor who clicks here lands
+// off the 14-day card-upfront trial. Any visitor who clicks here lands
 // in our funnel; that's the whole point of the LP.
 //
 // The atm_attribution cookie (set on the marketing site by
@@ -19,7 +19,7 @@ export function LPCta({ size = 'lg' as 'lg' | 'md' }) {
       href={`${API_URL}/auth/google`}
       className={`inline-flex items-center justify-center bg-signal text-paper font-medium rounded-md hover:opacity-90 transition-opacity ${sizing}`}
     >
-      Start free 7-day trial
+      Start 14-day free trial
     </a>
   );
 }

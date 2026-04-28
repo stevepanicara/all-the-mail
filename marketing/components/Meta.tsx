@@ -13,7 +13,7 @@ import { SITE_URL, SITE_NAME, DEFAULT_OG_IMAGE } from '@/lib/site';
 // Usage:
 //   export const metadata = buildMetadata({
 //     title: 'Pricing',
-//     description: 'Multi-account Gmail at $15/mo. 7-day free trial.',
+//     description: 'Multi-account Gmail at $15/mo. 14-day free trial.',
 //     ogImage: '/og/pricing.png',  // optional; falls back to DEFAULT_OG_IMAGE
 //     canonical: '/pricing',        // optional; absolute URL also works
 //   });

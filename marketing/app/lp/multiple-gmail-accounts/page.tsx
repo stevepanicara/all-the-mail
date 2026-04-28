@@ -6,7 +6,7 @@ import { LPCta } from '@/components/lp/LPCta';
 export const metadata = buildMetadata({
   title: 'Manage Multiple Gmail Accounts in One Inbox',
   description:
-    'Stop switching between Gmail tabs. All The Mail puts every Google account into one unified inbox. 7-day free trial.',
+    'Stop switching between Gmail tabs. All The Mail puts every Google account into one unified inbox. 14-day free trial.',
   canonical: '/lp/multiple-gmail-accounts',
 });
 
