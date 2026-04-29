@@ -22,11 +22,15 @@
   --text-2: rgba(255, 255, 255, 0.52);
   --text-3: rgba(255, 255, 255, 0.46);
 
-  /* 2. Master brand accent — violet (locked) */
-  --accent: #8b7cff;
-  --accent-weak: rgba(139, 124, 255, 0.18);
-  --accent-focus: rgba(139, 124, 255, 0.35);
-  --accent-contrast: #ffffff;
+  /* 2. Master brand accent — signature red. brand.css aliases these to
+     var(--primary) etc. so the cascade has the right values everywhere,
+     but we keep these ALSO defined here as the literal red so the
+     legacy file stands on its own and we never re-introduce the
+     violet "AI accent" if brand.css fails to load. */
+  --accent: #FF3A1D;
+  --accent-weak: rgba(255, 58, 29, 0.18);
+  --accent-focus: rgba(255, 58, 29, 0.35);
+  --accent-contrast: #FAFAF7;
 
   /* 3. Warm accent — rare */
   --warm-0: #ff8c42;
