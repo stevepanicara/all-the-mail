@@ -309,7 +309,10 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
     const response = await gmail.users.messages.list(listParams);
 
     const messages = response.data.messages || [];
-    // Concurrency-limited to 10 parallel requests to avoid Gmail API rate limits
+    // Concurrency-limited fan-out for messages.get(format=metadata).
+    // Gmail's per-user quota is 250 quota units/sec; metadata.get is 5 units,
+    // so 25 concurrent = 125 units/req — well under the cap and ~2.5× faster
+    // than the previous concurrency-10 setting (5 sequential rounds → 2).
     const emails = await pMap(messages, async (msg) => {
       const detail = await gmail.users.messages.get({
         userId: 'me',
@@ -339,7 +342,7 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
         hasAttachment,
         labelIds
       };
-    }, 10);
+    }, 25);
 
     res.json({ emails });
   } catch (error) {

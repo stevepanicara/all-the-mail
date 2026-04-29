@@ -11,9 +11,15 @@
 // when fresh data arrives.
 
 const DB_NAME = 'atm_email_cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // bump: added 'lists' store
 const STORE = 'bodies';
+const LISTS_STORE = 'lists';
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Lists go stale faster than bodies. 5 min is the SWR refresh window —
+// after that the cached list is still painted instantly, but the
+// background refresh is more critical. Bodies are immutable so 7-day
+// works for them.
+const LIST_TTL_MS = 5 * 60 * 1000;
 const MAX_ENTRIES = 2000;
 
 let _dbPromise = null;
@@ -26,11 +32,16 @@ function openDb() {
   _dbPromise = new Promise((resolve) => {
     try {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = () => {
+      req.onupgradeneeded = (e) => {
         const db = req.result;
         if (!db.objectStoreNames.contains(STORE)) {
           const store = db.createObjectStore(STORE, { keyPath: 'key' });
           store.createIndex('ts', 'ts', { unique: false });
+        }
+        // v2 — list cache for SWR rendering of mail lists.
+        if (!db.objectStoreNames.contains(LISTS_STORE)) {
+          const lstore = db.createObjectStore(LISTS_STORE, { keyPath: 'key' });
+          lstore.createIndex('ts', 'ts', { unique: false });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -140,6 +151,95 @@ export async function hydrateForIds(ids) {
         r.onerror = () => { if (--pending === 0) resolve({ bodies, headers, attachments }); };
       }
     } catch { resolve({ bodies, headers, attachments }); }
+  });
+}
+
+// ---- List cache (SWR for inbox lists) -------------------------------------
+//
+// Stores the metadata-list response per (accountId, category). Used by
+// useEmail.loadEmailsForAccount to paint the inbox instantly on cold reload
+// before the network response lands. List TTL is short (5 min) — past that,
+// the cached list is still useful as a placeholder, but we treat the
+// network response as authoritative.
+
+const _listMemFallback = new Map();
+
+function makeListKey(accountId, category) { return `${accountId || ''}:${category}`; }
+
+export async function getCachedList(accountId, category) {
+  const key = makeListKey(accountId, category);
+  const fb = _listMemFallback.get(key);
+  if (fb) return fb;
+  const db = await openDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(LISTS_STORE, 'readonly');
+      const req = tx.objectStore(LISTS_STORE).get(key);
+      req.onsuccess = () => {
+        const v = req.result;
+        if (!v) return resolve(null);
+        // Even if past LIST_TTL_MS we return the entry — caller decides
+        // whether it's still useful. Entries past 24h are dropped as too
+        // stale to bother painting.
+        if (Date.now() - v.ts > 24 * 60 * 60 * 1000) return resolve(null);
+        resolve(v);
+      };
+      req.onerror = () => resolve(null);
+    } catch { resolve(null); }
+  });
+}
+
+export async function setCachedList(accountId, category, emails) {
+  if (!Array.isArray(emails)) return;
+  const key = makeListKey(accountId, category);
+  const entry = { key, accountId, category, emails, ts: Date.now() };
+  _listMemFallback.set(key, entry);
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(LISTS_STORE, 'readwrite');
+    tx.objectStore(LISTS_STORE).put(entry);
+  } catch { /* ignore */ }
+}
+
+// Hydrate cached lists for many (accountId, category) pairs in one
+// transaction. Resolves to { [accountId]: { [category]: emails[] } }.
+// Skips entries older than 24h.
+export async function hydrateLists(pairs) {
+  const out = {};
+  if (!pairs?.length) return out;
+  const db = await openDb();
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  if (!db) {
+    for (const { accountId, category } of pairs) {
+      const e = _listMemFallback.get(makeListKey(accountId, category));
+      if (e && e.ts > cutoff) {
+        if (!out[accountId]) out[accountId] = {};
+        out[accountId][category] = e.emails;
+      }
+    }
+    return out;
+  }
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(LISTS_STORE, 'readonly');
+      const store = tx.objectStore(LISTS_STORE);
+      let pending = pairs.length;
+      if (!pending) return resolve(out);
+      for (const { accountId, category } of pairs) {
+        const r = store.get(makeListKey(accountId, category));
+        r.onsuccess = () => {
+          const v = r.result;
+          if (v && v.ts > cutoff) {
+            if (!out[accountId]) out[accountId] = {};
+            out[accountId][category] = v.emails;
+          }
+          if (--pending === 0) resolve(out);
+        };
+        r.onerror = () => { if (--pending === 0) resolve(out); };
+      }
+    } catch { resolve(out); }
   });
 }
 
