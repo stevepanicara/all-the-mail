@@ -2,7 +2,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
-import { oauth2Client, newOAuth2Client, ALL_SCOPES, encryptToken } from '../lib/google.js';
+import { oauth2Client, newOAuth2Client, MINIMUM_SCOPES, SERVICE_SCOPES, encryptToken, decryptToken } from '../lib/google.js';
 import { JWT_SECRET, authenticateToken } from '../middleware/auth.js';
 import { issueOAuthState, consumeOAuthState, revokeJti, newJti } from '../lib/security.js';
 import { safeLogError } from '../lib/log.js';
@@ -12,9 +12,13 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const router = Router();
 
 router.get('/google', (req, res) => {
+  // P1.12 — Sign-in requests profile/email only (non-sensitive). All
+  // Gmail/Drive/Calendar scopes are requested incrementally via
+  // /accounts/upgrade-scopes/:group when the user activates that
+  // feature. Keeps sign-up warning-free + outside the 100-user cap.
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    scope: ALL_SCOPES,
+    scope: MINIMUM_SCOPES,
     prompt: 'consent',
     include_granted_scopes: true
   });
@@ -40,19 +44,99 @@ router.get('/google/callback', async (req, res) => {
 
     // P0.2: state token is single-use, random 32-byte, server-issued, 10-min TTL.
     // For an "add account" flow, the payload contains { userId, purpose:'link' }.
+    // For a scope upgrade, payload contains { userId, accountId, group,
+    //                                          redirectAfter, purpose:'scope_upgrade' }.
     // For a fresh login, state may be absent or be a login-purpose token (not required).
     // popup=true means the frontend opened a popup window — we should respond
     // with a self-closing HTML page that pings the opener instead of redirecting.
     let linkToUserId = null;
     let isPopup = false;
+    let upgradePayload = null;
     if (state) {
       const payload = consumeOAuthState(state);
       if (payload && payload.purpose === 'link' && payload.userId) {
         linkToUserId = payload.userId;
         isPopup = !!payload.popup;
+      } else if (payload && payload.purpose === 'scope_upgrade' && payload.userId && payload.accountId && payload.group) {
+        upgradePayload = payload;
       } else if (payload === null) {
         console.warn('[AUTH] OAuth state token invalid or expired — treating as fresh login');
       }
+    }
+
+    // P1.12 — scope upgrade short-circuit. We do NOT touch users/sessions:
+    // this is an existing logged-in user adding scopes to an existing
+    // account. We update encrypted_tokens + granted_scopes for the
+    // specific account and bounce them back to where they came from.
+    if (upgradePayload) {
+      const { userId: upgradeUserId, accountId, group, redirectAfter } = upgradePayload;
+
+      // Verify the user actually granted what we asked for. Google lets
+      // users untick boxes on the consent screen; if they did, the
+      // requested group's scopes will be missing from tokens.scope.
+      const grantedScopeUrls = tokens.scope ? tokens.scope.split(' ') : [];
+      const requiredScopes = SERVICE_SCOPES[group] || [];
+      const missing = requiredScopes.filter(s => !grantedScopeUrls.includes(s));
+      if (missing.length > 0) {
+        console.warn('[AUTH] scope_upgrade incomplete', { group, missing });
+        const dest = redirectAfter || `${FRONTEND_URL}/app`;
+        const sep = dest.includes('?') ? '&' : '?';
+        return res.redirect(`${dest}${sep}upgrade_error=incomplete&group=${encodeURIComponent(group)}`);
+      }
+
+      // Verify the account belongs to the userId in state. Anyone who
+      // intercepts a state token (single-use, but defense-in-depth)
+      // cannot point it at a different user's account.
+      const { data: targetAccount, error: lookupErr } = await supabase
+        .from('gmail_accounts')
+        .select('id, user_id, granted_scopes, encrypted_tokens')
+        .eq('id', accountId)
+        .eq('user_id', upgradeUserId)
+        .single();
+      if (lookupErr || !targetAccount) {
+        console.warn('[AUTH] scope_upgrade account mismatch', { accountId, upgradeUserId });
+        return res.redirect(`${FRONTEND_URL}/app?upgrade_error=account_not_found`);
+      }
+
+      // Compute the merged short-label set. include_granted_scopes:true
+      // means tokens.scope already lists everything previously granted +
+      // the new ones; we re-derive the short-label set from scratch.
+      const mergedShortLabels = [];
+      if (grantedScopeUrls.some(s => s.includes('gmail'))) mergedShortLabels.push('mail');
+      if (grantedScopeUrls.some(s => s.includes('drive'))) mergedShortLabels.push('docs');
+      if (grantedScopeUrls.some(s => s.includes('calendar'))) mergedShortLabels.push('cals');
+
+      // Google rotates refresh_token only when prompt='consent' AND scopes
+      // change. We always pass prompt='consent' for upgrades, so we expect
+      // a fresh refresh_token here. If it's missing for any reason, fall
+      // back to merging into the existing token blob so we don't break
+      // the account.
+      const existingTokens = decryptToken(targetAccount.encrypted_tokens);
+      const mergedTokens = {
+        ...existingTokens,
+        access_token: tokens.access_token,
+        scope: tokens.scope,
+        token_type: tokens.token_type || existingTokens.token_type,
+        expiry_date: tokens.expiry_date,
+        ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
+      };
+
+      const { error: updateErr } = await supabase
+        .from('gmail_accounts')
+        .update({
+          encrypted_tokens: encryptToken(mergedTokens),
+          granted_scopes: mergedShortLabels,
+        })
+        .eq('id', accountId)
+        .eq('user_id', upgradeUserId);
+      if (updateErr) {
+        console.error('[AUTH] scope_upgrade update failed:', updateErr);
+        return res.redirect(`${FRONTEND_URL}/app?upgrade_error=db_write`);
+      }
+
+      const dest = redirectAfter || `${FRONTEND_URL}/app`;
+      const sep = dest.includes('?') ? '&' : '?';
+      return res.redirect(`${dest}${sep}upgraded=${encodeURIComponent(group)}`);
     }
 
     let userId;

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
-import { oauth2Client, ALL_SCOPES, getOAuth2ClientForAccount } from '../lib/google.js';
+import { oauth2Client, ALL_SCOPES, getOAuth2ClientForAccount, buildUpgradeAuthUrl, SERVICE_SCOPES } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { issueOAuthState } from '../lib/security.js';
 
@@ -40,6 +40,53 @@ router.get('/connect', authenticateToken, (req, res) => {
     state: issueOAuthState({ purpose: 'link', userId: req.userId, popup: isPopup }),
   });
   res.redirect(authUrl);
+});
+
+// P1.12 — incremental scope upgrade. Initiates an OAuth flow that requests
+// the scopes for one feature group (mail|docs|cals) on top of whatever the
+// account already has. On success the callback updates encrypted_tokens +
+// granted_scopes and redirects back to ?redirect= with ?upgraded=<group>.
+//
+// This is a browser navigation, not an XHR — the user ends up on Google's
+// consent screen. The frontend should `window.location.href = <this url>`.
+const FRONTEND_URL_FOR_UPGRADE = process.env.FRONTEND_URL || 'http://localhost:3001';
+
+router.get('/upgrade-scopes/:group', authenticateToken, async (req, res) => {
+  try {
+    const { group } = req.params;
+    const accountId = req.query.account;
+    const redirectAfter = req.query.redirect || `${FRONTEND_URL_FOR_UPGRADE}/app`;
+
+    if (!SERVICE_SCOPES[group] || group === 'profile') {
+      return res.status(400).json({ error: 'Invalid scope group' });
+    }
+    if (!accountId) {
+      return res.status(400).json({ error: 'account query param required' });
+    }
+
+    // Verify the account belongs to the caller before issuing a state
+    // token. Anyone could otherwise mint upgrade URLs targeting another
+    // user's accountId — single-use state stops the *callback* from
+    // succeeding, but blocking it earlier means we never even ask Google.
+    const { data: account } = await supabase
+      .from('gmail_accounts')
+      .select('id')
+      .eq('id', accountId)
+      .eq('user_id', req.userId)
+      .single();
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+
+    const url = buildUpgradeAuthUrl({
+      userId: req.userId,
+      accountId,
+      group,
+      redirectAfter,
+    });
+    res.redirect(url);
+  } catch (err) {
+    console.error('Upgrade scopes error:', err);
+    res.status(500).json({ error: 'Failed to start scope upgrade' });
+  }
 });
 
 router.delete('/:accountId', authenticateToken, async (req, res) => {

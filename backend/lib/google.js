@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
 import supabase from './supabase.js';
+import { issueOAuthState } from './security.js';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -29,18 +30,19 @@ const SERVICE_SCOPES = {
 
 const ALL_SCOPES = Object.values(SERVICE_SCOPES).flat();
 
-// P1.12 — minimum scopes for first login. Use this for new sign-ups so
-// users see a smaller consent screen and Google's restricted-scope review
-// is easier. Additional scopes (gmail.send/modify, drive, calendar) should
-// be requested incrementally when the user activates that feature.
+// P1.12 — minimum scopes for first login. Profile/email only (non-sensitive)
+// so the sign-in flow is verification-free and never trips Google's
+// "unverified app" warning, and the Cloud project's lifetime 100-OAuth-user
+// cap doesn't apply to sign-in.
 //
-// To migrate: switch routes/auth.js /google to MINIMUM_SCOPES, add an
-// /accounts/upgrade-scopes/{mail|docs|cals} endpoint that uses
-// SERVICE_SCOPES[group] + include_granted_scopes:true, and have the
-// frontend prompt when the user first hits a feature without the scope.
+// All Gmail/Drive/Calendar scopes are requested incrementally via
+// /accounts/upgrade-scopes/:group when the user activates that feature
+// (Variant B from the P1.12 handoff). Those upgrade flows DO show the
+// unverified warning until per-scope verification clears, but they fire
+// in the right context — the user is connecting an integration — and
+// don't gate basic sign-up.
 const MINIMUM_SCOPES = [
   ...SERVICE_SCOPES.profile,
-  'https://www.googleapis.com/auth/gmail.readonly',
 ];
 
 const oauth2Client = new google.auth.OAuth2(
@@ -158,6 +160,54 @@ function newOAuth2Client() {
   );
 }
 
+// P1.12 — incremental scope upgrade. Builds an OAuth URL that requests
+// just the scopes for one feature group (mail/docs/cals). The state token
+// is the existing single-use random token from security.js (NOT a JWT) so
+// the upgrade flow piggybacks on the same callback handler.
+//
+// include_granted_scopes:true means Google returns a token whose `scope`
+// field carries every scope the user has ever granted to this client +
+// the new ones — so we don't accidentally drop access to previously
+// granted features when a user upgrades a single group.
+function buildUpgradeAuthUrl({ userId, accountId, group, redirectAfter }) {
+  const scopes = SERVICE_SCOPES[group];
+  if (!scopes || group === 'profile') {
+    throw new Error(`Unknown or non-upgradable scope group: ${group}`);
+  }
+  const state = issueOAuthState({
+    purpose: 'scope_upgrade',
+    userId,
+    accountId,
+    group,
+    redirectAfter,
+  });
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: true,
+    scope: [...SERVICE_SCOPES.profile, ...scopes],
+    state,
+  });
+}
+
+// P1.12 — short-label capability check. The gmail_accounts.granted_scopes
+// column stores short tags ('mail' | 'docs' | 'cals') — derived in the
+// callback from the URL scopes Google grants. Frontend already filters
+// account lists with the same .includes() shape (App.js:728-729).
+async function accountHasGroup(accountId, userId, group) {
+  if (!['mail', 'docs', 'cals'].includes(group)) {
+    throw new Error(`Unknown group: ${group}`);
+  }
+  const { data, error } = await supabase
+    .from('gmail_accounts')
+    .select('granted_scopes')
+    .eq('id', accountId)
+    .eq('user_id', userId)
+    .single();
+  if (error || !data) return false;
+  return Array.isArray(data.granted_scopes) && data.granted_scopes.includes(group);
+}
+
 export {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
@@ -171,4 +221,6 @@ export {
   decryptToken,
   getOAuth2ClientForAccount,
   invalidateClientCache,
+  buildUpgradeAuthUrl,
+  accountHasGroup,
 };

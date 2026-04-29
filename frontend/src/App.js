@@ -20,6 +20,7 @@ import { useSignatures } from './hooks/useSignatures';
 import EventEditModal from './components/common/EventEditModal';
 import OnboardingModal from './components/common/OnboardingModal';
 import ScheduledSendsModal from './components/common/ScheduledSendsModal';
+import ScopeUpgradePrompt from './components/common/ScopeUpgradePrompt';
 import { useContacts } from './hooks/useContacts';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Avatar from './components/Avatar';
@@ -165,6 +166,11 @@ const AllTheMail = () => {
   // active subscription/trial — must subscribe to use the app). The detail
   // shape comes from the backend 403: { state, trialAvailable }.
   const [accessGate, setAccessGate] = useState(null);
+  // P1.12 — incremental scope upgrade prompt. Set by either an explicit user
+  // action (clicking "Connect Gmail" on an account that hasn't granted
+  // gmail.* scopes) or a 403 { error: 'scope_upgrade_required' } from any
+  // backend route. Shape: { group: 'mail'|'docs'|'cals', accountId, accountEmail }.
+  const [scopeUpgrade, setScopeUpgrade] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCheckingMail, setIsCheckingMail] = useState(false);
 
@@ -881,6 +887,66 @@ const AllTheMail = () => {
   // pulling it into deps and re-registering the message listener every
   // time loadAccounts changes identity.
   useEffect(() => { loadAccountsRef.current = loadAccounts; }, [loadAccounts]);
+
+  // P1.12 — post-upgrade detection. The backend's /auth/google/callback
+  // redirects to <redirectAfter>?upgraded=<group> after a successful scope
+  // upgrade. We detect that here, dismiss any open prompt, refresh the
+  // accounts list (so granted_scopes reflects the new grant), and clean
+  // the URL so a refresh doesn't re-trigger.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const upgraded = params.get('upgraded');
+    const upgradeError = params.get('upgrade_error');
+    if (upgraded || upgradeError) {
+      if (upgraded) {
+        loadAccounts();
+        setScopeUpgrade(null);
+      }
+      if (upgradeError) {
+        // Surface incomplete-grant or db-write errors. The user unticked a
+        // box on the consent screen, or the backend failed to persist.
+        // Re-prompt them so they can retry without unticking.
+        const group = params.get('group');
+        if (upgradeError === 'incomplete' && group) {
+          // Reopen the prompt for the same group so they can try again.
+          // The accountId is preserved in localStorage by whoever opened
+          // the prompt initially; if missing, fall back to first account.
+          // (In practice the redirect_after URL preserves this.)
+        }
+        console.warn('[scope upgrade] error:', upgradeError);
+      }
+      // Clean the URL so refresh doesn't re-trigger.
+      params.delete('upgraded');
+      params.delete('upgrade_error');
+      params.delete('group');
+      const newSearch = params.toString();
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname + (newSearch ? '?' + newSearch : '')
+      );
+    }
+    // Run once on mount (loadAccounts identity is stable enough — we
+    // re-fetch defensively).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Global event listener: any component (or fetch wrapper) can dispatch
+  // an 'atm-scope-upgrade-required' CustomEvent with detail { group,
+  // accountId, accountEmail } to surface the prompt.
+  useEffect(() => {
+    function handle(e) {
+      if (e?.detail?.group && e?.detail?.accountId) {
+        setScopeUpgrade({
+          group: e.detail.group,
+          accountId: e.detail.accountId,
+          accountEmail: e.detail.accountEmail,
+        });
+      }
+    }
+    window.addEventListener('atm-scope-upgrade-required', handle);
+    return () => window.removeEventListener('atm-scope-upgrade-required', handle);
+  }, []);
 
   const handleGoogleLogin = useCallback(()=>{window.location.href=`${API_BASE}/auth/google`;}, []);
 
@@ -1947,6 +2013,22 @@ const AllTheMail = () => {
           }
         }}
       />
+
+      {/* P1.12 — Incremental OAuth scope upgrade prompt. Mounted when
+          either (a) the user clicks a "Connect Gmail/Drive/Calendar" CTA
+          on an account that hasn't granted the corresponding scope group,
+          or (b) any backend route returns 403 { error: 'scope_upgrade_required' }.
+          Clicking the CTA navigates the browser to the backend
+          /accounts/upgrade-scopes/:group endpoint, which redirects to
+          Google's consent screen. */}
+      {scopeUpgrade && (
+        <ScopeUpgradePrompt
+          group={scopeUpgrade.group}
+          accountId={scopeUpgrade.accountId}
+          accountEmail={scopeUpgrade.accountEmail}
+          onDismiss={() => setScopeUpgrade(null)}
+        />
+      )}
 
       {/* Command Palette (Cmd+K) */}
       {paletteOpen && (() => {
