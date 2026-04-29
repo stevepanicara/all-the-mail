@@ -60,6 +60,8 @@ describe('Gmail batch parser', () => {
             on: () => {},
             write: () => {},
             end: () => {},
+            setTimeout: () => {},
+            destroy: () => {},
           };
         },
       },
@@ -97,7 +99,7 @@ describe('Gmail batch parser', () => {
             handlers.data?.(Buffer.from(body, 'utf8'));
             handlers.end?.();
           });
-          return { on: () => {}, write: () => {}, end: () => {} };
+          return { on: () => {}, write: () => {}, end: () => {}, setTimeout: () => {}, destroy: () => {} };
         },
       },
     }));
@@ -133,7 +135,7 @@ describe('Gmail batch parser', () => {
             handlers.data?.(Buffer.from(body, 'utf8'));
             handlers.end?.();
           });
-          return { on: () => {}, write: () => {}, end: () => {} };
+          return { on: () => {}, write: () => {}, end: () => {}, setTimeout: () => {}, destroy: () => {} };
         },
       },
     }));

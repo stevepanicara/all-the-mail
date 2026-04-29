@@ -102,6 +102,10 @@ function _parseMultipart(body, boundary, count) {
     const statusMatch = statusLine.match(/HTTP\/[\d.]+\s+(\d+)/);
     const status = statusMatch ? Number(statusMatch[1]) : 0;
     if (status < 200 || status >= 300) {
+      // Log so we can monitor partial-batch failures. Without this the
+      // user silently sees 49/50 emails and we have no signal that
+      // Gmail is rate-limiting or rejecting individual messages.
+      console.warn('[gmailBatch] sub-request status', status, 'for index', originalIdx);
       if (originalIdx >= 0 && originalIdx < count) out[originalIdx] = null;
       continue;
     }
@@ -165,6 +169,13 @@ export async function batchGetMessages(client, messageIds, opts = {}) {
       });
     });
     req.on('error', reject);
+    // Hard timeout so a hung Gmail backend doesn't stall the user's
+    // inbox load forever. 20s is generous for a 100-msg batch — typical
+    // is 200-400ms. Render's load balancer would eventually kill the
+    // upstream request but during that window the user sees nothing.
+    req.setTimeout(20000, () => {
+      req.destroy(new Error('Gmail batch HTTP timeout (20s)'));
+    });
     req.write(body);
     req.end();
   });
