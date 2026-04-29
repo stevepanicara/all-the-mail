@@ -62,6 +62,20 @@ const sendLimiter = rateLimit({
   keyGenerator: (req) => `${ipKeyGenerator(req)}:${req.userId || 'anon'}`,
 });
 
+// List rate limiter. The list endpoint now triggers a Gmail batch HTTP
+// request that costs us multipart parsing + a 50-msg JSON walk per call;
+// a misbehaving client could hammer it. 60/min per (ip, user) is well
+// above the polling interval (every 30s × 4 accounts = 8/min on the
+// hot path) but blocks runaway loops.
+const listLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Inbox list rate limit reached — please slow down' },
+  keyGenerator: (req) => `${ipKeyGenerator(req)}:${req.userId || 'anon'}`,
+});
+
 // P0.3 — strip CR/LF (and other control chars) from any value that ends
 // up in a MIME header. Without this, a "subject" like "Hi\r\nBcc: evil"
 // silently injects a Bcc header and exfiltrates outgoing mail. Same for
@@ -276,7 +290,7 @@ async function pMap(items, fn, concurrency = 10) {
 }
 
 // List emails
-router.get('/:accountId', authenticateToken, async (req, res) => {
+router.get('/:accountId', authenticateToken, listLimiter, async (req, res) => {
   try {
     const { accountId } = req.params;
     const category = req.query.category || 'primary';
@@ -350,6 +364,14 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
         labelIds,
       };
     }).filter(Boolean);
+
+    // Surface partial-batch failures: if Gmail returned 50 message IDs
+    // but only 49 came back through the batch fetch, log it. Without
+    // this we'd silently ship a shorter list and have no signal that
+    // Gmail is rate-limiting individual sub-requests.
+    if (emails.length < messages.length) {
+      console.warn('[emails.list] partial batch:', messages.length - emails.length, 'failed of', messages.length, 'for account', accountId);
+    }
 
     res.json({ emails });
   } catch (error) {
