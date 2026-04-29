@@ -21,10 +21,26 @@ const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // works for them.
 const LIST_TTL_MS = 5 * 60 * 1000;
 const MAX_ENTRIES = 2000;
+// In-memory fallback caps. Without these, a long-lived tab in private
+// browsing (where IDB is unavailable) accumulates body strings until the
+// renderer OOMs. Bodies dominate (~30KB each); lists are cheap. Cap each
+// independently so a deluge in one doesn't push the other out.
+const MAX_MEM_BODIES = 500;
+const MAX_MEM_LISTS = 100;
 
 let _dbPromise = null;
 let _idbAvailable = typeof indexedDB !== 'undefined';
 const _memFallback = new Map();
+
+// Insertion-ordered LRU eviction. Map iteration order is insertion
+// order; oldest key is the first one yielded by .keys().
+function _capMap(map, max) {
+  while (map.size > max) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey === undefined) break;
+    map.delete(oldestKey);
+  }
+}
 
 function openDb() {
   if (!_idbAvailable) return Promise.resolve(null);
@@ -82,7 +98,10 @@ export async function setCached(accountId, messageId, body, headers, attachments
   if (!body) return;
   const key = makeKey(accountId, messageId);
   const entry = { key, accountId, messageId, body, headers: headers || null, attachments: attachments || [], ts: Date.now() };
+  // Re-insert to bump LRU position even if already present
+  _memFallback.delete(key);
   _memFallback.set(key, entry);
+  _capMap(_memFallback, MAX_MEM_BODIES);
   const db = await openDb();
   if (!db) return;
   try {
@@ -97,9 +116,12 @@ export async function setManyCached(items) {
   if (!items?.length) return;
   for (const it of items) {
     if (it?.body && it?.messageId) {
-      _memFallback.set(makeKey(it.accountId, it.messageId), { ...it, ts: Date.now() });
+      const k = makeKey(it.accountId, it.messageId);
+      _memFallback.delete(k);
+      _memFallback.set(k, { ...it, ts: Date.now() });
     }
   }
+  _capMap(_memFallback, MAX_MEM_BODIES);
   const db = await openDb();
   if (!db) return;
   try {
@@ -170,7 +192,9 @@ export async function setCachedList(accountId, category, emails) {
   if (!Array.isArray(emails)) return;
   const key = makeListKey(accountId, category);
   const entry = { key, accountId, category, emails, ts: Date.now() };
+  _listMemFallback.delete(key);
   _listMemFallback.set(key, entry);
+  _capMap(_listMemFallback, MAX_MEM_LISTS);
   const db = await openDb();
   if (!db) return;
   try {

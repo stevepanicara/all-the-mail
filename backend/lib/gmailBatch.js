@@ -15,6 +15,14 @@
 //   - all sub-requests must be against the same API
 //   - global rate limit still applies; this doesn't bypass quota
 //
+// Known limitation (acceptable):
+// The parser splits the response by the literal boundary string. If a
+// message snippet from Gmail happened to contain `--<boundary>` verbatim
+// the split would mis-section. Boundaries are 14+ random chars; collision
+// probability is ~1 in 10^21 per request. A content-aware MIME parser
+// (e.g. dicer) would be robust here but not worth the dep for that
+// failure rate.
+//
 // Usage:
 //   const client = await getOAuth2ClientForAccount(accountId, userId);
 //   const items = await batchGetMessages(client, messageIds, {
@@ -64,7 +72,8 @@ function _buildMultipartBody(messageIds, opts, boundary) {
 // Parse a multipart/mixed response body. Returns an array parallel to the
 // input ids, with each element being the JSON-parsed body of that sub-
 // response (or null on individual failure).
-function _parseMultipart(body, boundary, count) {
+// Exported so tests can exercise the parser directly without mocking https.
+export function _parseMultipart(body, boundary, count) {
   const out = new Array(count).fill(null);
   // Sections are delimited by `--<boundary>`. Final delimiter is
   // `--<boundary>--`. Split by the boundary marker; ignore the preamble
