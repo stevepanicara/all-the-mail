@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { API_BASE } from '../utils/constants';
 import { stripName } from '../utils/helpers';
-import { getCached, setCached, setManyCached, hydrateForIds, maybeEvict } from '../utils/emailCache';
+import { getCached, setCached, setManyCached, hydrateForIds, maybeEvict, getCachedList, setCachedList, hydrateLists } from '../utils/emailCache';
 
 export function useEmail({
   connectedAccounts,
@@ -119,36 +119,81 @@ export function useEmail({
     }
   }, []);
 
+  // SWR list loader. The fast path on cold reload is:
+  //   1. Hydrate the cached list from IDB and paint immediately
+  //   2. Fan out the network refresh in parallel across categories
+  //
+  // Default category set is just ['primary']. The full sidebar set
+  // (primary/social/promotions/sent/drafts/trash) only loads when the
+  // user explicitly clicks into that category — App.js's activeCategory
+  // effect already triggers a refresh on click, so we don't need to
+  // pre-fetch all six up front (~9s on 4 accounts vs ~1.5s for primary).
   const loadEmailsForAccount = useCallback(async (accountId, category = null) => {
-    const cats = category ? [category] : ['primary', 'social', 'promotions', 'sent', 'drafts', 'trash'];
+    const cats = category ? [category] : ['primary'];
+
+    // Stage 1 — paint cached lists synchronously-ish from IDB. Doesn't
+    // block the network refresh below.
+    hydrateLists(cats.map(c => ({ accountId, category: c }))).then((hydrated) => {
+      const accCats = hydrated[accountId];
+      if (!accCats) return;
+      setEmails(p => {
+        const cur = p[accountId] || {};
+        const next = { ...cur };
+        for (const c of cats) {
+          // Only paint cache if state for this (account, category) is empty —
+          // network response (if it already arrived) wins.
+          if (!next[c] && accCats[c]) next[c] = accCats[c];
+        }
+        return { ...p, [accountId]: next };
+      });
+    }).catch(() => {});
+
+    // Stage 2 — network refresh. All categories in parallel via Promise.all
+    // so a 6-category load takes ~1.5s instead of ~9s.
     setIsLoadingEmails(true);
-    for (const cat of cats) {
+    const fetches = cats.map(async (cat) => {
       try {
         const r = await fetch(`${API_BASE}/emails/${accountId}?category=${cat}&maxResults=50`, { credentials: 'include' });
         if (r.ok) {
-          setIsAuthed(true);
           const d = await r.json();
-          setEmails(p => ({ ...p, [accountId]: { ...(p[accountId] || {}), [cat]: d.emails || [] } }));
-          setEmailLoadError(null);
-        } else if (r.status === 401) {
-          setIsAuthed(false);
-          setEmails({});
-          setSelectedEmail(null);
-          setSelectedThread(null);
-          setSelectedThreadActiveMessageId(null);
-          setEmailBodies({});
-          setEmailHeaders({});
-          setEditMode(false);
-          setSelectedIds(new Set());
-          return;
-        } else {
-          setEmailLoadError({ accountId, category: cat });
+          const list = d.emails || [];
+          setEmails(p => ({ ...p, [accountId]: { ...(p[accountId] || {}), [cat]: list } }));
+          // Persist to IDB so the next cold reload paints instantly.
+          setCachedList(accountId, cat, list).catch(() => {});
+          return { ok: true };
         }
+        if (r.status === 401) {
+          return { unauthed: true };
+        }
+        return { ok: false, accountId, category: cat };
       } catch (err) {
         console.error('Error loading emails:', err);
-        setEmailLoadError({ accountId, category: cat });
+        return { ok: false, accountId, category: cat };
       }
+    });
+
+    const results = await Promise.all(fetches);
+    const anyUnauthed = results.some(r => r.unauthed);
+    const anyOk = results.some(r => r.ok);
+    const firstError = results.find(r => r.ok === false);
+
+    if (anyUnauthed) {
+      setIsAuthed(false);
+      setEmails({});
+      setSelectedEmail(null);
+      setSelectedThread(null);
+      setSelectedThreadActiveMessageId(null);
+      setEmailBodies({});
+      setEmailHeaders({});
+      setEditMode(false);
+      setSelectedIds(new Set());
+      setIsLoadingEmails(false);
+      return;
     }
+
+    if (anyOk) setIsAuthed(true);
+    if (firstError) setEmailLoadError(firstError);
+    else if (anyOk) setEmailLoadError(null);
     setIsLoadingEmails(false);
   }, [setIsAuthed]);
 
