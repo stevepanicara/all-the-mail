@@ -265,7 +265,7 @@ function Landing() {
           <div className="atm-pricing-head">
             <div>
               <div className="atm-pricing-sup">Pricing &middot; One plan</div>
-              <h2 className="atm-pricing-h">Fifteen dollars.</h2>
+              <h2 className="atm-pricing-h">All the accounts. One low price.</h2>
             </div>
             <p className="atm-pricing-p">Every account. One window. 14-day free trial, then $15 a month.</p>
           </div>
