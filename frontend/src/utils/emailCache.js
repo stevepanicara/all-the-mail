@@ -166,30 +166,6 @@ const _listMemFallback = new Map();
 
 function makeListKey(accountId, category) { return `${accountId || ''}:${category}`; }
 
-export async function getCachedList(accountId, category) {
-  const key = makeListKey(accountId, category);
-  const fb = _listMemFallback.get(key);
-  if (fb) return fb;
-  const db = await openDb();
-  if (!db) return null;
-  return new Promise((resolve) => {
-    try {
-      const tx = db.transaction(LISTS_STORE, 'readonly');
-      const req = tx.objectStore(LISTS_STORE).get(key);
-      req.onsuccess = () => {
-        const v = req.result;
-        if (!v) return resolve(null);
-        // Even if past LIST_TTL_MS we return the entry — caller decides
-        // whether it's still useful. Entries past 24h are dropped as too
-        // stale to bother painting.
-        if (Date.now() - v.ts > 24 * 60 * 60 * 1000) return resolve(null);
-        resolve(v);
-      };
-      req.onerror = () => resolve(null);
-    } catch { resolve(null); }
-  });
-}
-
 export async function setCachedList(accountId, category, emails) {
   if (!Array.isArray(emails)) return;
   const key = makeListKey(accountId, category);

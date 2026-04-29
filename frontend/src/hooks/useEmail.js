@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { API_BASE } from '../utils/constants';
 import { stripName } from '../utils/helpers';
-import { getCached, setCached, setManyCached, hydrateForIds, maybeEvict, getCachedList, setCachedList, hydrateLists } from '../utils/emailCache';
+import { getCached, setCached, setManyCached, hydrateForIds, maybeEvict, setCachedList, hydrateLists } from '../utils/emailCache';
 
 export function useEmail({
   connectedAccounts,
