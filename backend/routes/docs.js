@@ -3,8 +3,14 @@ import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireAccountScope } from '../middleware/scopes.js';
 
 const router = Router();
+
+// P1.12 — gate every /docs/:accountId/* route on the account having
+// the 'docs' scope group. 403 contract:
+//   { error: 'scope_upgrade_required', group: 'docs', accountId }
+router.use('/:accountId', requireAccountScope('docs'));
 
 // In-memory cache for doc previews — 5-minute TTL (doc metadata can change).
 const _docPreviewCache = new Map();

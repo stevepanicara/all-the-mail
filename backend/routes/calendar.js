@@ -3,9 +3,15 @@ import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireAccountScope } from '../middleware/scopes.js';
 import { safeLogError } from '../lib/log.js';
 
 const router = Router();
+
+// P1.12 — gate every /cals/:accountId/* route on the account having
+// the 'cals' scope group. 403 contract:
+//   { error: 'scope_upgrade_required', group: 'cals', accountId }
+router.use('/:accountId', requireAccountScope('cals'));
 
 async function verifyAccountOwnership(accountId, userId) {
   const { data: account } = await supabase
