@@ -47,11 +47,10 @@ function Landing() {
           <a href="#how">How it works</a>
           <a href="#sources">Sources</a>
           <a href="#pricing">Pricing</a>
-          <a href="#faq">FAQ</a>
         </nav>
         <div className="atm-nav-right">
           <span className="atm-nav-status">Pre-launch &middot; Waitlist open</span>
-          <button type="button" className="atm-nav-cta" onClick={handleSignIn} disabled={isSigningIn}>
+          <button type="button" className="atm-nav-cta" onClick={handleSignIn} disabled={isSigningIn} aria-busy={isSigningIn}>
             {isSigningIn ? 'Signing in\u2026' : 'Sign in'}
           </button>
         </div>
@@ -69,15 +68,18 @@ function Landing() {
           </h1>
           {authError && <div className="atm-l-error" role="alert">{authError}</div>}
           <div className="atm-cta-row">
-            <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn}>
+            <button type="button" className="atm-btn-primary" onClick={handleSignIn} disabled={isSigningIn} aria-busy={isSigningIn}>
               {isSigningIn ? 'Signing in\u2026' : 'Add your first account'}
             </button>
-            <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn}>
+            <button type="button" className="atm-btn-secondary" onClick={handleSignIn} disabled={isSigningIn} aria-busy={isSigningIn}>
               Sign in with Google
             </button>
             <span className="atm-h1-trust">
               Encrypted tokens &middot; No passwords stored &middot; Disconnect anytime
             </span>
+          </div>
+          <div className="atm-sr-status" role="status" aria-live="polite">
+            {isSigningIn ? 'Redirecting to Google sign-in.' : ''}
           </div>
           <div className="atm-h1-meta">
             <div className="atm-h1-cell">
@@ -166,11 +168,11 @@ function Landing() {
               <p className="atm-step-p">OAuth each account. Tokens stay encrypted on your device. Passwords never touch our servers.</p>
               <div className="atm-step-vis atm-step-vis-1">
                 <div className="atm-step-chips">
-                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#FF3A1D'}} />studio</div>
-                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#1B2BFF'}} />personal</div>
-                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#CCFF00'}} />side</div>
-                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#FFE500'}} />nonprofit</div>
-                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'#0A0A0A'}} />legacy</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'var(--acct-work)'}} />studio</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'var(--acct-personal)'}} />personal</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'var(--acct-side)'}} />side</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'var(--acct-nonprof)'}} />nonprofit</div>
+                  <div className="atm-step-chip"><span className="atm-step-chip-dot" style={{background:'var(--acct-old)'}} />legacy</div>
                 </div>
               </div>
             </div>
@@ -210,44 +212,44 @@ function Landing() {
             <div className="atm-chips-col">
               <h4 className="atm-chips-ch">Accounts &middot; 5</h4>
               <div className="atm-chips-cluster">
-                <span className="atm-source-chip atm-work"><span className="atm-source-dot" style={{background:'#FF3A1D'}} />studio</span>
-                <span className="atm-source-chip atm-personal"><span className="atm-source-dot" style={{background:'#1B2BFF'}} />personal</span>
-                <span className="atm-source-chip atm-side"><span className="atm-source-dot" style={{background:'#CCFF00'}} />side-project</span>
-                <span className="atm-source-chip atm-np"><span className="atm-source-dot" style={{background:'#FFE500'}} />nonprofit</span>
-                <span className="atm-source-chip atm-legacy"><span className="atm-source-dot" style={{background:'#0A0A0A'}} />legacy</span>
+                <span className="atm-source-chip atm-work"><span className="atm-source-dot" style={{background:'var(--acct-work)'}} />studio</span>
+                <span className="atm-source-chip atm-personal"><span className="atm-source-dot" style={{background:'var(--acct-personal)'}} />personal</span>
+                <span className="atm-source-chip atm-side"><span className="atm-source-dot" style={{background:'var(--acct-side)'}} />side-project</span>
+                <span className="atm-source-chip atm-np"><span className="atm-source-dot" style={{background:'var(--acct-nonprof)'}} />nonprofit</span>
+                <span className="atm-source-chip atm-legacy"><span className="atm-source-dot" style={{background:'var(--acct-old)'}} />legacy</span>
               </div>
               <h4 className="atm-chips-ch">Kinds &middot; 3</h4>
               <div className="atm-chips-cluster">
-                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'#FF3A1D'}} />MAIL</span>
-                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'#1B2BFF'}} />DOC</span>
-                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'#CCFF00'}} />CAL</span>
+                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'var(--acct-work)'}} />MAIL</span>
+                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'var(--acct-personal)'}} />DOC</span>
+                <span className="atm-source-chip"><span className="atm-source-dot" style={{background:'var(--acct-side)'}} />CAL</span>
               </div>
             </div>
             <div className="atm-chips-col">
               <h4 className="atm-chips-ch">In the feed</h4>
               <div className="atm-sample-rows">
                 <div className="atm-sample-row">
-                  <span className="atm-source-chip atm-work"><span className="atm-source-dot" style={{background:'#FF3A1D'}} />studio</span>
+                  <span className="atm-source-chip atm-work"><span className="atm-source-dot" style={{background:'var(--acct-work)'}} />studio</span>
                   <div className="atm-sample-msg">Nora Park <em>&middot; Q2 brand system &middot; sign-off</em></div>
                   <span className="atm-sample-t">09:42</span>
                 </div>
                 <div className="atm-sample-row">
-                  <span className="atm-source-chip atm-personal"><span className="atm-source-dot" style={{background:'#1B2BFF'}} />personal</span>
+                  <span className="atm-source-chip atm-personal"><span className="atm-source-dot" style={{background:'var(--acct-personal)'}} />personal</span>
                   <div className="atm-sample-msg">Linnea <em>&middot; lease paperwork</em></div>
                   <span className="atm-sample-t">Yday</span>
                 </div>
                 <div className="atm-sample-row">
-                  <span className="atm-source-chip atm-side"><span className="atm-source-dot" style={{background:'#CCFF00'}} />side</span>
+                  <span className="atm-source-chip atm-side"><span className="atm-source-dot" style={{background:'var(--acct-side)'}} />side</span>
                   <div className="atm-sample-msg">Investor intro <em>&middot; 11:00 AM &middot; 30 min</em></div>
                   <span className="atm-sample-t">11:00</span>
                 </div>
                 <div className="atm-sample-row">
-                  <span className="atm-source-chip atm-np"><span className="atm-source-dot" style={{background:'#FFE500'}} />nonprofit</span>
+                  <span className="atm-source-chip atm-np"><span className="atm-source-dot" style={{background:'var(--acct-nonprof)'}} />nonprofit</span>
                   <div className="atm-sample-msg">Board draft v3 <em>&middot; 14 comments</em></div>
                   <span className="atm-sample-t">Yday</span>
                 </div>
                 <div className="atm-sample-row">
-                  <span className="atm-source-chip atm-legacy"><span className="atm-source-dot" style={{background:'#0A0A0A'}} />legacy</span>
+                  <span className="atm-source-chip atm-legacy"><span className="atm-source-dot" style={{background:'var(--acct-old)'}} />legacy</span>
                   <div className="atm-sample-msg">All-hands <em>&middot; 10:00 AM &middot; 60 min</em></div>
                   <span className="atm-sample-t">Tmrw</span>
                 </div>
@@ -280,7 +282,7 @@ function Landing() {
                 <li>Send-as / RSVP-as</li>
                 <li>Priority sync</li>
               </ul>
-              <button type="button" onClick={handleSignIn} disabled={isSigningIn}>Start 14-day free trial</button>
+              <button type="button" onClick={handleSignIn} disabled={isSigningIn} aria-busy={isSigningIn}>Start 14-day free trial</button>
               <div className="atm-price-fine">Card required. Cancel anytime before the trial ends.</div>
             </div>
           </div>
@@ -298,25 +300,23 @@ function Landing() {
           <div className="atm-foot-grid">
             <div className="atm-foot-col">
               <h5>Product</h5>
-              <a href="#">Mail</a>
-              <a href="#">Docs</a>
-              <a href="#">Cals</a>
               <a href="#sources">Source chips</a>
-              <a href="#">Changelog</a>
+              <a href="#how">How it works</a>
+              <a href="#pricing">Pricing</a>
+              <span className="atm-foot-soon">Changelog &middot; Soon</span>
             </div>
             <div className="atm-foot-col">
               <h5>Company</h5>
-              <a href="#">Brief</a>
-              <a href="#pricing">Pricing</a>
-              <a href="#">Security</a>
-              <a href="#">Status</a>
+              <span className="atm-foot-soon">Brief &middot; Soon</span>
+              <span className="atm-foot-soon">Security &middot; Soon</span>
+              <span className="atm-foot-soon">Status &middot; Soon</span>
             </div>
             <div className="atm-foot-col">
               <h5>Stay in the loop</h5>
-              <a href="#">Waitlist</a>
-              <a href="#">X / Twitter</a>
-              <a href="#">Github</a>
-              <a href="#">Contact</a>
+              <span className="atm-foot-soon">Waitlist &middot; Soon</span>
+              <span className="atm-foot-soon">X / Twitter &middot; Soon</span>
+              <span className="atm-foot-soon">Github &middot; Soon</span>
+              <span className="atm-foot-soon">Contact &middot; Soon</span>
             </div>
           </div>
 
@@ -325,8 +325,8 @@ function Landing() {
             <div className="atm-foot-links">
               <a href="/privacy">Privacy</a>
               <a href="/terms">Terms</a>
-              <a href="#">Security</a>
-              <a href="#">DPA</a>
+              <span className="atm-foot-soon">Security &middot; Soon</span>
+              <span className="atm-foot-soon">DPA &middot; Soon</span>
             </div>
           </div>
         </div>

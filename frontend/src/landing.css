@@ -78,10 +78,11 @@
   text-transform: uppercase;
   background: var(--ink-1);
   color: var(--paper);
-  padding: 11px 16px;
+  padding: 16px 18px;
+  min-height: 44px;
   transition: background var(--t-quick), color var(--t-quick);
 }
-.atm-nav-cta:hover:not(:disabled) { background: var(--primary); color: #fff; }
+.atm-nav-cta:hover:not(:disabled) { background: var(--primary); color: var(--primary-ink); }
 .atm-nav-cta:disabled { opacity: 0.55; cursor: default; }
 
 @media (max-width: 720px) {
@@ -155,7 +156,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-ink);
   padding: 18px 24px;
   /* 4x4 ink drop on bottom-right; 1px ink stroke on top-left so all 4 edges read */
   box-shadow: 4px 4px 0 var(--ink-1), -1px -1px 0 var(--ink-1);
@@ -170,6 +171,30 @@
   box-shadow: 0 0 0 var(--ink-1);
 }
 .atm-btn-primary:disabled { opacity: 0.55; cursor: default; }
+
+/* Focus ring — primary-color outline complements the printed shadow.
+   Brand.css provides a global focus rule via :where() with 0 specificity,
+   so any element-level rule overrides it. We re-state focus here in a
+   way that survives alongside the box-shadow design language. */
+.atm-l button:focus-visible,
+.atm-l a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.atm-btn-primary:focus-visible { outline-color: var(--ink-1); }
+.atm-nav-cta:focus-visible    { outline-color: var(--primary); }
+
+/* Screen-reader-only live region for sign-in announcements.
+   Visually hidden but exposed to AT. Standard "sr-only" idiom. */
+.atm-sr-status {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .atm-btn-secondary {
   font: 600 12px/1 var(--font-ui);
   letter-spacing: 0.08em;
@@ -228,6 +253,7 @@
   text-transform: uppercase;
   white-space: nowrap;
   animation: atm-scroll-marquee 40s linear infinite;
+  will-change: transform;
 }
 .atm-marquee-track span { display: inline-flex; align-items: center; gap: 48px; }
 .atm-marquee-track span::after { content: "/"; color: var(--primary); margin-left: 48px; }
@@ -574,7 +600,7 @@
 .atm-price-ft .atm-price-label { color: var(--paper-3); }
 .atm-price-tag {
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-ink);
   padding: 3px 7px;
   font: 500 9px/1 var(--font-mono);
   letter-spacing: 0.1em;
@@ -614,7 +640,8 @@
 .atm-price-list li::before { content: "—"; position: absolute; left: 0; opacity: 0.55; }
 .atm-price button {
   width: 100%;
-  padding: 14px;
+  padding: 16px 14px;
+  min-height: 44px;
   font: 600 11px/1 var(--font-ui);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -626,7 +653,7 @@
 .atm-price button:hover:not(:disabled) { background: var(--ink-1); color: var(--paper); }
 .atm-price-ft button {
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-ink);
   border-color: var(--primary);
 }
 .atm-price-ft button:hover:not(:disabled) {
@@ -704,6 +731,17 @@
   transition: color var(--t-quick);
 }
 .atm-foot-col a:hover { color: var(--primary); }
+
+/* Pre-launch placeholder: same visual rhythm as foot-col links, but
+   non-interactive. No tab stop, no link announcement, no broken click. */
+.atm-foot-soon {
+  display: block;
+  font: 500 13px/1.8 var(--font-ui);
+  color: var(--paper-3);
+  margin: 0;
+  cursor: default;
+  user-select: none;
+}
 .atm-foot-row {
   display: flex; justify-content: space-between; align-items: center;
   margin-top: 48px; padding-top: 20px;
@@ -720,6 +758,10 @@
 
 @media (max-width: 900px) {
   .atm-foot-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+}
+@media (max-width: 480px) {
+  .atm-foot-grid { grid-template-columns: 1fr; gap: 24px; }
+  .atm-foot-row { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
 
 /* ==========================================================
