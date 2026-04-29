@@ -5,6 +5,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireAccountScope } from '../middleware/scopes.js';
 import { safeLogError } from '../lib/log.js';
 
 // P1.7 — multer hardening.
@@ -88,6 +89,12 @@ function wrapBase64(s) {
 }
 
 const router = Router();
+
+// P1.12 — gate every /emails/:accountId/* route on the account having
+// the 'mail' scope group. Frontend already filters on granted_scopes,
+// so this is belt-and-suspenders. 403 contract:
+//   { error: 'scope_upgrade_required', group: 'mail', accountId }
+router.use('/:accountId', requireAccountScope('mail'));
 
 // In-memory cache for email bodies — keyed by `${accountId}:${messageId}`.
 // Emails are immutable once received, so a 30-minute TTL is safe.
