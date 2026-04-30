@@ -440,6 +440,8 @@ router.post('/:accountId/batch-bodies', authenticateToken, async (req, res) => {
     return res.json({ bodies: results });
   } catch (err) {
     console.error('Batch email bodies error:', err);
+    const mapped = mapGoogleError(err, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to batch fetch' });
   }
 });
@@ -488,6 +490,8 @@ router.get('/:accountId/:messageId', authenticateToken, async (req, res) => {
     return res.json(_responseData);
   } catch (error) {
     console.error('Get email detail error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to get email details' });
   }
 });
@@ -519,6 +523,8 @@ router.get('/:accountId/:messageId/attachments/:attachmentId', authenticateToken
     res.send(buffer);
   } catch (error) {
     safeLogError('emails download attachment', error, { accountId: req.params.accountId });
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
@@ -563,6 +569,8 @@ router.get('/:accountId/:threadId/thread', authenticateToken, async (req, res) =
     res.json({ messages });
   } catch (error) {
     console.error('Get thread error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to get thread' });
   }
 });
@@ -600,6 +608,8 @@ router.post('/:accountId/draft', authenticateToken, async (req, res) => {
     res.json({ success: true, draftId: result.data.id });
   } catch (error) {
     safeLogError('emails save draft', error, { accountId: req.params.accountId });
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to save draft' });
   }
 });
@@ -654,6 +664,8 @@ router.post('/:accountId/send', authenticateToken, sendLimiter, upload.array('at
     res.json({ success: true });
   } catch (error) {
     safeLogError('emails send', error, { accountId: req.params.accountId });
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to send email' });
   }
 });
@@ -695,6 +707,8 @@ router.post('/:accountId/drafts', authenticateToken, async (req, res) => {
     res.json({ success: true, draftId: result.data.id });
   } catch (error) {
     console.error('Save draft error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to save draft' });
   }
 });
@@ -715,6 +729,8 @@ router.delete('/:accountId/drafts/:draftId', authenticateToken, async (req, res)
     res.json({ success: true });
   } catch (error) {
     console.error('Delete draft error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to delete draft' });
   }
 });
@@ -739,6 +755,8 @@ router.post('/:accountId/:messageId/archive', authenticateToken, async (req, res
     res.json({ success: true });
   } catch (error) {
     console.error('Archive email error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to archive email' });
   }
 });
@@ -763,6 +781,8 @@ router.post('/:accountId/:messageId/read', authenticateToken, async (req, res) =
     res.json({ success: true });
   } catch (error) {
     console.error('Mark as read error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to mark as read' });
   }
 });
@@ -783,6 +803,8 @@ router.post('/:accountId/:messageId/trash', authenticateToken, async (req, res) 
     res.json({ success: true });
   } catch (error) {
     console.error('Trash email error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to delete email' });
   }
 });
@@ -810,6 +832,8 @@ router.post('/:accountId/:messageId/star', authenticateToken, async (req, res) =
     res.json({ success: true });
   } catch (error) {
     console.error('Star toggle error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to toggle star' });
   }
 });
@@ -835,6 +859,8 @@ router.post('/:accountId/:messageId/labels', authenticateToken, async (req, res)
     res.json({ success: true });
   } catch (error) {
     console.error('Modify labels error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to modify labels' });
   }
 });
@@ -859,6 +885,8 @@ router.post('/:accountId/:messageId/unread', authenticateToken, async (req, res)
     res.json({ success: true });
   } catch (error) {
     console.error('Mark as unread error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to mark as unread' });
   }
 });
@@ -897,6 +925,8 @@ router.post('/:accountId/batch', authenticateToken, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Batch action error:', error);
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'mail' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to perform batch action' });
   }
 });
