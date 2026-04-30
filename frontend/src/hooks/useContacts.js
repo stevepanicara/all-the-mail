@@ -19,13 +19,36 @@ export function useContacts(connectedAccounts) {
     let cancelled = false;
     setIsLoading(true);
 
+    // Surface backend's typed error contracts so a busted account doesn't
+    // silently disappear from autocomplete:
+    //   401 token_revoked         → dispatch atm-account-reconnect-required
+    //   403 scope_upgrade_required → dispatch atm-scope-upgrade-required
+    // App.js already listens for both events and shows the right modal.
     Promise.all(
-      connectedAccounts.map(a =>
-        fetch(`${API_BASE}/emails/${a.id}/contacts`, { credentials: 'include' })
-          .then(r => r.ok ? r.json() : { contacts: [] })
-          .then(d => [a.id, d.contacts || []])
-          .catch(() => [a.id, []])
-      )
+      connectedAccounts.map(async (a) => {
+        try {
+          const r = await fetch(`${API_BASE}/emails/${a.id}/contacts`, { credentials: 'include' });
+          if (r.ok) {
+            const d = await r.json();
+            return [a.id, d.contacts || []];
+          }
+          if (r.status === 401 || r.status === 403) {
+            const body = await r.json().catch(() => ({}));
+            if (body?.error === 'token_revoked') {
+              window.dispatchEvent(new CustomEvent('atm-account-reconnect-required', {
+                detail: { accountId: a.id, accountEmail: a.gmail_email },
+              }));
+            } else if (body?.error === 'scope_upgrade_required' && body?.group) {
+              window.dispatchEvent(new CustomEvent('atm-scope-upgrade-required', {
+                detail: { accountId: a.id, group: body.group, accountEmail: a.gmail_email },
+              }));
+            }
+          }
+          return [a.id, []];
+        } catch {
+          return [a.id, []];
+        }
+      })
     ).then(pairs => {
       if (cancelled) return;
       const map = {};

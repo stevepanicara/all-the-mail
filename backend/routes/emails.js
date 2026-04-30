@@ -1028,7 +1028,48 @@ router.get('/:accountId/contacts', authenticateToken, async (req, res) => {
     _contactsCache.set(accountId, { contacts, expiresAt: Date.now() + CONTACTS_CACHE_TTL_MS });
     res.json({ contacts });
   } catch (err) {
+    // Map common Gmail / OAuth failure modes to typed responses the frontend
+    // can act on, instead of dumping every error as a generic 500. Order
+    // matters: the more specific OAuth checks come first.
     safeLogError('contacts list', err, { accountId: req.params.accountId });
+
+    const accountId = req.params.accountId;
+    const status = err?.code || err?.response?.status || err?.status || 0;
+    const oauthError = err?.response?.data?.error || '';
+    const message = String(err?.message || '');
+
+    // invalid_grant / token revoked / refresh failed. The user has to
+    // re-link this account — there's no recoverable path in code.
+    // Common causes: user revoked our app from myaccount.google.com,
+    // password reset triggered token invalidation, account suspended.
+    if (
+      oauthError === 'invalid_grant' ||
+      /invalid_grant|token has been expired or revoked|invalid_token/i.test(message)
+    ) {
+      return res.status(401).json({
+        error: 'token_revoked',
+        accountId,
+        message: 'This account needs to be re-connected.',
+      });
+    }
+
+    // Insufficient scope. granted_scopes in the DB says we have mail,
+    // but the actual token Google has on file is missing the scope (or
+    // the user partially-granted on a previous re-consent). Frontend
+    // surfaces ScopeUpgradePrompt via the global event listener.
+    if (status === 403 && /insufficient|scope/i.test(message)) {
+      return res.status(403).json({
+        error: 'scope_upgrade_required',
+        group: 'mail',
+        accountId,
+      });
+    }
+
+    // Pass through Gmail-side rate limiting so the client can back off.
+    if (status === 429) {
+      return res.status(429).json({ error: 'gmail_rate_limited' });
+    }
+
     res.status(500).json({ error: 'Failed to load contacts' });
   }
 });

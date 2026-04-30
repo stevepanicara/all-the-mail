@@ -977,6 +977,36 @@ const AllTheMail = () => {
     return () => window.removeEventListener('atm-scope-upgrade-required', handle);
   }, []);
 
+  // Token-revoked listener — paired with the 401 contract from the
+  // backend. The user revoked our app from myaccount.google.com (or a
+  // password reset invalidated tokens). The only recovery is a re-link;
+  // surface a one-shot toast instead of a blocking modal so it doesn't
+  // dogpile if multiple accounts are dead at once.
+  const [reconnectToastSeen, setReconnectToastSeen] = useState(() => new Set());
+  useEffect(() => {
+    function handle(e) {
+      const accountId = e?.detail?.accountId;
+      const accountEmail = e?.detail?.accountEmail;
+      if (!accountId) return;
+      // Don't toast the same account twice in a session — a single revoked
+      // token can fan out across every endpoint that touches Gmail.
+      // Passive informational toast (no executeFn so it auto-dismisses
+      // without surprising the user with a popup). User re-connects
+      // manually from the avatar dropdown when they're ready.
+      setReconnectToastSeen(prev => {
+        if (prev.has(accountId)) return prev;
+        const next = new Set(prev);
+        next.add(accountId);
+        setSuccessToast({
+          message: `${accountEmail || 'An account'} needs to be re-connected. Use Add account in the avatar menu.`,
+        });
+        return next;
+      });
+    }
+    window.addEventListener('atm-account-reconnect-required', handle);
+    return () => window.removeEventListener('atm-account-reconnect-required', handle);
+  }, []);
+
   const handleGoogleLogin = useCallback(()=>{window.location.href=`${API_BASE}/auth/google`;}, []);
 
   // Open Google's OAuth in a popup window so the main app never navigates
