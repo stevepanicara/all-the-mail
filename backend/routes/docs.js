@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
+import { mapGoogleError } from '../lib/gmailErrors.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireAccountScope } from '../middleware/scopes.js';
 
@@ -73,12 +74,8 @@ router.get('/:accountId', authenticateToken, async (req, res) => {
     res.json({ docs });
   } catch (error) {
     console.error('Get docs error:', error?.message || error);
-    if (error?.code === 403 || error?.response?.status === 403 || error?.errors?.[0]?.reason === 'insufficientPermissions') {
-      return res.status(403).json({ error: 'missing_scope', message: 'Drive permissions not granted. Please reconnect this account.', service: 'docs' });
-    }
-    if (error?.code === 401 || error?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
-    }
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'docs' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to get documents' });
   }
 });
@@ -118,12 +115,8 @@ router.get('/:accountId/:fileId', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Get doc detail error:', error?.message || error);
-    if (error?.code === 403 || error?.response?.status === 403 || error?.errors?.[0]?.reason === 'insufficientPermissions') {
-      return res.status(403).json({ error: 'missing_scope', message: 'Drive permissions not granted. Please reconnect this account.', service: 'docs' });
-    }
-    if (error?.code === 401 || error?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
-    }
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'docs' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to get document details' });
   }
 });
@@ -183,12 +176,8 @@ router.get('/:accountId/:fileId/preview', authenticateToken, async (req, res) =>
     return res.json(previewResponse);
   } catch (err) {
     console.error('Doc preview error:', err?.message || err);
-    if (err?.code === 403 || err?.response?.status === 403) {
-      return res.status(403).json({ error: 'missing_scope', service: 'docs' });
-    }
-    if (err?.code === 401 || err?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token' });
-    }
+    const mapped = mapGoogleError(err, { accountId: req.params.accountId, group: 'docs' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Preview failed' });
   }
 });
