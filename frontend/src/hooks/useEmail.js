@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { API_BASE } from '../utils/constants';
 import { stripName } from '../utils/helpers';
 import { getCached, setCached, setManyCached, hydrateForIds, maybeEvict, setCachedList, hydrateLists } from '../utils/emailCache';
+import { maybeHandleApiError } from '../utils/apiErrors';
 
 export function useEmail({
   connectedAccounts,
@@ -154,6 +155,14 @@ export function useEmail({
     const fetches = cats.map(async (cat) => {
       try {
         const r = await fetch(`${API_BASE}/emails/${accountId}?category=${cat}&maxResults=50`, { credentials: 'include' });
+        // Dispatch typed-error CustomEvents (token_revoked / scope_upgrade)
+        // so the global App.js listeners can surface the right UX. Returns
+        // ok=false so this category is treated as a soft failure rather
+        // than triggering the full unauthed flow that nukes all emails.
+        const account = connectedAccounts.find(a => a.id === accountId);
+        if (await maybeHandleApiError(r, account)) {
+          return { ok: false, accountId, category: cat };
+        }
         if (r.ok) {
           const d = await r.json();
           const list = d.emails || [];
@@ -195,7 +204,7 @@ export function useEmail({
     if (firstError) setEmailLoadError(firstError);
     else if (anyOk) setEmailLoadError(null);
     setIsLoadingEmails(false);
-  }, [setIsAuthed]);
+  }, [setIsAuthed, connectedAccounts]);
 
   const loadEmailDetails = useCallback(async (email) => {
     if (!email?.id) return;

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { google } from 'googleapis';
 import supabase from '../lib/supabase.js';
 import { getOAuth2ClientForAccount } from '../lib/google.js';
+import { mapGoogleError } from '../lib/gmailErrors.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireAccountScope } from '../middleware/scopes.js';
 import { safeLogError } from '../lib/log.js';
@@ -180,12 +181,8 @@ router.get('/:accountId/events', authenticateToken, async (req, res) => {
     res.json({ events });
   } catch (error) {
     console.error('Get calendar events error:', error?.message || error);
-    if (error?.code === 403 || error?.response?.status === 403 || error?.errors?.[0]?.reason === 'insufficientPermissions') {
-      return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
-    }
-    if (error?.code === 401 || error?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
-    }
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'cals' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to get calendar events' });
   }
 });
@@ -241,12 +238,8 @@ router.patch('/:accountId/events/:eventId', authenticateToken, async (req, res) 
     if (error?.message === 'calendar_not_allowed') {
       return res.status(403).json({ error: 'calendar_not_allowed', message: 'That calendar is not on your allowed list for this account.' });
     }
-    if (error?.code === 403 || error?.response?.status === 403) {
-      return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
-    }
-    if (error?.code === 401 || error?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
-    }
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'cals' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to update event' });
   }
 });
@@ -305,12 +298,8 @@ router.post('/:accountId/events', authenticateToken, async (req, res) => {
     if (error?.message === 'calendar_not_allowed') {
       return res.status(403).json({ error: 'calendar_not_allowed', message: 'That calendar is not on your allowed list for this account.' });
     }
-    if (error?.code === 403 || error?.response?.status === 403) {
-      return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
-    }
-    if (error?.code === 401 || error?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
-    }
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'cals' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to create event' });
   }
 });
@@ -341,12 +330,8 @@ router.get('/:accountId/calendars', authenticateToken, async (req, res) => {
     res.json({ calendars });
   } catch (error) {
     console.error('Get calendars error:', error?.message || error);
-    if (error?.code === 403 || error?.response?.status === 403 || error?.errors?.[0]?.reason === 'insufficientPermissions') {
-      return res.status(403).json({ error: 'missing_scope', message: 'Calendar permissions not granted. Please reconnect this account.', service: 'cals' });
-    }
-    if (error?.code === 401 || error?.response?.status === 401) {
-      return res.status(401).json({ error: 'invalid_token', message: 'Token expired or revoked. Please reconnect this account.' });
-    }
+    const mapped = mapGoogleError(error, { accountId: req.params.accountId, group: 'cals' });
+    if (mapped) return res.status(mapped.status).json(mapped.body);
     res.status(500).json({ error: 'Failed to get calendars' });
   }
 });

@@ -14,6 +14,7 @@ import {
   parseEventStart,
 } from './utils/helpers';
 import { attributionPayload } from './utils/attribution';
+import { maybeHandleApiError } from './utils/apiErrors';
 import * as analytics from './utils/analytics';
 import { useSignatures } from './hooks/useSignatures';
 
@@ -739,6 +740,15 @@ const AllTheMail = () => {
     try {
       const qs = filter ? `?filter=${filter}` : '';
       const r = await fetch(`${API_BASE}/docs/${accountId}${qs}`, { credentials: 'include' });
+      // Dispatch typed-error CustomEvents (token_revoked / scope_upgrade)
+      // for the global App.js listeners. Falls through to inline error
+      // state for legacy `missing_scope` / `invalid_token` shapes — both
+      // contracts are still emitted by some routes during the migration.
+      const accountForEvent = { id: accountId };
+      if (await maybeHandleApiError(r, accountForEvent)) {
+        setDocsErrors(p => ({ ...p, [accountId]: 'scope' }));
+        return;
+      }
       if (r.ok) {
         const d = await r.json();
         setDocs(p => ({ ...p, [accountId]: d.docs || [] }));
@@ -755,6 +765,11 @@ const AllTheMail = () => {
     try {
       const qs = range ? `?range=${range}` : '';
       const r = await fetch(`${API_BASE}/cals/${accountId}/events${qs}`, { credentials: 'include' });
+      const accountForEvent = { id: accountId };
+      if (await maybeHandleApiError(r, accountForEvent)) {
+        setEventsErrors(p => ({ ...p, [accountId]: 'scope' }));
+        return;
+      }
       if (r.ok) {
         const d = await r.json();
         setEvents(p => ({ ...p, [accountId]: d.events || [] }));
