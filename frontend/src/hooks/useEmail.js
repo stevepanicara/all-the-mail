@@ -230,6 +230,8 @@ export function useEmail({
     if (!cacheHit) setIsLoadingBody(true);
     try {
       const r = await fetch(`${API_BASE}/emails/${aid}/${eid}`, { credentials: 'include' });
+      const account = connectedAccounts.find(a => a.id === aid);
+      if (await maybeHandleApiError(r, account)) return;
       if (r.ok) {
         setIsAuthed(true);
         const d = await r.json();
@@ -281,6 +283,12 @@ export function useEmail({
     setThreadExpanded(false);
     try {
       const r = await fetch(`${API_BASE}/emails/${email.accountId}/${email.threadId}/thread`, { credentials: 'include' });
+      const account = connectedAccounts.find(a => a.id === email.accountId);
+      if (await maybeHandleApiError(r, account)) {
+        setSelectedThread(null);
+        setSelectedThreadActiveMessageId(null);
+        return;
+      }
       if (r.ok) {
         const d = await r.json();
         const msgs = d.messages || [];
@@ -302,7 +310,7 @@ export function useEmail({
       }
     } catch (err) { console.error('Thread error:', err); setSelectedThread(null); setSelectedThreadActiveMessageId(null); }
     finally { setIsLoadingThread(false); }
-  }, [handleLogout, loadEmailDetails]);
+  }, [handleLogout, loadEmailDetails, connectedAccounts]);
 
   const getCurrentEmails = useCallback(() => {
     let list;
@@ -412,12 +420,14 @@ export function useEmail({
     const executeFn = async () => {
       try {
         const r = await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/trash`, { method: 'POST', credentials: 'include' });
+        const account = connectedAccounts.find(a => a.id === email.accountId);
+        if (await maybeHandleApiError(r, account)) { setEmails(snapshot); return; }
         if (!r.ok) { setEmails(snapshot); setError('Failed to delete'); }
       } catch (err) { setEmails(snapshot); setError('Failed to delete'); }
     };
     const undoFn = () => { setEmails(snapshot); setSuccessToast(null); };
     setSuccessToast({ message: 'Email deleted', undoFn, executeFn });
-  }, [selectedEmail, removeEmailIds, emails, setError, setSuccessToast, setShowMetadata, setFullPageReaderOpen]);
+  }, [selectedEmail, removeEmailIds, emails, setError, setSuccessToast, setShowMetadata, setFullPageReaderOpen, connectedAccounts]);
 
   const archiveEmail = useCallback((email) => {
     if (!email?.id || !email?.accountId) return;
@@ -431,12 +441,14 @@ export function useEmail({
     const executeFn = async () => {
       try {
         const r = await fetch(`${API_BASE}/emails/${email.accountId}/${email.id}/archive`, { method: 'POST', credentials: 'include' });
+        const account = connectedAccounts.find(a => a.id === email.accountId);
+        if (await maybeHandleApiError(r, account)) { setEmails(snapshot); return; }
         if (!r.ok) { setEmails(snapshot); setError('Failed to archive'); }
       } catch (err) { setEmails(snapshot); setError('Failed to archive'); }
     };
     const undoFn = () => { setEmails(snapshot); setSuccessToast(null); };
     setSuccessToast({ message: 'Email archived', undoFn, executeFn });
-  }, [selectedEmail, removeEmailIds, emails, setError, setSuccessToast, setShowMetadata, setFullPageReaderOpen]);
+  }, [selectedEmail, removeEmailIds, emails, setError, setSuccessToast, setShowMetadata, setFullPageReaderOpen, connectedAccounts]);
 
   const starEmail = useCallback(async (email) => {
     if (!email?.id || !email?.accountId) return;
@@ -623,12 +635,16 @@ export function useEmail({
       Object.entries(byAccount).forEach(([accountId, ids]) => {
         const chunks = [];
         for (let i = 0; i < ids.length; i += 25) chunks.push(ids.slice(i, i + 25));
+        const account = connectedAccounts.find(a => a.id === accountId);
         chunks.forEach(chunk => fetch(`${API_BASE}/emails/${accountId}/batch-bodies`, {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messageIds: chunk }),
         })
-          .then(r => r.ok ? r.json() : null)
+          .then(async r => {
+            if (await maybeHandleApiError(r, account)) return null;
+            return r.ok ? r.json() : null;
+          })
           .then(d => {
             if (!d?.bodies) return;
             const bodyMap = {}, headerMap = {}, attachMap = {};
