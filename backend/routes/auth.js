@@ -318,6 +318,16 @@ router.get('/google/callback', async (req, res) => {
         'Content-Security-Policy',
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       );
+      // Helmet's default Cross-Origin-Opener-Policy is 'same-origin', which
+      // forces this response into a different browsing context group from
+      // the opener (the React app). When the inline script then runs
+      // window.opener.postMessage(...), `window.opener` is null and the
+      // message never reaches the app — visible bug: "Add account does
+      // nothing." Override to 'unsafe-none' for THIS response only so
+      // the popup can communicate back. The opener side is already
+      // 'same-origin-allow-popups' (vercel.json), which trusts popups
+      // it opened that don't isolate themselves.
+      res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       // We tightly target the message at our frontend origin so a hostile
       // opener can't intercept. window.close() is silent if the popup was
